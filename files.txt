@@ -1,0 +1,797 @@
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { FormBuilder, FormControl, FormControlStatus, FormGroup, Validators } from '@angular/forms';
+import { ReToolService } from '../../../service/re-tool.service';
+import { FormDataSource } from '../../../models/form-data-source';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { ActionEnum } from '../../../models/action-enum';
+import { MasterDataModel } from '../../../../dashboard/models/master-data';
+import { ReToolConstants } from '../../../constants/re-tool.constants';
+import { SubTabEncodedEnum } from '../../../models/re-tool-tabs-enum';
+import { Utility } from '../../../utility/mapper-util';
+import { Cover } from '../../../models/cover';
+import { PropertyLocation } from '../../../models/property-location';
+import { HazardEnum } from '../../../models/hazard-enum';
+import { Subscription } from 'rxjs';
+import { OccupancyUnderwritingSummary } from '../../../models/cover-underwriting-summary';
+
+@Component({
+  selector: 're-tool-cover',
+  templateUrl: './cover.component.html',
+  styleUrls: ['./cover.component.css']
+})
+export class CoverComponent implements OnInit, OnDestroy {
+  coverForm!: FormGroup;
+  coverDisplayedColumns: string[] = [];
+  coverData: Cover;
+  subscription: Subscription = new Subscription();
+  OccupancyGroupData: MasterDataModel[] = [];
+  HazardData: MasterDataModel[] = [];
+  EquipmentBreakdownData: MasterDataModel[] = [];
+  rowValuesMap: Map<number, any> = new Map();
+  occupancyData: OccupancyUnderwritingSummary = {
+    occupancyGroupTIV: null,
+    occupancyTypeTIV: null,
+    occupancyCodeTIV: null,
+    hazardTIV: null,
+    deviationTIV: null,
+    equipmentBreakdownTIV: null,
+    isHazardTIVUpdated: null,
+    isEquipmentBreakdownUpdatedTIV: null,
+    occupancyHighestHazardReview: null,
+    equipmentBreakdownHazardReview: null,
+    deviationHighestHazardReview: null,
+    isHazardReviewUpdated: null,
+    isEBRHazardReviewUpdated: null
+  }
+  private previousFormStatus: FormControlStatus = ReToolConstants.valid;
+
+  constructor(
+    private reToolService: ReToolService,
+    private fb: FormBuilder,
+    private reToolTabService: ReToolTabService
+  ) { }
+
+  ngOnInit(): void {
+    this.loadOccupancyGroups();
+    this.initializeForm();
+    this.reToolTabService.emit('onFormComponentInit', { encodedTabIndex: SubTabEncodedEnum.Cover });
+  }
+
+  initializeForm() {
+    this.coverForm = this.fb.group({
+      PropertyAccountId: new FormControl(0),
+      ReviewRequestId: new FormControl(0),
+      Currency: new FormControl(''),
+      Unit: new FormControl(''),
+      PropertyAccountCoverId: new FormControl(0),
+      ReportedBuildingValue: new FormControl('', Validators.required),
+      ReportedContentsValue: new FormControl('', Validators.required),
+      ReportedTotalPD: new FormControl({ value: '0.0', disabled: true }),
+      ReportedTotalBivalue: new FormControl('', Validators.required),
+      ReportedTIV: new FormControl({ value: '0.0', disabled: true }),
+      ReviewedBuilding: new FormControl({ value: '0.0', disabled: true }),
+      ReviewedContents: new FormControl({ value: '0.0', disabled: true }),
+      ReviewedTotalPD: new FormControl({ value: '0.0', disabled: true }),
+      ReviewedTotalBI: new FormControl({ value: '0.0', disabled: true }),
+      ReviewedTIV: new FormControl({ value: '0.0', disabled: true }),
+      ReviewedPercentageBuilding: new FormControl({ value: '0%', disabled: true }),
+      ReviewedPercentageContents: new FormControl({ value: '0%', disabled: true }),
+      ReviewedPercentageTotalPD: new FormControl({ value: '0%', disabled: true }),
+      ReviewedPercentageTotalBI: new FormControl({ value: '0%', disabled: true }),
+      ReviewedPercentageTIV: new FormControl({ value: '0%', disabled: true }),
+      TimeElementExcluded: new FormControl({ value: false, disabled: false }, Validators.required),
+      RecommendedReviewFrequency: new FormControl({ value: '', disabled: true }, Validators.required),
+      RecommendedAccountPercentageTIV: new FormControl({ value: '', disabled: true }, Validators.required),
+      OccupancyGroupTIV: new FormControl('', Validators.required),
+      OccupancyTypeTIV: new FormControl('', Validators.required),
+      OccupancyCodeTIV: new FormControl({ value: '', disabled: true }),
+      HazardTIV: new FormControl({ value: '', disabled: false }, Validators.required),
+      EquipmentBreakdownTIV: new FormControl({ value: '', disabled: false }, Validators.required),
+      DeviationTIV: new FormControl({ value: '', disabled: false }, Validators.required),
+      IsHazardTIVUpdated: new FormControl(false),
+      IsEquipmentBreakdownUpdatedTIV: new FormControl(false),
+      OccupancyGroupHighestHazardReview: new FormControl({ value: '', disabled: true }, Validators.required),
+      OccupancyTypeHighestHazardReview: new FormControl({ value: '', disabled: true }, Validators.required),
+      OccupancyCodeHighestHazardReview: new FormControl({ value: '', disabled: true }, Validators.required),
+      OccupancyHighestHazardReview: new FormControl({ value: '', disabled: false }, Validators.required),
+      EquipmentBreakdownHazardReview: new FormControl({ value: '', disabled: false }, Validators.required),
+      DeviationHighestHazardReview: new FormControl({ value: '', disabled: false }, Validators.required),
+      IsHighestHazardReviewUpdated: new FormControl(false),
+      IsEBRHighestHazardReviewUpdated: new FormControl(false),
+      Occupancy: new FormControl(null),
+      EquipmentBreakdownMflcertified: new FormControl(false),
+      FireMflcertified: new FormControl(false),
+      Action: new FormControl(ActionEnum.IsSaved),
+      PropertyLocations: new FormControl<PropertyLocation[]>([]),
+      VerCol: new FormControl('')
+    });
+
+    const onInitializeCoverData = this.reToolTabService.on('onInitializeCoverData').subscribe({
+      next: (event: FormDataSource) => {
+        if (event.data) {
+          this.coverDisplayedColumns = event.columns;
+          this.coverData = event.data;
+          this.coverData = this.setOccpancyValuesAfterDeserialize();
+          this.initializeDataSource();
+        }
+      },
+      error: (error) => {
+        throw new Error(error);
+      }
+    });
+    this.subscription.add(onInitializeCoverData);
+
+    this.subscription.add(
+      this.reToolTabService.on('onProcessingSave').subscribe((event) => {
+        if (this.coverForm) {
+          this.coverForm.markAllAsTouched();
+          this.coverForm.markAsPristine();
+          this.coverForm.updateValueAndValidity();
+          this.updateCoverOccupancyData();
+          this.reToolTabService.formStatus = this.coverForm.status;
+
+          const hasFormError = this.coverForm.status === ReToolConstants.invalid;
+
+          if (hasFormError) {
+            this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+          } else {
+            this.reToolTabService.emit('onSaveFormData', { formData: this.getCoverFormData, subTabIndex: 0, tabInfo: event.tabInfo, isTabChange: event.isTabChange });
+          }
+        }
+      })
+    );
+
+    this.subscription.add(
+      this.coverForm.statusChanges.subscribe((status) => {
+        if (status !== this.previousFormStatus) {
+          this.previousFormStatus = this.coverForm.status;
+          this.reToolTabService.formStatus = this.coverForm.status;
+        }
+      })
+    );
+  }
+
+  initializeDataSource() {
+    this.rowValuesMap.clear();
+    this.coverForm = this.initializeCoverForm(this.coverData)
+    this.calculatedReviewedBuilding(this.coverForm);
+    this.calculatedReviewedContents(this.coverForm);
+    this.calculatedReviewedTotalPD(this.coverForm);
+    this.calculatedReviewedTotalBI(this.coverForm);
+    this.calculatedReviewedTIV(this.coverForm);
+    this.totalReportedTotalPD(this.coverForm);
+    this.calculatedPercentageReviewedBuilding(this.coverForm);
+    this.calculatedPercentageReviewedContents(this.coverForm);
+    this.calculatedPercentageReviewedTotalPD(this.coverForm);
+    this.calculatedPercentageReviewedTotalBI(this.coverForm);
+    this.calculatedPercentageReviewedTIV(this.coverForm);
+    this.setRecommendedReviewFrequency(this.coverForm);
+    this.setupCalculationSubscribers(this.coverForm);
+    for (let index = 0; index <= 1; index++) {
+      this.rowValuesMap.set(index, {
+        OccupancyTypeList: []
+      });
+
+      if (index === 0) {
+        this.getOccupancyType(index, this.coverData.OccupancyGroupTIV || '0', this.rowValuesMap.get(index), this.coverForm);
+        this.coverForm.controls['HazardTIV'][ReToolConstants.isHighlighted] = this.coverData.IsHazardTIVUpdated;
+        this.coverForm.controls['EquipmentBreakdownTIV'][ReToolConstants.isHighlighted] = this.coverData.IsEquipmentBreakdownUpdatedTIV;
+        this.reToolTabService.actionStateChange(this.coverForm);
+        this.disableDropdownControl(index, this.coverForm, false);
+      }
+      else {
+        this.getOccupancyBasedonHighestHazard(index, '0', this.rowValuesMap.get(index), this.coverForm);
+        this.coverForm.controls['OccupancyHighestHazardReview'][ReToolConstants.isHighlighted] = this.coverForm.value.IsHazardUpdatedForHazard;;
+        this.coverForm.controls['EquipmentBreakdownHazardReview'][ReToolConstants.isHighlighted] = this.coverForm.value.IsEquipmentBreakdownUpdatedForHazard;
+        this.reToolTabService.actionStateChange(this.coverForm);
+        this.disableDropdownControl(index, this.coverForm, false);
+
+      }
+    }
+  }
+
+  initializeCoverForm(data: Cover): FormGroup {
+    return this.fb.group({
+      ReportedBuildingValue: new FormControl(this.setDefaultValue(data.ReportedBuildingValue) || ReToolConstants.blank, Validators.required),
+      ReportedContentsValue: new FormControl(this.setDefaultValue(data.ReportedContentsValue) || ReToolConstants.blank, Validators.required),
+      ReportedTotalPD: new FormControl({ value: Utility.commaSepratedValueForDisabledInput(this.calculatedReportedTotalPD(data.ReportedBuildingValue, data.ReportedContentsValue)) || '0.0', disabled: true }, Validators.required),
+      ReportedTotalBivalue: new FormControl({ value: this.setDefaultValue(data.ReportedTotalBivalue) || ReToolConstants.blank, disabled: false }, Validators.required),
+      ReportedTIV: new FormControl({ value: Utility.commaSepratedValueForDisabledInput(this.calculatedReportedTotalTIV(data.ReportedTotalPD, data.ReportedTotalBivalue)) || '0.0', disabled: true }, Validators.required),
+      ReviewedBuilding: new FormControl({ value: data.ReviewedBuilding || '0.0', disabled: true }),
+      ReviewedContents: new FormControl({ value: data.ReviewedContents || '0.0', disabled: true }),
+      ReviewedTotalPD: new FormControl({ value: data.ReviewedTotalPD || '0.0', disabled: true }),
+      ReviewedTotalBI: new FormControl({ value: data.ReviewedTotalBI || '0.0', disabled: true }),
+      ReviewedTIV: new FormControl({ value: data.ReviewedTIV || '0.0', disabled: true }),
+      ReviewedPercentageBuilding: new FormControl({ value: data.ReviewedPercentageBuilding || '0%', disabled: true }),
+      ReviewedPercentageContents: new FormControl({ value: data.ReviewedPercentageContents || '0%', disabled: true }),
+      ReviewedPercentageTotalPD: new FormControl({ value: data.ReviewedPercentageTotalPD || '0%', disabled: true }),
+      ReviewedPercentageTotalBI: new FormControl({ value: data.ReviewedPercentageTotalBI || '0%', disabled: true }),
+      ReviewedPercentageTIV: new FormControl({ value: data.ReviewedPercentageTIV || '0%', disabled: true }),
+      TimeElementExcluded: new FormControl({ value: data.TimeElementExcluded || false, disabled: false }, Validators.required),
+      RecommendedReviewFrequency: new FormControl({ value: data.RecommendedReviewFrequency || '', disabled: true }, Validators.required),
+      RecommendedAccountPercentageTIV: new FormControl({ value: data.RecommendedAccountPercentageTIV || '', disabled: true }, Validators.required),
+      OccupancyGroupTIV: new FormControl({ value: data.OccupancyGroupTIV || '', disabled: false }, Validators.required),
+      OccupancyTypeTIV: new FormControl({ value: data.OccupancyTypeTIV || '', disabled: false }, Validators.required),
+      OccupancyCodeTIV: new FormControl({ value: data.OccupancyCodeTIV || '', disabled: true }, Validators.required),
+      HazardTIV: new FormControl({ value: data.HazardTIV || '', disabled: false }, Validators.required),
+      EquipmentBreakdownTIV: new FormControl({ value: data.EquipmentBreakdownTIV || '', disabled: false }, Validators.required),
+      DeviationTIV: new FormControl({ value: data.DeviationTIV || '', disabled: false }, Validators.required),
+      IsHazardTIVUpdated: new FormControl(data.IsHazardTIVUpdated || false),
+      IsEquipmentBreakdownUpdatedTIV: new FormControl(data.IsEquipmentBreakdownUpdatedTIV || false),
+      OccupancyGroupHighestHazardReview: new FormControl({ value: data.OccupancyGroupHighestHazardReview || '', disabled: true }),
+      OccupancyTypeHighestHazardReview: new FormControl({ value: data.OccupancyTypeHighestHazardReview || '', disabled: true }),
+      OccupancyCodeHighestHazardReview: new FormControl({ value: data.OccupancyCodeHighestHazardReview || '', disabled: true }),
+      OccupancyHighestHazardReview: new FormControl({ value: data.OccupancyHighestHazardReview || '', disabled: false }, Validators.required),
+      EquipmentBreakdownHazardReview: new FormControl({ value: data.EquipmentBreakdownHazardReview || '', disabled: false }, Validators.required),
+      DeviationHighestHazardReview: new FormControl({ value: data.DeviationHighestHazardReview || '', disabled: false }, Validators.required),
+      IsHighestHazardReviewUpdated: new FormControl(data.IsHighestHazardReviewUpdated || false),
+      IsEBRHighestHazardReviewUpdated: new FormControl(data.IsEBRHighestHazardReviewUpdated || false),
+      Occupancy: new FormControl(data.Occupancy),
+      PropertyAccountId: new FormControl(data.PropertyAccountId),
+      PropertyAccountCoverId: new FormControl(data.PropertyAccountCoverId),
+      ReviewRequestId: new FormControl(data.ReviewRequestId),
+      Currency: new FormControl(data.Currency),
+      Unit: new FormControl(data.Unit),
+      EquipmentBreakdownMflcertified: new FormControl(data.IsHazardUpdated || false),
+      FireMflcertified: new FormControl(data.IsHazardUpdated || false),
+      Action: new FormControl(ActionEnum.IsSaved),
+      PropertyLocations: new FormControl<PropertyLocation[]>(data.PropertyLocations || []),
+      VerCol: new FormControl('')
+    });
+  }
+
+  loadOccupancyGroups(): void {
+    const loadOccupancyGroups = this.reToolService.getOccupancyGroup(0).subscribe({
+      next: (response) => {
+        this.OccupancyGroupData = response.occupancyGroups;
+        this.HazardData = response.hazard;
+        this.EquipmentBreakdownData = response.equipmentBreakdown;
+      },
+      error: (error) => {
+        throw new Error(error);
+      }
+    });
+    this.subscription.add(loadOccupancyGroups);
+  }
+
+  changeOccupancyGroup(index: number, selectedGroupId: string): void {
+    const data = this.coverForm;
+    const currentValues = this.rowValuesMap.get(index);
+    this.rowValuesMap.set(index, {
+      ...currentValues,
+      OccupancyGroup: selectedGroupId
+    });
+
+    data.patchValue({
+      OccupancyTypeForTIV: ReToolConstants.blank,
+      OccupancyCodeForTIV: ReToolConstants.blank,
+      HazardForTIV: ReToolConstants.blank,
+      EquipmentBreakdownForTIV: ReToolConstants.blank,
+      OccupancyTypeList: [],
+      Action: ActionEnum.IsModified
+    });
+
+    if (selectedGroupId) {
+      this.getOccupancyType(index, selectedGroupId, currentValues, data);
+    }
+    else {
+      data.patchValue({
+        OccupancyTypeForTIV: ReToolConstants.blank,
+        OccupancyCodeForTIV: ReToolConstants.blank,
+        HazardForTIV: ReToolConstants.blank,
+        EquipmentBreakdownForTIV: ReToolConstants.blank,
+        OccupancyTypeList: [],
+        Action: ActionEnum.IsModified
+      });
+      this.rowValuesMap.get(index).OccupancyTypeList = [];
+      this.disableDropdownControl(index, data, true);
+    }
+  }
+
+  changeOccupancyType(index: number, selectedTypeId: string): void {
+    const data = this.coverForm;
+
+    if (selectedTypeId) {
+      this.disableDropdownControl(index, data, false);
+      const occupancyTypeMap = this.rowValuesMap.get(index).OccupancyTypeList.find(type => type.value === selectedTypeId);
+
+      if (occupancyTypeMap) {
+        data.patchValue({
+          OccupancyCodeTIV: occupancyTypeMap.dependentValue.occupancyTypeCode,
+          HazardTIV: occupancyTypeMap.dependentValue.hazard,
+          EquipmentBreakdownTIV: occupancyTypeMap.dependentValue.equipmentBreakdown,
+          Action: ActionEnum.IsModified
+        });
+        this.rowValuesMap.set(index, {
+          ...this.rowValuesMap.get(index),
+          OccupancyTypeTIV: occupancyTypeMap.value,
+          OccupancyCodeTIV: occupancyTypeMap.dependentValue.occupancyTypeCode,
+          HazardTIV: occupancyTypeMap.dependentValue.hazard,
+          EquipmentBreakdownTIV: occupancyTypeMap.dependentValue.equipmentBreakdown
+        });
+
+      }
+    } else {
+      data.patchValue({
+        OccupancyTypeTIV: ReToolConstants.blank,
+        OccupancyCodeTIV: ReToolConstants.blank,
+        HazardTIV: ReToolConstants.blank,
+        EquipmentBreakdownTIV: ReToolConstants.blank,
+        Action: ActionEnum.IsModified
+      });
+      this.rowValuesMap.set(index, {
+        ...this.rowValuesMap.get(index),
+        OccupancyTypeTIV: ReToolConstants.blank,
+        OccupancyCodeTIV: ReToolConstants.blank,
+        HazardTIV: ReToolConstants.blank,
+        EquipmentBreakdownTIV: ReToolConstants.blank,
+      });
+      this.disableDropdownControl(index, data, true);
+    }
+    this.changeHazardForTIV(index, selectedTypeId);
+    this.changeEquipmentBreakdownTIV(index, selectedTypeId);
+  }
+
+  changeHazardForHighestHazardReviewed(index: number, selectedTypeId: string): void {
+    const data = this.coverForm;
+    data.patchValue({ Action: ActionEnum.IsModified });
+    this.setRecommendedReviewFrequency(data);
+    this.updateHighlight(index, selectedTypeId, ReToolConstants.IsHighestHazardReviewUpdated, ReToolConstants.OccupancyHighestHazardReview);
+  }
+
+  changeHazardForTIV(index: number, selectedTypeId: string): void {
+    const data = this.coverForm;
+    data.patchValue({ Action: ActionEnum.IsModified });
+    this.updateHighlight(index, selectedTypeId, ReToolConstants.IsHazardTIVUpdated, ReToolConstants.HazardTIV);
+  }
+
+  changeEquipmentBreakdownTIV(index: number, selectedTypeId: string): void {
+    const data = this.coverForm;
+    data.patchValue({ Action: ActionEnum.IsModified });
+    this.updateHighlight(index, selectedTypeId, ReToolConstants.IsEquipmentBreakdownUpdatedTIV, ReToolConstants.EquipmentBreakdownTIV);
+  }
+
+  changeEquipmentBreakdown(index: number, selectedTypeId: string): void {
+    const data = this.coverForm;
+    data.patchValue({ Action: ActionEnum.IsModified });
+    this.updateHighlight(index, selectedTypeId, 'IsEBRHighestHazardReviewUpdated', 'EquipmentBreakdownHazardReview');
+  }
+
+  setAction(selectedValue: any) {
+    if (selectedValue != '') {
+      const formData = this.coverForm;
+      formData.patchValue({
+        Action: ActionEnum.IsModified
+      });
+    }
+  }
+
+  onSubmit() {
+    this.coverForm.markAllAsTouched();
+    this.reToolTabService.formStatus = this.coverForm.status;
+    this.updateCoverOccupancyData();
+
+    if (this.coverForm.status == ReToolConstants.valid) {
+      this.reToolTabService.emit('onSaveFormData', { formData: this.getCoverFormData, subTabIndex: 0 });
+    } else {
+      this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+    }
+  }
+
+  private updateHighlight(index: number, selectedTypeId: string,
+    controlUpdate: string, controlType: 'HazardTIV' | 'EquipmentBreakdownTIV' |
+      'EquipmentBreakdownHazardReview' | 'OccupancyHighestHazardReview') {
+    const occupancyTypeList = this.rowValuesMap.get(index).OccupancyTypeList;
+    const selectedType = occupancyTypeList.find(item => item.value == selectedTypeId);
+    let controlKey: string = '';
+    if (index === 0) {
+      controlKey = controlType === ReToolConstants.HazardTIV ? ReToolConstants.HazardTIV : ReToolConstants.EquipmentBreakdownTIV;
+    }
+    else {
+      controlKey = controlType === ReToolConstants.OccupancyHighestHazardReview ? ReToolConstants.OccupancyHighestHazardReview : ReToolConstants.EquipmentBreakdownHazardReview;
+    }
+    const control = this.coverForm.get(controlKey);
+    let isHighlighted: boolean = false;
+
+    if (control) {
+      const dropdownValue = control.value;
+
+      if (selectedType) {
+
+        if (index === 0) {
+          isHighlighted = controlType === ReToolConstants.HazardTIV
+            ? dropdownValue !== selectedType.dependentValue.hazard
+            : dropdownValue !== selectedType.dependentValue.equipmentBreakdown;
+        } else {
+          isHighlighted = controlType === ReToolConstants.OccupancyHighestHazardReview
+            ? dropdownValue !== selectedType.dependentValue.hazard
+            : dropdownValue !== selectedType.dependentValue.equipmentBreakdown;
+        }
+        control[ReToolConstants.isHighlighted] = isHighlighted;
+      }
+    } else {
+      control[ReToolConstants.isHighlighted] = isHighlighted;
+    }
+    this.coverForm.get(controlUpdate).setValue(isHighlighted);
+  }
+
+  private getOccupancyType(index: number, selectedGroupId: string, currentValues: any, data: any) {
+    this.reToolService.getOccupancyType(selectedGroupId).subscribe(types => {
+      const existingOccupancyType = currentValues?.OccupancyType || ReToolConstants.blank;
+      const validType = types.find(type => type.value === existingOccupancyType);
+
+      if (validType) {
+        data.patchValue({
+          OccupancyTypeTIV: validType.value,
+          OccupancyCodeTIV: validType.dependentValue.occupancyTypeCode,
+          HazardTIV: validType.dependentValue.hazard,
+          EquipmentBreakdownTIV: validType.dependentValue.equipmentBreakdown,
+          OccupancyTypeList: types
+        });
+      } else {
+        this.rowValuesMap.set(index, {
+          ...this.rowValuesMap.get(index),
+          OccupancyTypeList: types
+        })
+      }
+      this.rowValuesMap.set(index, {
+        ...this.rowValuesMap.get(index),
+        OccupancyTypeList: types
+      })
+    });
+  }
+
+  private getOccupancyBasedonHighestHazard(index: number, selectedGroupId: string, currentValues: any, data: any) {
+
+    const propertyLocations = data.get('PropertyLocations').value;
+    const maxHazard = Math.max(...propertyLocations.map(item => item.hazard));
+
+    if (maxHazard != undefined && !isNaN(maxHazard)) {
+      const highestHazardData = propertyLocations.find(g => g.hazard === maxHazard);
+      this.reToolService.getOccupancyType(highestHazardData.occupancyGroup).subscribe(types => {
+        const existingOccupancyType = highestHazardData.occupancyType || ReToolConstants.blank;
+        const validType = types.find(type => type.value == existingOccupancyType);
+        const isHazardReviewUpdated = this.coverForm.get('IsHighestHazardReviewUpdated').value;
+        const IsEBRHazardReviewUpdated = this.coverForm.get('IsEBRHighestHazardReviewUpdated').value;
+        const occupancyHighestHazardReview = this.coverForm.get('OccupancyHighestHazardReview').value;
+        const equipmentBreakdownHazardReview = this.coverForm.get('EquipmentBreakdownHazardReview').value;
+
+        if (validType) {
+          data.patchValue({
+            OccupancyGroupHighestHazardReview: highestHazardData.occupancyGroup,
+            OccupancyTypeHighestHazardReview: highestHazardData.occupancyType,
+            OccupancyCodeHighestHazardReview: highestHazardData.occupancyCode,
+            OccupancyHighestHazardReview: isHazardReviewUpdated === true ? occupancyHighestHazardReview : highestHazardData.hazard,
+            EquipmentBreakdownHazardReview: IsEBRHazardReviewUpdated === true ? equipmentBreakdownHazardReview : highestHazardData.equipmentBreakdown,
+            OccupancyTypeList: types
+          });
+
+        } else {
+          this.rowValuesMap.set(index, {
+            ...this.rowValuesMap.get(index),
+            OccupancyTypeList: types
+          })
+        }
+        this.setRecommendedReviewFrequency(data);
+        this.rowValuesMap.set(index, {
+          ...this.rowValuesMap.get(index),
+          OccupancyTypeList: types
+        })
+      });
+    }
+
+  }
+
+
+
+  private disableDropdownControl(index: number, coverForm: any, isDisabled: boolean): void {
+
+    if (index === 0) {
+      if (isDisabled) {
+        coverForm.get('HazardTIV').disable();
+        coverForm.get('EquipmentBreakdownTIV').disable();
+      } else {
+        coverForm.get('HazardTIV').enable();
+        coverForm.get('EquipmentBreakdownTIV').enable();
+      }
+    } else {
+      if (isDisabled) {
+        coverForm.get('OccupancyHighestHazardReview').disable();
+        coverForm.get('EquipmentBreakdownHazardReview').disable();
+      } else {
+        coverForm.get('OccupancyHighestHazardReview').enable();
+        coverForm.get('EquipmentBreakdownHazardReview').enable();
+      }
+    }
+
+  }
+
+  private getFormValue(): Cover {
+    return (this.coverForm.value as Cover);
+  }
+
+  private get getCoverFormData(): Cover {
+    return this.getFormValue() as Cover;
+  }
+
+  private totalReportedTotalPD(formGroup: FormGroup<any>) {
+    const ReportedBuildingValueValue = parseFloat(Utility.removeComma(formGroup.get('ReportedBuildingValue')?.value)) || 0.0;
+    const reportedContentValue = parseFloat(Utility.removeComma(formGroup.get('ReportedContentsValue')?.value)) || 0.0;
+    const reportedTotalPD = ReportedBuildingValueValue + reportedContentValue;
+    formGroup.get('ReportedTotalPD').setValue(Utility.commaSepratedValueForDisabledInput(reportedTotalPD), { emitEvent: false });
+    this.totalReportedTIV(formGroup);
+    this.calculatedPercentageReviewedTotalPD(formGroup);
+  }
+
+  private calculatedReportedTotalPD(reportedTotalPDValue: number, ReportedTotalBivalueValue: number): number {
+    if (reportedTotalPDValue != undefined && ReportedTotalBivalueValue != undefined) {
+      return reportedTotalPDValue + ReportedTotalBivalueValue;
+    }
+    else {
+      return 0.0;
+    }
+  }
+
+  private totalReportedTIV(formGroup: FormGroup<any>) {
+    const reportedTotalPDValue = parseFloat(Utility.removeComma(formGroup.get('ReportedTotalPD')?.value)) || 0.0;
+    const ReportedTotalBivalueValue = parseFloat(Utility.removeComma(formGroup.get('ReportedTotalBivalue')?.value)) || 0.0;
+    const reportedTotalTIV = reportedTotalPDValue + ReportedTotalBivalueValue;
+    formGroup.get('ReportedTIV').setValue(Utility.commaSepratedValueForDisabledInput(reportedTotalTIV), { emitEvent: false });
+    this.calculatedPercentageReviewedTIV(formGroup);
+  }
+
+  private calculatedReviewedBuilding(formGroup: FormGroup<any>) {
+    const propertyLocations = this.coverForm.get('PropertyLocations').value;
+    const propertyLocationBuildingValues = propertyLocations.reduce((sum, current) => sum + current.buildingValue, 0);
+    formGroup.get('ReviewedBuilding').setValue(Utility.commaSepratedValueForDisabledInput(propertyLocationBuildingValues), { emitEvent: false });
+  }
+
+  private calculatedReviewedContents(formGroup: FormGroup<any>) {
+    const propertyLocations = this.coverForm.get('PropertyLocations').value;
+    const propertyLocationBuildingValues = propertyLocations.reduce((sum, value) => sum + (value.equipmentValue ?? 0) + (value.inventoryValue ?? 0) + (value.otherValue ?? 0), 0);
+    formGroup.get('ReviewedContents').setValue(Utility.commaSepratedValueForDisabledInput(propertyLocationBuildingValues), { emitEvent: false });
+  }
+
+  private calculatedReviewedTotalPD(formGroup: FormGroup<any>) {
+    const reviewedBuildingCalculated = parseFloat(Utility.removeComma(formGroup.get('ReviewedBuilding')?.value)) || 0.0;
+    const reviewedContentsCalculated = parseFloat(Utility.removeComma(formGroup.get('ReviewedContents')?.value)) || 0.0;
+    const reviewTotalPD = reviewedBuildingCalculated + reviewedContentsCalculated;
+    formGroup.get('ReviewedTotalPD').setValue(Utility.commaSepratedValueForDisabledInput(reviewTotalPD), { emitEvent: false });
+  }
+
+  private calculatedReviewedTotalBI(formGroup: FormGroup<any>) {
+    const propertyLocations = this.coverForm.get('PropertyLocations').value;
+    const propertyLocationTotalTE = propertyLocations.reduce((sum, value) => sum + (value.businessInterruptionOtherValue ?? 0) + (value.businessInterruptionValue ?? 0) + (value.payrollValue ?? 0), 0);
+    formGroup.get('ReviewedTotalBI').setValue(Utility.commaSepratedValueForDisabledInput(propertyLocationTotalTE), { emitEvent: false });
+  }
+
+  private calculatedReviewedTIV(formGroup: FormGroup<any>) {
+    const reviewedTotalPDCalculated = parseFloat(Utility.removeComma(formGroup.get('ReviewedTotalPD')?.value)) || 0.0;
+    const reviewedTotalBICalculated = parseFloat(Utility.removeComma(formGroup.get('ReviewedTotalBI')?.value)) || 0.0;
+    const calculatedReviewIV = reviewedTotalPDCalculated + reviewedTotalBICalculated;
+    formGroup.get('ReviewedTIV').setValue(Utility.commaSepratedValueForDisabledInput(calculatedReviewIV), { emitEvent: false });
+  }
+
+  private calculatedPercentageReviewedBuilding(formGroup: FormGroup<any>) {
+    const reviewedBuildingCalculated = parseFloat(Utility.removeComma(formGroup.get('ReviewedBuilding')?.value)) || 0.0;
+    const ReportedBuildingValue = parseFloat(Utility.removeComma(formGroup.get('ReportedBuildingValue')?.value)) || 0.0;
+    const calculatedReviewedPercentageBuilding = reviewedBuildingCalculated / ReportedBuildingValue;
+    formGroup.get('ReviewedPercentageBuilding').setValue(calculatedReviewedPercentageBuilding === Infinity ? '0%' : calculatedReviewedPercentageBuilding.toFixed(1) + '%');
+  }
+
+  private calculatedPercentageReviewedContents(formGroup: FormGroup<any>) {
+    const reviewedContentsCalculated = parseFloat(Utility.removeComma(formGroup.get('ReviewedContents')?.value)) || 0.0;
+    const ReportedContentsValue = parseFloat(Utility.removeComma(formGroup.get('ReportedContentsValue')?.value)) || 0.0;
+    const calculatedReviewedPercentageContents = reviewedContentsCalculated / ReportedContentsValue;
+    formGroup.get('ReviewedPercentageContents').setValue(calculatedReviewedPercentageContents === Infinity ? '0%' : calculatedReviewedPercentageContents.toFixed(1) + '%');
+  }
+
+  private calculatedPercentageReviewedTotalPD(formGroup: FormGroup<any>) {
+    const reviewedTotalPDCalculated = parseFloat(Utility.removeComma(formGroup.get('ReviewedTotalPD')?.value)) || 0.0;
+    const reportedTotalPDCalculated = parseFloat(Utility.removeComma(formGroup.get('ReportedTotalPD')?.value)) || 0.0;
+    const calculatedReviewedPercentageTotalPD = reviewedTotalPDCalculated / reportedTotalPDCalculated;
+    formGroup.get('ReviewedPercentageTotalPD').setValue(calculatedReviewedPercentageTotalPD === Infinity ? '0%' : calculatedReviewedPercentageTotalPD.toFixed(1) + '%');
+  }
+
+  private calculatedPercentageReviewedTotalBI(formGroup: FormGroup<any>) {
+    const reviewedTotalBICalculated = parseFloat(Utility.removeComma(formGroup.get('ReviewedTotalBI')?.value)) || 0.0;
+    const ReportedTotalBivalue = parseFloat(Utility.removeComma(formGroup.get('ReportedTotalBivalue')?.value)) || 0.0;
+    const calculatedReviewedPercentageTotalBI = reviewedTotalBICalculated / ReportedTotalBivalue;
+    formGroup.get('ReviewedPercentageTotalBI').setValue(calculatedReviewedPercentageTotalBI === Infinity ? '0%' : calculatedReviewedPercentageTotalBI.toFixed(1) + '%');
+  }
+
+  private calculatedPercentageReviewedTIV(formGroup: FormGroup<any>) {
+    const reviewedTIVCalculated = parseFloat(Utility.removeComma(formGroup.get('ReviewedTIV')?.value)) || 0.0;
+    const reportedTIV = parseFloat(Utility.removeComma(formGroup.get('ReportedTIV')?.value)) || 0.0;
+    const calculatedReviewedPercentageTIV = reviewedTIVCalculated / reportedTIV;
+    formGroup.get('ReviewedPercentageTIV').setValue(calculatedReviewedPercentageTIV === Infinity ? '0%' : calculatedReviewedPercentageTIV.toFixed(1) + '%');
+  }
+
+  private setRecommendedReviewFrequency(formGroup: FormGroup<any>) {
+    const selectedHazardValue = formGroup.get('OccupancyHighestHazardReview').value;
+
+    switch (Number(selectedHazardValue)) {
+      case HazardEnum.Low:
+        formGroup.get('RecommendedReviewFrequency').setValue(ReToolConstants.Review36Months);
+        formGroup.get('RecommendedAccountPercentageTIV').setValue(ReToolConstants.TIV20Review);
+        break;
+      case HazardEnum.Moderate:
+        formGroup.get('RecommendedReviewFrequency').setValue(ReToolConstants.Review24Months);
+        formGroup.get('RecommendedAccountPercentageTIV').setValue(ReToolConstants.TIV30Review);
+        break;
+      case HazardEnum.High:
+        formGroup.get('RecommendedReviewFrequency').setValue(ReToolConstants.Review12Months);
+        formGroup.get('RecommendedAccountPercentageTIV').setValue(ReToolConstants.TIV40Review);
+        break;
+      case HazardEnum.Severe:
+        formGroup.get('RecommendedReviewFrequency').setValue(ReToolConstants.Review12Months);
+        formGroup.get('RecommendedAccountPercentageTIV').setValue(ReToolConstants.TIV50Review);
+        break;
+    }
+
+  }
+
+  private calculatedReportedTotalTIV(ReportedBuildingValueValue: number, reportedContentValue: number): number {
+    if (ReportedBuildingValueValue != undefined && reportedContentValue != undefined) {
+      return ReportedBuildingValueValue + reportedContentValue;
+    }
+    else {
+      return 0.0;
+    }
+  }
+
+  private setUpReportedPropertyTIVCalculation(formData: FormGroup<any>) {
+    const reportedPropertyTotalPDValue = formData.get('ReportedTotalPD')?.valueChanges.subscribe(({
+      next: (res) => {
+        if (res !== undefined && res !== null) {
+          this.totalReportedTIV(formData);
+        }
+      },
+      error: (error) => {
+        throw new error;
+      },
+    }));
+    this.subscription?.add(reportedPropertyTotalPDValue);
+
+    const ReportedTotalBivalueValue = formData.get('ReportedTotalBivalue')?.valueChanges.subscribe(({
+      next: (res) => {
+        if (res !== undefined && res !== null) {
+          this.setAction(res);
+          this.totalReportedTIV(formData)
+          this.calculatedPercentageReviewedTotalBI(formData);
+        }
+      },
+      error: (error) => {
+        throw new error;
+      },
+    }));
+    this.subscription?.add(ReportedTotalBivalueValue);
+  }
+
+  private setUpReportedPropertyDamagedTotalCalculation(formData: FormGroup<any>) {
+    const reportedPropertyDamageValue = formData.get('ReportedBuildingValue')?.valueChanges.subscribe(({
+      next: (res) => {
+        if (res !== undefined && res !== null) {
+          this.setAction(res);
+          this.totalReportedTotalPD(formData);
+          this.calculatedPercentageReviewedBuilding(formData);
+        }
+      },
+      error: (error) => {
+        throw new error;
+      },
+    }));
+    this.subscription?.add(reportedPropertyDamageValue);
+
+    const reportedContentValue = formData.get('ReportedContentsValue')?.valueChanges.subscribe(({
+      next: (res) => {
+
+        if (res !== undefined && res !== null) {
+          this.setAction(res);
+          this.totalReportedTotalPD(formData)
+          this.calculatedPercentageReviewedContents(formData);
+        }
+      },
+      error: (error) => {
+        throw new error;
+      },
+    }));
+    this.subscription?.add(reportedContentValue);
+  }
+
+  private setupCalculationSubscribers(formData: FormGroup<any>) {
+    this.setUpReportedPropertyDamagedTotalCalculation(formData);
+    this.setUpReportedPropertyTIVCalculation(formData);
+  }
+
+  private updateCoverOccupancyData() {
+
+    let occupancy = this.coverForm.get('Occupancy')?.value;
+
+    if (!occupancy && !Utility.isCoverOccupancyValue(JSON.parse(occupancy)))
+      occupancy = Utility.getCoverOccupancyDefaultValue();
+    else
+      occupancy = JSON.parse(occupancy);
+
+    this.setOccupancyValuesForSerialize();
+    const occupancySerialzed = this.getOccupancyValuesSerialize(this.occupancyData);
+    this.coverForm.get('Occupancy')?.setValue(occupancySerialzed);
+  }
+
+  private getOccupancyValuesSerialize(occupancyValues: any): any {
+    if (occupancyValues != null && occupancyValues != undefined) {
+      return JSON.stringify(occupancyValues);
+    }
+    return null;
+  }
+
+  private setOccupancyValuesForSerialize(): void {
+
+    this.occupancyData = {
+      occupancyGroupTIV: this.coverForm.get('OccupancyGroupTIV')?.value,
+      occupancyTypeTIV: this.coverForm.get('OccupancyTypeTIV')?.value,
+      occupancyCodeTIV: this.coverForm.get('OccupancyCodeTIV')?.value,
+      hazardTIV: this.coverForm.get('HazardTIV')?.value,
+      deviationTIV: this.coverForm.get('DeviationTIV')?.value,
+      equipmentBreakdownTIV: this.coverForm.get('EquipmentBreakdownTIV')?.value,
+      isHazardTIVUpdated: this.coverForm.get('IsHazardTIVUpdated')?.value,
+      isEquipmentBreakdownUpdatedTIV: this.coverForm.get('IsEquipmentBreakdownUpdatedTIV')?.value,
+      occupancyHighestHazardReview: this.coverForm.get('OccupancyHighestHazardReview')?.value,
+      equipmentBreakdownHazardReview: this.coverForm.get('EquipmentBreakdownHazardReview')?.value,
+      deviationHighestHazardReview: this.coverForm.get('DeviationHighestHazardReview')?.value,
+      isHazardReviewUpdated: this.coverForm.get('IsHighestHazardReviewUpdated')?.value,
+      isEBRHazardReviewUpdated: this.coverForm.get('IsEBRHighestHazardReviewUpdated')?.value
+    }
+  }
+
+  private setOccpancyValuesAfterDeserialize(): Cover {
+
+    const coverData = this.coverData;
+    const occupancyValue = this.getOccupancyValuesDeserialize(coverData.Occupancy);
+
+    if (occupancyValue != null && occupancyValue != undefined) {
+      coverData.OccupancyGroupTIV = occupancyValue.occupancyGroupTIV;
+      coverData.OccupancyTypeTIV = occupancyValue.occupancyTypeTIV;
+      coverData.OccupancyCodeTIV = occupancyValue.occupancyCodeTIV;
+      coverData.HazardTIV = occupancyValue.hazardTIV;
+      coverData.DeviationTIV = occupancyValue.deviationTIV;
+      coverData.EquipmentBreakdownTIV = occupancyValue.equipmentBreakdownTIV;
+      coverData.IsHazardTIVUpdated = occupancyValue.isHazardTIVUpdated;
+      coverData.IsEquipmentBreakdownUpdatedTIV = occupancyValue.isEquipmentBreakdownUpdatedTIV;
+      coverData.OccupancyHighestHazardReview = occupancyValue.occupancyHighestHazardReview;
+      coverData.EquipmentBreakdownHazardReview = occupancyValue.equipmentBreakdownHazardReview;
+      coverData.DeviationHighestHazardReview = occupancyValue.deviationHighestHazardReview;
+      coverData.IsHighestHazardReviewUpdated = occupancyValue.isHazardReviewUpdated;
+      coverData.IsEBRHighestHazardReviewUpdated = occupancyValue.isEBRHazardReviewUpdated;
+    }
+    return coverData;
+  }
+
+  private getOccupancyValuesDeserialize(value: string): OccupancyUnderwritingSummary {
+
+    if (value) {
+      const parseValue = JSON.parse(value) as OccupancyUnderwritingSummary;
+      if (parseValue && parseValue != undefined && parseValue != null)
+        return parseValue;
+      else
+        return Utility.getCoverOccupancyDefaultValue();
+    }
+
+    return Utility.getCoverOccupancyDefaultValue();
+  }
+
+  private setDefaultValue(ReportedValue: any): any {
+    if (ReportedValue != 0 && ReportedValue != undefined && ReportedValue != '') {
+      return Utility.commaSepratedValueForDisabledInput(ReportedValue);
+    }
+    else {
+      return '';
+    }
+  }
+
+  ngOnDestroy() {
+    if (this.subscription) {
+      this.subscription?.unsubscribe();
+    }
+  }
+}
