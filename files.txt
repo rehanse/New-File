@@ -1,16 +1,36 @@
 it('should update form and emit event on onSubmit with valid data', () => {
-  spyOn(component as any, 'updateCoverOccupancyData'); // Spy on private method
+    spyOn(component as any, 'updateCoverOccupancyData'); // Spy on private method
+  
+    // Ensure form initialization
+    component.ngOnInit();
+  
+    // Set form values
+    component.coverForm.get('ReportedBuildingValue')?.setValue('1000');
+  
+    // Call the method
+    component.onSubmit();
+  
+    // Assertions
+    expect(component['updateCoverOccupancyData']).toHaveBeenCalled();
+    expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
+  });
 
-  // Ensure form initialization
-  component.ngOnInit();
+CoverComponent > should update form and emit event on onSubmit with valid data
+Expected spy ReToolTabService.emit to have been called with:
+  [ 'onSaveFormData', <jasmine.any(Object)> ]
+but actual calls were:
+  [ 'onFormComponentInit', Object({ encodedTabIndex: 1 }) ].
 
-  // Set form values
-  component.coverForm.get('ReportedBuildingValue')?.setValue('1000');
-
-  // Call the method
-  component.onSubmit();
-
-  // Assertions
-  expect(component['updateCoverOccupancyData']).toHaveBeenCalled();
-  expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
-});
+Call 0:
+  Expected $[0] = 'onFormComponentInit' to equal 'onSaveFormData'.
+Error: Expected spy ReToolTabService.emit to have been called with:
+  [ 'onSaveFormData', <jasmine.any(Object)> ]
+but actual calls were:
+  [ 'onFormComponentInit', Object({ encodedTabIndex: 1 }) ].
+Call 0:
+  Expected $[0] = 'onFormComponentInit' to equal 'onSaveFormData'.
+    at <Jasmine>
+    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.spec.ts:76:39)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
+    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
