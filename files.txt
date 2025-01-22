@@ -1,78 +1,12 @@
-beforeEach(async () => {
-  mockReToolService = jasmine.createSpyObj('ReToolService', ['getOccupancyGroup', 'getOccupancyType']);
-  mockReToolTabService = jasmine.createSpyObj('ReToolTabService', ['emit', 'on', 'showErrorMessage', 'actionStateChange']);
-
-  // Mock return values
-  mockReToolService.getOccupancyGroup.and.returnValue(of({
-    occupancyGroups: [{ text: 'Group A', value: 'A', category: 'CAT_A', defaultValue: 'Default A' }],
-    hazard: [{ text: 'Hazard A', value: 'HA' }],
-    equipmentBreakdown: [{ text: 'Breakdown A', value: 'BA' }]
-  }));
-
-  await TestBed.configureTestingModule({
-    declarations: [CoverComponent],
-    imports: [ReactiveFormsModule],
-    providers: [
-      { provide: ReToolService, useValue: mockReToolService },
-      { provide: ReToolTabService, useValue: mockReToolTabService },
-      FormBuilder,
-    ],
-  }).compileComponents();
-
-  fixture = TestBed.createComponent(CoverComponent);
-  component = fixture.componentInstance;
-
-  // Call lifecycle hooks after mocking
-  fixture.detectChanges();
-});
-
-
-it('should load occupancy groups and set OccupancyGroupData', async () => {
-  component.loadOccupancyGroups();
-
-  await fixture.whenStable(); // Wait for asynchronous operations to complete
-
-  expect(component.OccupancyGroupData.length).toBe(1);
-  expect(component.OccupancyGroupData[0].text).toBe('Group A');
-  expect(component.HazardData.length).toBe(1);
-  expect(component.HazardData[0].text).toBe('Hazard A');
-  expect(component.EquipmentBreakdownData.length).toBe(1);
-  expect(component.EquipmentBreakdownData[0].text).toBe('Breakdown A');
-});
-
-
-loadOccupancyGroups(): void {
-  console.log('Calling getOccupancyGroup');
-  const loadOccupancyGroups = this.reToolService.getOccupancyGroup(0).subscribe({
-    next: (response) => {
-      console.log('Response received:', response);
-      this.OccupancyGroupData = response.occupancyGroups;
-      this.HazardData = response.hazard;
-      this.EquipmentBreakdownData = response.equipmentBreakdown;
-    },
-    error: (error) => {
-      console.error('Error:', error);
-      throw new Error(error);
-    }
-  });
-  this.subscription.add(loadOccupancyGroups);
-}
-
-
-it('should load occupancy groups and set OccupancyGroupData', async () => {
-  // Ensure method is called
-  spyOn(component, 'loadOccupancyGroups').and.callThrough();
-
-  // Call the method
-  component.ngOnInit();
-
-  await fixture.whenStable(); // Wait for async operations
-
-  expect(component.loadOccupancyGroups).toHaveBeenCalled();
-  expect(component.OccupancyGroupData.length).toBe(1);
-  expect(component.OccupancyGroupData[0].text).toBe('Group A');
-  expect(component.HazardData.length).toBe(1);
-  expect(component.HazardData[0].text).toBe('Hazard A');
-  expect(component.EquipmentBreakdownData.length).toBe(1);
-  expect(component.EquipmentBreakdownData[0].text).toBe('Breakdown A');
-});
+CoverComponent > should create the component
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.initializeForm (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:107:84)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:56:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
