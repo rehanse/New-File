@@ -1,13 +1,7 @@
 it('should update form and emit event on onSubmit with valid data', () => {
-      spyOn(component'updateCoverOccupancyData');
-      component.coverForm.get('ReportedBuildingValue')?.setValue('1000');
-      component.onSubmit();
-      expect(component['updateCoverOccupancyData']).toHaveBeenCalled();
-      expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
-    });
-	
-	
-	above test cases has error come on this line code spyOn(component'updateCoverOccupancyData');
-	error is following
-	',' expected.ts(1005)
-Argument of type '"updateCoverOccupancyData"' is not assignable to parameter of type 'never'.ts(2345)
+  spyOn(component as any, 'updateCoverOccupancyData'); // Correctly reference private method with `as any`
+  component.coverForm.get('ReportedBuildingValue')?.setValue('1000');
+  component.onSubmit();
+  expect(component['updateCoverOccupancyData']).toHaveBeenCalled();
+  expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
+});
