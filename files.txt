@@ -1,6 +1,15 @@
+export interface MasterDataModel {
+  id: number;
+  name: string;
+  code: string;
+  description: string;
+}
+
 it('should load occupancy groups on loadOccupancyGroups', () => {
   const mockResponse = {
-    occupancyGroups: [{ id: 1, name: 'Group A', code: 'GRA', description: 'Group A Description' }], // Add required properties
+    occupancyGroups: [
+      { id: 1, name: 'Group A', code: 'CODE_A', description: 'Description A' },
+    ],
     hazard: [],
     equipmentBreakdown: [],
   };
