@@ -1,7 +1,23 @@
-it('should update form and emit event on onSubmit with valid data', () => {
-  spyOn(component as any, 'updateCoverOccupancyData'); // Correctly reference private method with `as any`
-  component.coverForm.get('ReportedBuildingValue')?.setValue('1000');
-  component.onSubmit();
-  expect(component['updateCoverOccupancyData']).toHaveBeenCalled();
-  expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
-});
+it('should load occupancy groups on loadOccupancyGroups', () => {
+      const mockResponse = {
+        occupancyGroups: [{ id: 1, name: 'Group A' }],
+        hazard: [],
+        equipmentBreakdown: [],
+      };
+      mockReToolService.getOccupancyGroup.and.returnValue(of(mockResponse));
+      component.loadOccupancyGroups();
+      expect(component.OccupancyGroupData).toEqual(mockResponse.occupancyGroups);
+    });
+	
+	
+	above test cases has error come on this line code expect(component.OccupancyGroupData).toEqual(mockResponse.occupancyGroups);
+	error is following
+	Argument of type '{ id: number; name: string; }[]' is not assignable to parameter of type 'Expected<ArrayLike<MasterDataModel>> | ArrayContaining<MasterDataModel>'.
+  Type '{ id: number; name: string; }[]' is not assignable to type '{ [x: number]: ExpectedRecursive<MasterDataModel>; length: ExpectedRecursive<number>; }'.
+    'number' index signatures are incompatible.
+      Type '{ id: number; name: string; }' is not assignable to type 'ExpectedRecursive<MasterDataModel>'.ts(2345)
+(property) occupancyGroups: {
+    id: number;
+    name: string;
+}[]
+
