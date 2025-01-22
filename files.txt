@@ -1,23 +1,10 @@
 it('should load occupancy groups on loadOccupancyGroups', () => {
-      const mockResponse = {
-        occupancyGroups: [{ id: 1, name: 'Group A' }],
-        hazard: [],
-        equipmentBreakdown: [],
-      };
-      mockReToolService.getOccupancyGroup.and.returnValue(of(mockResponse));
-      component.loadOccupancyGroups();
-      expect(component.OccupancyGroupData).toEqual(mockResponse.occupancyGroups);
-    });
-	
-	
-	above test cases has error come on this line code expect(component.OccupancyGroupData).toEqual(mockResponse.occupancyGroups);
-	error is following
-	Argument of type '{ id: number; name: string; }[]' is not assignable to parameter of type 'Expected<ArrayLike<MasterDataModel>> | ArrayContaining<MasterDataModel>'.
-  Type '{ id: number; name: string; }[]' is not assignable to type '{ [x: number]: ExpectedRecursive<MasterDataModel>; length: ExpectedRecursive<number>; }'.
-    'number' index signatures are incompatible.
-      Type '{ id: number; name: string; }' is not assignable to type 'ExpectedRecursive<MasterDataModel>'.ts(2345)
-(property) occupancyGroups: {
-    id: number;
-    name: string;
-}[]
-
+  const mockResponse = {
+    occupancyGroups: [{ id: 1, name: 'Group A', code: 'GRA', description: 'Group A Description' }], // Add required properties
+    hazard: [],
+    equipmentBreakdown: [],
+  };
+  mockReToolService.getOccupancyGroup.and.returnValue(of(mockResponse));
+  component.loadOccupancyGroups();
+  expect(component.OccupancyGroupData).toEqual(mockResponse.occupancyGroups);
+});
