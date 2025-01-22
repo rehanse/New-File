@@ -1,19 +1,126 @@
-export interface MasterDataModel {
-  id: number;
-  name: string;
-  code: string;
-  description: string;
-}
+CoverComponent > should show error message on onSubmit with invalid data
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:240:72)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:55:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
 
-it('should load occupancy groups on loadOccupancyGroups', () => {
-  const mockResponse = {
-    occupancyGroups: [
-      { id: 1, name: 'Group A', code: 'CODE_A', description: 'Description A' },
-    ],
-    hazard: [],
-    equipmentBreakdown: [],
-  };
-  mockReToolService.getOccupancyGroup.and.returnValue(of(mockResponse));
-  component.loadOccupancyGroups();
-  expect(component.OccupancyGroupData).toEqual(mockResponse.occupancyGroups);
-});
+CoverComponent > should load occupancy groups on loadOccupancyGroups
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:240:72)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:55:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+
+
+
+CoverComponent > should unsubscribe from subscriptions on ngOnDestroy
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:240:72)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:55:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+
+
+CoverComponent > should calculate totalReportedTIV correctly
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:240:72)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:55:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+
+
+CoverComponent > should update highlight status correctly
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:240:72)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:55:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+
+
+
+CoverComponent > should calculate reviewed percentages correctly for building
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:240:72)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:55:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+
+
+CoverComponent > should calculate percentages for total TIV correctly
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:240:72)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:55:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/coreCoverComponent > should calculate percentages for total TIV correctly
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:240:72)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:55:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+
+/fesm2022/core.mjs:13352:5)
+
+
+CoverComponent > should serialize occupancy values correctly
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:240:72)
+    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:55:10)
+    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
+    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
+    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
+    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
+    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
+    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
+    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+
+
