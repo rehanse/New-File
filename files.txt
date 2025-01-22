@@ -1,12 +1,52 @@
-CoverComponent > should create the component
-TypeError: Cannot read properties of undefined (reading 'subscribe')
-    at CoverComponent.initializeForm (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:107:84)
-    at CoverComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.ts:56:10)
-    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
-    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
-    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
-    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
-    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
-    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
-    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
-    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+describe('CoverComponent', () => {
+  let component: CoverComponent;
+  let fixture: ComponentFixture<CoverComponent>;
+  let mockReToolService: jasmine.SpyObj<ReToolService>;
+  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+
+  beforeEach(async () => {
+    // Mock Services
+    mockReToolService = jasmine.createSpyObj('ReToolService', ['getOccupancyGroup', 'getOccupancyType']);
+    mockReToolTabService = jasmine.createSpyObj('ReToolTabService', ['emit', 'on', 'showErrorMessage', 'actionStateChange']);
+
+    // Mock Observables
+    mockReToolService.getOccupancyGroup.and.returnValue(of({
+      occupancyGroups: [{ text: 'Group A', value: 'A', category: 'CAT_A', defaultValue: 'Default A' }],
+      hazard: [{ text: 'Hazard A', value: 'HA' }],
+      equipmentBreakdown: [{ text: 'Breakdown A', value: 'BA' }]
+    }));
+
+    mockReToolTabService.on.and.returnValue(of({
+      data: { ReportedBuildingValue: '100', ReportedContentsValue: '200' },
+      columns: ['Column1', 'Column2']
+    }));
+
+    await TestBed.configureTestingModule({
+      declarations: [CoverComponent],
+      imports: [ReactiveFormsModule],
+      providers: [
+        { provide: ReToolService, useValue: mockReToolService },
+        { provide: ReToolTabService, useValue: mockReToolTabService },
+        FormBuilder,
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(CoverComponent);
+    component = fixture.componentInstance;
+  });
+
+  it('should create the component', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should initialize the form and load occupancy groups on ngOnInit', () => {
+    spyOn(component, 'loadOccupancyGroups');
+    spyOn(component, 'initializeForm');
+
+    component.ngOnInit();
+
+    expect(component.loadOccupancyGroups).toHaveBeenCalled();
+    expect(component.initializeForm).toHaveBeenCalled();
+    expect(mockReToolTabService.emit).toHaveBeenCalledWith('onFormComponentInit', { encodedTabIndex: 0 });
+  });
+});
