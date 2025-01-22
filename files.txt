@@ -1,52 +1,8 @@
-describe('CoverComponent', () => {
-  let component: CoverComponent;
-  let fixture: ComponentFixture<CoverComponent>;
-  let mockReToolService: jasmine.SpyObj<ReToolService>;
-  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+CoverComponent > should initialize the form and load occupancy groups on ngOnInit
+Expected spy ReToolTabService.emit to have been called with:
+  [ 'onFormComponentInit', Object({ encodedTabIndex: 0 }) ]
+but actual calls were:
+  [ 'onFormComponentInit', Object({ encodedTabIndex: 1 }) ].
 
-  beforeEach(async () => {
-    // Mock Services
-    mockReToolService = jasmine.createSpyObj('ReToolService', ['getOccupancyGroup', 'getOccupancyType']);
-    mockReToolTabService = jasmine.createSpyObj('ReToolTabService', ['emit', 'on', 'showErrorMessage', 'actionStateChange']);
-
-    // Mock Observables
-    mockReToolService.getOccupancyGroup.and.returnValue(of({
-      occupancyGroups: [{ text: 'Group A', value: 'A', category: 'CAT_A', defaultValue: 'Default A' }],
-      hazard: [{ text: 'Hazard A', value: 'HA' }],
-      equipmentBreakdown: [{ text: 'Breakdown A', value: 'BA' }]
-    }));
-
-    mockReToolTabService.on.and.returnValue(of({
-      data: { ReportedBuildingValue: '100', ReportedContentsValue: '200' },
-      columns: ['Column1', 'Column2']
-    }));
-
-    await TestBed.configureTestingModule({
-      declarations: [CoverComponent],
-      imports: [ReactiveFormsModule],
-      providers: [
-        { provide: ReToolService, useValue: mockReToolService },
-        { provide: ReToolTabService, useValue: mockReToolTabService },
-        FormBuilder,
-      ],
-    }).compileComponents();
-
-    fixture = TestBed.createComponent(CoverComponent);
-    component = fixture.componentInstance;
-  });
-
-  it('should create the component', () => {
-    expect(component).toBeTruthy();
-  });
-
-  it('should initialize the form and load occupancy groups on ngOnInit', () => {
-    spyOn(component, 'loadOccupancyGroups');
-    spyOn(component, 'initializeForm');
-
-    component.ngOnInit();
-
-    expect(component.loadOccupancyGroups).toHaveBeenCalled();
-    expect(component.initializeForm).toHaveBeenCalled();
-    expect(mockReToolTabService.emit).toHaveBeenCalledWith('onFormComponentInit', { encodedTabIndex: 0 });
-  });
-});
+Call 0:
+  Expected $[1].encodedTabIndex = 1 to equal 0.
