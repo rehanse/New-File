@@ -1,11 +1,16 @@
- it('should update form and emit event on onSubmit with valid data', () => {
-    spyOn(component as any, 'updateCoverOccupancyData'); // Correctly reference private method with `as any`
-    component.coverForm.get('ReportedBuildingValue')?.setValue('1000');
-    component.onSubmit();
-    expect(component['updateCoverOccupancyData']).toHaveBeenCalled();
-    expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
-  });
+it('should update form and emit event on onSubmit with valid data', () => {
+  spyOn(component as any, 'updateCoverOccupancyData'); // Spy on private method
 
+  // Ensure form initialization
+  component.ngOnInit();
 
-CoverComponent > should update form and emit event on onSubmit with valid data
-TypeError: Cannot read properties of undefined (reading 'get')
+  // Set form values
+  component.coverForm.get('ReportedBuildingValue')?.setValue('1000');
+
+  // Call the method
+  component.onSubmit();
+
+  // Assertions
+  expect(component['updateCoverOccupancyData']).toHaveBeenCalled();
+  expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
+});
