@@ -1,8 +1,11 @@
-CoverComponent > should initialize the form and load occupancy groups on ngOnInit
-Expected spy ReToolTabService.emit to have been called with:
-  [ 'onFormComponentInit', Object({ encodedTabIndex: 0 }) ]
-but actual calls were:
-  [ 'onFormComponentInit', Object({ encodedTabIndex: 1 }) ].
+ it('should update form and emit event on onSubmit with valid data', () => {
+    spyOn(component as any, 'updateCoverOccupancyData'); // Correctly reference private method with `as any`
+    component.coverForm.get('ReportedBuildingValue')?.setValue('1000');
+    component.onSubmit();
+    expect(component['updateCoverOccupancyData']).toHaveBeenCalled();
+    expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
+  });
 
-Call 0:
-  Expected $[1].encodedTabIndex = 1 to equal 0.
+
+CoverComponent > should update form and emit event on onSubmit with valid data
+TypeError: Cannot read properties of undefined (reading 'get')
