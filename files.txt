@@ -1,36 +1,573 @@
-it('should update form and emit event on onSubmit with valid data', () => {
-    spyOn(component as any, 'updateCoverOccupancyData'); // Spy on private method
-  
-    // Ensure form initialization
-    component.ngOnInit();
-  
-    // Set form values
-    component.coverForm.get('ReportedBuildingValue')?.setValue('1000');
-  
-    // Call the method
-    component.onSubmit();
-  
-    // Assertions
-    expect(component['updateCoverOccupancyData']).toHaveBeenCalled();
-    expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
-  });
+using EnterpriseApps.RET.Application.Property.Commands;
+using EnterpriseApps.RET.Core.Authentication.User.Repositories.Query;
+using EnterpriseApps.RET.Core.Common.Utility;
+using EnterpriseApps.RET.Core.Master.Entities;
+using EnterpriseApps.RET.Core.Property.Entities;
+using EnterpriseApps.RET.Core.Property.Repositories.Command;
+using EnterpriseApps.RET.Core.Property.Repositories.Query;
+using EnterpriseApps.RET.Core.Property.Request;
+using EnterpriseApps.RET.Core.Property.Response;
+using MediatR;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
-CoverComponent > should update form and emit event on onSubmit with valid data
-Expected spy ReToolTabService.emit to have been called with:
-  [ 'onSaveFormData', <jasmine.any(Object)> ]
-but actual calls were:
-  [ 'onFormComponentInit', Object({ encodedTabIndex: 1 }) ].
+namespace EnterpriseApps.RET.Application.Location.Handlers
+{
+    public class ImportPropertyLocationCommandHandler : IRequestHandler<ImportLocationCommand, ImportPropertyLocationResponse>
+    {
+        private readonly IImportPropertyLocationQueryRepository _locationQueryRepository;
+        private readonly IImportPropertyLocationCommandRepository _locationCommandRepository;
+        private readonly ILoginUserRepository _loginUserRepository;
+        private List<ImportLocationAddressMappingRequest>? _existingLocationAddresses;
+        private Dictionary<short, string> _countriesDict = null!;
+        public ImportPropertyLocationCommandHandler(IImportPropertyLocationQueryRepository locationQueryRepository, IImportPropertyLocationCommandRepository locationCommandRepository, ILoginUserRepository loginUserRepository)
+        {
+            _locationQueryRepository = locationQueryRepository;
+            _locationCommandRepository = locationCommandRepository;
+            _loginUserRepository = loginUserRepository;
+        }
 
-Call 0:
-  Expected $[0] = 'onFormComponentInit' to equal 'onSaveFormData'.
-Error: Expected spy ReToolTabService.emit to have been called with:
-  [ 'onSaveFormData', <jasmine.any(Object)> ]
-but actual calls were:
-  [ 'onFormComponentInit', Object({ encodedTabIndex: 1 }) ].
-Call 0:
-  Expected $[0] = 'onFormComponentInit' to equal 'onSaveFormData'.
-    at <Jasmine>
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/cover/cover.component.spec.ts:76:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
+        public async Task<ImportPropertyLocationResponse> Handle(ImportLocationCommand request, CancellationToken cancellationToken)
+        {
+            var locationAddresses = request.PropertyLocationAddresses;
+            var response = new ImportPropertyLocationResponse();
+
+            var countries = locationAddresses
+                .Select(l => l.Country)
+                .Distinct()
+                .ToList();
+
+            _countriesDict = await _locationQueryRepository.GetCountriesByName(countries);
+
+            var invalidCountries = countries.Except(_countriesDict.Values.ToList());
+
+            if (invalidCountries.Any())
+            {
+                response.IsError = true;
+                response.Message = $"Imported countries {string.Join(", ", invalidCountries)} does not exist!";
+                response.Data = null;
+                return response;
+            }
+
+            var ulIds = locationAddresses
+                .Where(l => !string.IsNullOrEmpty(l.ULId))
+                .Select(item => GetIdentifierCountryTuple(item.ULId!))
+                .ToList();
+            var existingUlIds = await _locationQueryRepository.GetExistingULIds(ulIds);
+
+            var inValidULIds = ulIds.Select(x=> ConvertToIdFormat(x, 5)).ToList().Except(existingUlIds);
+
+            if (inValidULIds.Any())
+            {
+                response.IsError = true;
+                response.Message = $"Imported ULIds {string.Join(", ", inValidULIds)} are invalid!";
+                response.Data = null;
+                return response;
+            }
+
+            var uaIds = locationAddresses
+                .Where(l => !string.IsNullOrEmpty(l.UAId))
+                .Select(l => GetIdentifierCountryTuple(l.UAId!))
+                .ToList();
+            var existingUAIds = await _locationQueryRepository.GetExistingUAIds(uaIds);
+
+            var inValidUAIds = uaIds.Select(x => ConvertToIdFormat(x,8)).ToList().Except(existingUAIds);
+
+            if (inValidUAIds.Any())
+            {
+                response.IsError = true;
+                response.Message = $"Imported UAIds {string.Join(", ", inValidUAIds)} are invalid!";
+                response.Data = null;
+                return response;
+            }
+
+            var locationCombination = locationAddresses
+                .Select(item => (LocationName: item.LocationName, CountryId: _countriesDict.FirstOrDefault(kvp => kvp.Value.ToLower() == item.Country.ToLower()).Key.ToString()))
+                .Where(comb => !string.IsNullOrEmpty(comb.CountryId))
+                .Distinct()
+                .ToList();
+
+            var addressCombination = locationAddresses
+                .Select(item => (AddressName: item.LocationAddress, City: item.City, State: item.State, Country: _countriesDict.FirstOrDefault(kvp => kvp.Value.ToLower() == item.Country.ToLower()).Key.ToString()))
+                .Distinct()
+                .ToList();
+
+            var locationMappings = await _locationQueryRepository
+                .GetExistingLocationAddressesCombinations(GetQueryFilters(locationCombination));
+
+            var addressMappings = await _locationQueryRepository
+                .GetExistingLocationAddressesCombinations(GetQueryFilters(addressCombination!));
+
+            _existingLocationAddresses = MergeLocationAddressMappings(locationMappings, addressMappings);
+
+            bool isImportedDataInvalid = false;
+
+            foreach (var address in locationAddresses)
+            {
+                var checkDuplicate = _existingLocationAddresses == null || _existingLocationAddresses.Count == 0 ? null :
+                        _existingLocationAddresses
+                            .Where(x => x.Location?.LocationName.ToLower() == address.LocationName.ToLower()
+                            && _countriesDict[x.Location.CountryId].ToLower() == address.Country.ToLower()
+                            && x.Address?.AddressName.ToLower() == address.LocationAddress.ToLower()
+                            && x.Address?.City?.ToLower() == address.City?.ToLower()
+                            && x.Address?.State.ToLower() == address.State.ToLower()
+                            && _countriesDict[x.Address.CountryId].ToLower() == address.Country.ToLower());
+
+                address.IsValid = true;
+
+                var existingLocationRecord = GetExistingLocationRecord(address);
+                var existingAddressRecord = GetExistingAddressRecord(address);
+
+                if (!string.IsNullOrEmpty(address.ULId)
+                    && !IsValidULId(address))
+                {
+                    address.IsValid = false;
+                    address.ValidationMessage = $"'{address.ULId}' is invalid ULId for LocationName '{address.LocationName}' and Country '{address.Country}'. Expected ULId should be { GetULId(existingLocationRecord?.Location!) ?? "blank"}.";
+                    isImportedDataInvalid = true;
+                    break;
+                }
+                else if (!string.IsNullOrEmpty(address.UAId)
+                    && !IsValidUAId(address))
+                {
+                    address.IsValid = false;
+                    address.ValidationMessage = $"'{address.UAId}' is invalid UAId for LocationAddress '{address.LocationAddress}' and Country '{address.Country}'. Expected UAId should be { GetUAId(existingAddressRecord?.Address!) ??  "blank"}";
+                    isImportedDataInvalid = true;
+                    break;
+                }
+                else if (checkDuplicate != null && checkDuplicate.Any())
+                {
+                    //address.ULId = GetULId(checkDuplicate.First()?.Location!);
+                    //address.UAId = GetUAId(checkDuplicate.First()?.Address!);
+                    address.IsDuplicate = true;
+                    continue;
+                }
+                else
+                {
+                    if (_existingLocationAddresses == null)
+                        _existingLocationAddresses = new List<ImportLocationAddressMappingRequest>();
+
+                    _existingLocationAddresses.Add(new ImportLocationAddressMappingRequest
+                    {
+                        Location = existingLocationRecord != null ? existingLocationRecord.Location : BuildLocation(address),
+                        Address =  existingAddressRecord != null ? existingAddressRecord.Address : BuildAddress(address)
+                    });
+                }
+            }
+
+            if (isImportedDataInvalid)
+            {
+                return new ImportPropertyLocationResponse { IsError = true, Message = string.Empty, Data = locationAddresses };
+            }
+            else
+            {
+                var newLocationAddressMappings = new List<ImportLocationAddressMappingRequest>();
+                var existingLocationAddressMapping = new List<ImportLocationAddressMappingRequest>();
+
+                foreach (var address in locationAddresses)
+                {
+                    var countryId = _countriesDict.FirstOrDefault(kvp => kvp.Value.ToLower() == address.Country.ToLower()).Key;
+                    var location = _existingLocationAddresses?
+                        .Where(x => x.Location?.LocationName.ToLower() == address.LocationName.ToLower()
+                            && x.Location.CountryId == countryId)
+                        .Select(x => x.Location)
+                        .FirstOrDefault();
+
+                    var addressInfo = _existingLocationAddresses?
+                           .Where(x => x.Address?.AddressName.ToLower() == address.LocationAddress.ToLower()
+                               && x.Address.City!.ToLower() == address.City!.ToLower()
+                               && x.Address.State.ToLower() == address.State.ToLower()
+                               && x.Address.CountryId == countryId)
+                           .Select(x => x.Address)
+                           .FirstOrDefault();
+                    if (address.IsDuplicate)
+                    {
+                        existingLocationAddressMapping.Add(new()
+                        {
+                            Location = location,
+                            Address = addressInfo
+                        });
+                    }
+                    else 
+                    {
+                        if (location == null)
+                            location = BuildLocation(address);
+
+                        if (addressInfo == null)
+                            addressInfo = BuildAddress(address);
+
+                        newLocationAddressMappings.Add(new()
+                        {
+                            Location = location,
+                            Address = addressInfo
+                        });
+                    }
+                }
+
+                if (newLocationAddressMappings.Count > 0)
+                {
+                    var success = await _locationCommandRepository.AddLocationAndMappings(newLocationAddressMappings);
+                    if (success == 1)
+                    {
+                        var locationAddressMappings = existingLocationAddressMapping.Concat(newLocationAddressMappings).ToList();
+                        UpdateLocationImportResponse(locationAddressMappings!, locationAddresses);
+                        return new ImportPropertyLocationResponse { IsError = false, Message = string.Empty, Data = locationAddresses };
+                    }
+                    else
+                    {
+                        return new ImportPropertyLocationResponse { IsError = true, Message = "Imported data doesn't saved in database!", Data = locationAddresses };
+                    }
+                }
+                else if(_existingLocationAddresses != null && _existingLocationAddresses.Any())
+                {
+                    UpdateLocationImportResponse(_existingLocationAddresses!, locationAddresses);
+                    return new ImportPropertyLocationResponse { IsError = false, Message = string.Empty, Data = locationAddresses };
+                }
+                else
+                {
+                    return new ImportPropertyLocationResponse { IsError = true, Message = "Something went wrong while importing locations", Data = null };
+                }
+            }
+        }
+
+        private void UpdateLocationImportResponse(List<ImportLocationAddressMappingRequest> locationAddressMappings, List<ImportPropertyLocationRequest> locationAddresses)
+        {
+
+            foreach (var item in locationAddresses)
+            {
+                var itemUpdated = locationAddressMappings
+                    .Where(loc => (loc.Location?.LocationName?.ToLower() ?? "") == (item.LocationName?.ToLower() ?? "")
+                        && (loc.Location != null && ((_countriesDict[loc.Location.CountryId].ToLower() ?? "") == (item.Country?.ToLower() ?? "")))
+                        && (loc.Address?.AddressName?.ToLower() ?? "") == (item.LocationAddress?.ToLower() ?? "")
+                        && (loc.Address?.City?.ToLower() ?? "")== (item.City?.ToLower() ?? "")
+                        && (loc.Address?.State?.ToLower() ?? "") == (item.State?.ToLower() ?? "")
+                        && (loc.Address != null && ((_countriesDict[loc.Address.CountryId]?.ToLower() ?? "") == (item.Country?.ToLower() ?? ""))))
+                    .FirstOrDefault();
+                item.LocationId = itemUpdated?.Location?.LocationId;
+                item.AddressId = itemUpdated?.Address?.AddressId;
+                item.CountryId = itemUpdated?.Location?.CountryId;
+            }
+        }
+
+        private Core.Property.Entities.Location BuildLocation(ImportPropertyLocationRequest address)
+        {
+            return new Core.Property.Entities.Location
+            {
+                LocationName = address.LocationName,
+                CountryId = _countriesDict.FirstOrDefault(kvp => kvp.Value.ToLower() == address.Country.ToLower()).Key,
+                CreatedOnDate = DateTime.UtcNow,
+                CreatedByUserId = _loginUserRepository.UserId
+            };
+        }
+
+        private (int identifier, short countryId) GetIdentifierCountryTuple(string formatterId)
+        {
+            var idParts = formatterId.Split('-');
+            return (Convert.ToInt32(idParts[1]), Convert.ToInt16(idParts[0]));
+        }
+
+        private string GetULId(Core.Property.Entities.Location location)
+        {
+            return ConvertToIdFormat((Convert.ToInt32(location.LocationId), location.CountryId), 5);
+        }
+
+        private string GetUAId(Address address)
+        {
+            return ConvertToIdFormat((Convert.ToInt32(address.AddressId), address.CountryId), 8);
+        }
+
+        private string ConvertToIdFormat((int Identifier, short CountryId) tuple, int padding)
+        {
+            return $"{tuple.CountryId:D3}-{Convert.ToInt32(tuple.Identifier).ToString($"D{padding}")}";
+        }
+
+        private Address BuildAddress(ImportPropertyLocationRequest address)
+        {
+            return new Address
+            {
+                AddressName = address.LocationAddress,
+                City = address.City,
+                State = address.State,
+                CountryId = _countriesDict.FirstOrDefault(kvp => kvp.Value.ToLower() == address.Country.ToLower()).Key,
+                CreatedOnDate = DateTime.UtcNow,
+                CreatedByUserId = _loginUserRepository.UserId
+            };
+        }
+
+        private ImportLocationAddressMappingRequest? GetExistingLocationRecord(ImportPropertyLocationRequest address)
+        {
+            if (_existingLocationAddresses == null || _existingLocationAddresses.Count == 0)
+                return null;
+
+            return _existingLocationAddresses
+                   .Where(x => x.Location != null)
+                   .Where(x => $"{x.Location?.LocationName}-{_countriesDict[x.Location!.CountryId]}".ToLower() == $"{address.LocationName}-{address.Country}".ToLower())
+                   .FirstOrDefault();
+        }
+
+        private ImportLocationAddressMappingRequest? GetExistingAddressRecord(ImportPropertyLocationRequest address)
+        {
+            if (_existingLocationAddresses == null || _existingLocationAddresses.Count == 0)
+                return null;
+
+            return _existingLocationAddresses
+                .Where(x => x.Address != null)
+                .Where(x => $"{x.Address!.AddressName}-{x.Address.City ?? string.Empty}-{x.Address.State}-{_countriesDict[x.Address.CountryId]}".ToLower() 
+                       == $"{address.LocationAddress}-{address.City ?? string.Empty}-{address.State}-{address.Country}".ToLower())
+                .FirstOrDefault();
+        }
+
+        private bool IsValidULId(ImportPropertyLocationRequest address)
+        {
+            if ((_existingLocationAddresses == null || _existingLocationAddresses.Count == 0) && string.IsNullOrEmpty(address.ULId))
+                return true;
+
+            var existingMapping = _existingLocationAddresses!
+                        .Where(x => $"{x.Location?.LocationName}-{_countriesDict[x.Location!.CountryId]}".ToLower() == $"{address.LocationName}-{address.Country}".ToLower()
+                        || GetULId(x.Location) == address.ULId)
+                        .FirstOrDefault();
+
+            if (existingMapping != null && !string.IsNullOrEmpty(address.ULId))
+            {
+                return (GetULId(existingMapping.Location!) == address.ULId
+                    && $"{existingMapping.Location!.LocationName}-{_countriesDict[existingMapping.Location.CountryId]}".ToLower()
+                    == $"{address.LocationName}-{address.Country}".ToLower());
+            }
+            else
+                return false;
+        }
+
+        private bool IsValidUAId(ImportPropertyLocationRequest address)
+        {
+            if ((_existingLocationAddresses == null || _existingLocationAddresses.Count == 0) && string.IsNullOrEmpty(address.UAId))
+                return true;
+
+            var existingMapping = _existingLocationAddresses!
+                        .Where(x => $"{x.Address?.AddressName}-{x.Address?.City ?? string.Empty}-{x.Address?.State}-{_countriesDict[x.Address!.CountryId]}".ToLower() == $"{address.LocationAddress}-{address.City ?? string.Empty}-{address.State}-{address.Country}".ToLower() 
+                        || GetUAId(x.Address) == address.UAId)
+                        .FirstOrDefault();
+
+            if (existingMapping != null && existingMapping.Address != null && !string.IsNullOrEmpty(address.UAId))
+            {
+                return (GetUAId(existingMapping?.Address!) == address.UAId
+                    && $"{existingMapping?.Address.AddressName}-{existingMapping?.Address.City ?? string.Empty}-{existingMapping?.Address.State}-{_countriesDict[existingMapping.Address.CountryId]}".ToLower()
+                    == $"{address.LocationAddress}-{address.City ?? string.Empty}-{address.State}-{address.Country}".ToLower());
+            }
+            else
+                return false;
+        }
+
+        private List<ImportLocationAddressMappingRequest> MergeLocationAddressMappings(List<ImportLocationAddressMappingRequest> locationMapping, List<ImportLocationAddressMappingRequest> addressMapping)
+        {
+            var mergedMappings = new Dictionary<(string? ULId, string? UAId),ImportLocationAddressMappingRequest>();
+
+            foreach (var mapping in locationMapping)
+            {
+                var key = (GetULId(mapping.Location!), GetUAId(mapping.Address!));
+
+                if (!mergedMappings.ContainsKey(key))
+                {
+                    mergedMappings[key] = mapping;
+                }
+            }
+
+            foreach (var mapping in addressMapping)
+            {
+                var key = (GetULId(mapping.Location!), GetUAId(mapping.Address!));
+
+                if (mergedMappings.ContainsKey(key))
+                {
+                    mergedMappings[key].Location = mapping.Location ?? mergedMappings[key].Location;
+                    mergedMappings[key].Address = mapping.Address ?? mergedMappings[key].Address;
+                }
+                else
+                {
+                    mergedMappings[key] = mapping;
+                }
+            }
+
+            return mergedMappings.Values.ToList();
+        }
+
+        /// <summary>
+        /// Build dynamic where filter clause with OR conditions if needed.
+        /// Because using multiple where clauses filter only support AND operator.
+        /// </summary>
+        /// <param name="combinations"></param>
+        /// <returns></returns>
+        private Expression<Func<Core.Property.Entities.Location, bool>> GetQueryFilters(List<(string LocationName, string CountryId)> locationCombinations)
+        {
+            var predicate = PredicateBuilder.True<Core.Property.Entities.Location>();
+
+            if (locationCombinations != null && locationCombinations.Count > 0)
+            {
+                var countryAndLocationNamePredicate = PredicateBuilder.False<Core.Property.Entities.Location>();
+                foreach (var combination in locationCombinations)
+                {
+                    countryAndLocationNamePredicate = countryAndLocationNamePredicate.Or(x => x.LocationName == combination.LocationName && x.CountryId == int.Parse(combination.CountryId));
+                }
+
+                predicate = predicate.And(countryAndLocationNamePredicate);
+            }
+
+            return predicate;
+        }
+
+        private Expression<Func<Address, bool>> GetQueryFilters(List<(string AddressName, string City, string State, string CountryId)> addressCombination)
+        {
+            var predicate = PredicateBuilder.True<Address>();
+
+            if (addressCombination != null && addressCombination.Count > 0)
+            {
+                var addressCityAndStatePredicate = PredicateBuilder.False<Address>();
+                foreach (var item in addressCombination)
+                {
+                    addressCityAndStatePredicate = addressCityAndStatePredicate.Or(x => x.AddressName == item.AddressName && x.City == item.City && x.State == item.State && x.CountryId == int.Parse(item.CountryId));
+
+                }
+                predicate = predicate.And(addressCityAndStatePredicate);
+            }
+
+            return predicate;
+        }
+
+    }
+}
+
+
+
+public class ImportPropertyLocationResponse
+{
+    public bool IsError { get; set; }
+    public string? Message { get; set; }
+    public List<ImportPropertyLocationRequest>? Data { get; set; }
+}
+
+ public class ImportLocationAddressMappingRequest
+ {
+     public Location? Location { get; set; } = null!;
+     public Address? Address { get; set; } = null!;
+ }
+
+public partial class Location
+{
+    public int LocationId { get; set; }
+
+    public string LocationName { get; set; } = null!;
+
+    public short CountryId { get; set; }
+
+    public byte StatusId { get; set; }
+
+    public byte[] VerCol { get; set; } = null!;
+
+    public DateTime CreatedOnDate { get; set; }
+
+    public int CreatedByUserId { get; set; }
+
+    public DateTime? LastModifiedOnDate { get; set; }
+
+    public int? LastModifiedByUserId { get; set; }
+
+    public virtual PropertyCountry Country { get; set; } = null!;
+
+    public virtual ICollection<LocationAddressMap> LocationAddressMaps { get; set; } = new List<LocationAddressMap>();
+
+    public virtual ICollection<PropertyLocationAddressMap> PropertyLocationAddressMaps { get; set; } = new List<PropertyLocationAddressMap>();
+}
+
+
+public partial class Address
+{
+    public int? AddressId { get; set; }
+
+    public string AddressName { get; set; } = null!;
+
+    public string? City { get; set; } = null!;
+
+    public string State { get; set; } = null!;
+
+    public short CountryId { get; set; }
+
+    public byte StatusId { get; set; }
+
+    public byte[] VerCol { get; set; } = null!;
+
+    public DateTime CreatedOnDate { get; set; }
+
+    public int CreatedByUserId { get; set; }
+
+    public DateTime? LastModifiedOnDate { get; set; }
+
+    public int? LastModifiedByUserId { get; set; }
+
+    public virtual PropertyCountry Country { get; set; } = null!;
+
+    public virtual ICollection<LocationAddressMap> LocationAddressMaps { get; set; } = new List<LocationAddressMap>();
+
+    public virtual ICollection<PropertyLocationAddressMap> PropertyLocationAddressMaps { get; set; } = new List<PropertyLocationAddressMap>();
+}
+
+
+public class ImportPropertyLocationRequest
+{
+    private int? _locationId = 0;
+    private int? _addressId = 0;
+    private short? _countryId = 0;
+
+    public ImportPropertyLocationRequest() 
+        => UpdateIds();
+
+    private void UpdateIds()
+    {
+        if (CountryId > 0 && LocationId > 0)
+            this.ULId = $"{this.CountryId:D3}-{this.LocationId:D5}";
+        if (CountryId > 0 && AddressId > 0)
+            this.UAId = $"{this.CountryId:D3}-{this.AddressId:D8}";
+    }
+
+    public int? LocationId 
+    {
+        get => _locationId;
+        set
+        {
+            _locationId = value;
+            this.UpdateIds();
+        }
+    }
+
+    public int? AddressId
+    {
+        get => _addressId;
+        set
+        {
+            _addressId = value;
+            this.UpdateIds();
+        }
+    }
+
+    public short? CountryId
+    {
+        get => _countryId;
+        set
+        {
+            _countryId = value;
+            this.UpdateIds();
+        }
+    }
+    public string? ULId { get; set; } = null!;
+    public string? UAId { get; set; } = null!;
+    public string LocationName { get; set; } = null!;
+    public string LocationAddress { get; set; } = null!;
+    public string? City { get; set; }
+    public string State { get; set; } = null!;
+    public string Country { get; set; } = null!;
+
+    public bool IsDuplicate { get; set; }
+    public bool IsValid { get; set; }
+    public string? ValidationMessage { get; set; }
+}
