@@ -5,9 +5,9 @@ public async Task Handle_ShouldReturnSuccess_WhenValidDataIsProvided()
     var request = new ImportLocationCommand
     {
         PropertyLocationAddresses = new List<ImportPropertyLocationRequest>
-    {
-        new ImportPropertyLocationRequest { Country = "ValidCountry", LocationName = "TestLocation", LocationAddress = "TestAddress" }
-    }
+        {
+            new ImportPropertyLocationRequest { Country = "ValidCountry", LocationName = "TestLocation", LocationAddress = "TestAddress" }
+        }
     };
 
     _mockQueryRepository.Setup(repo => repo.GetCountriesByName(It.IsAny<List<string>>()))
@@ -19,6 +19,13 @@ public async Task Handle_ShouldReturnSuccess_WhenValidDataIsProvided()
     _mockQueryRepository.Setup(repo => repo.GetExistingUAIds(It.IsAny<List<(int, short)>>()))
         .ReturnsAsync(new List<string> { "002-56789" });
 
+    // ✅ Fix: Ensure GetExistingLocationAddressesCombinations() never returns null
+    _mockQueryRepository.Setup(repo => repo.GetExistingLocationAddressesCombinations(It.IsAny<Expression<Func<Location, bool>>>()))
+        .ReturnsAsync(new List<ImportLocationAddressMappingRequest>()); 
+
+    _mockQueryRepository.Setup(repo => repo.GetExistingLocationAddressesCombinations(It.IsAny<Expression<Func<Address, bool>>>()))
+        .ReturnsAsync(new List<ImportLocationAddressMappingRequest>());
+
     _mockCommandRepository.Setup(repo => repo.AddLocationAndMappings(It.IsAny<List<ImportLocationAddressMappingRequest>>()))
         .ReturnsAsync(1);
 
@@ -29,27 +36,3 @@ public async Task Handle_ShouldReturnSuccess_WhenValidDataIsProvided()
     Assert.False(response.IsError);
     Assert.NotNull(response.Data);
 }
-
- EnterpriseApps.RET.Application.Tests.PropertyHandlerTests.Handle_ShouldReturnSuccess_WhenValidDataIsProvided
-   Source: PropertyHandlerTests.cs line 1667
-   Duration: 4.9 min
-
-  Message: 
-System.NullReferenceException : Object reference not set to an instance of an object.
-
-  Stack Trace: 
-ImportPropertyLocationCommandHandler.MergeLocationAddressMappings(List`1 locationMapping, List`1 addressMapping) line 368
-ImportPropertyLocationCommandHandler.Handle(ImportLocationCommand request, CancellationToken cancellationToken) line 106
-PropertyHandlerTests.Handle_ShouldReturnSuccess_WhenValidDataIsProvided() line 1691
---- End of stack trace from previous location ---
-
-
-error occur becuase when MergeLocationAddressMappings on this method List`1 locationMapping, List`1 addressMapping this both list null in attached code has following line code which assign list value of List`1 locationMapping, List`1 addressMapping
-
-var locationMappings = await _locationQueryRepository
-    .GetExistingLocationAddressesCombinations(GetQueryFilters(locationCombination));
-
-var addressMappings = await _locationQueryRepository
-    .GetExistingLocationAddressesCombinations(GetQueryFilters(addressCombination!));
-
-_existingLocationAddresses = MergeLocationAddressMappings(locationMappings, addressMappings);
