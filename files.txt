@@ -1,171 +1,39 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Moq;
-using Xunit;
-using EnterpriseApps.RET.Application.Location.Handlers;
-using EnterpriseApps.RET.Core.Property.Repositories.Command;
-using EnterpriseApps.RET.Core.Property.Repositories.Query;
-using EnterpriseApps.RET.Core.Authentication.User.Repositories.Query;
-using EnterpriseApps.RET.Core.Property.Request;
-using EnterpriseApps.RET.Core.Property.Response;
-
-public class ImportPropertyLocationCommandHandlerTests
+public async Task Handle_ShouldReturnError_WhenUAIdsAreInvalid()
 {
-    private readonly Mock<IImportPropertyLocationQueryRepository> _mockQueryRepository;
-    private readonly Mock<IImportPropertyLocationCommandRepository> _mockCommandRepository;
-    private readonly Mock<ILoginUserRepository> _mockLoginUserRepository;
-    private readonly ImportPropertyLocationCommandHandler _handler;
-
-    public ImportPropertyLocationCommandHandlerTests()
+    // Arrange
+    var request = new ImportLocationCommand
     {
-        _mockQueryRepository = new Mock<IImportPropertyLocationQueryRepository>();
-        _mockCommandRepository = new Mock<IImportPropertyLocationCommandRepository>();
-        _mockLoginUserRepository = new Mock<ILoginUserRepository>();
-
-        _handler = new ImportPropertyLocationCommandHandler(
-            _mockQueryRepository.Object, 
-            _mockCommandRepository.Object, 
-            _mockLoginUserRepository.Object);
-    }
-
-    [Fact]
-    public async Task Handle_ShouldReturnError_WhenCountriesAreInvalid()
-    {
-        // Arrange
-        var request = new ImportLocationCommand
+        PropertyLocationAddresses = new List<ImportPropertyLocationRequest>
         {
-            PropertyLocationAddresses = new List<ImportPropertyLocationRequest>
-            {
-                new ImportPropertyLocationRequest { Country = "InvalidCountry", LocationName = "TestLocation" }
-            }
-        };
+            new ImportPropertyLocationRequest { UAId = "002-56789", Country = "ValidCountry", LocationAddress = "TestAddress" }
+        }
+    };
 
-        _mockQueryRepository.Setup(repo => repo.GetCountriesByName(It.IsAny<List<string>>()))
-            .ReturnsAsync(new Dictionary<short, string>());
+    _mockQueryRepository.Setup(repo => repo.GetCountriesByName(It.IsAny<List<string>>()))
+        .ReturnsAsync(new Dictionary<short, string> { { 1, "ValidCountry" } });
 
-        // Act
-        var response = await _handler.Handle(request, CancellationToken.None);
+    _mockQueryRepository.Setup(repo => repo.GetExistingUAIds(It.IsAny<List<(int, short)>>()))
+        .ReturnsAsync(new List<string>());
 
-        // Assert
-        Assert.True(response.IsError);
-        Assert.Contains("does not exist", response.Message);
-    }
+    // Act
+    var response = await _handler.Handle(request, CancellationToken.None);
 
-    [Fact]
-    public async Task Handle_ShouldReturnError_WhenULIdsAreInvalid()
-    {
-        // Arrange
-        var request = new ImportLocationCommand
-        {
-            PropertyLocationAddresses = new List<ImportPropertyLocationRequest>
-            {
-                new ImportPropertyLocationRequest { ULId = "001-12345", Country = "ValidCountry", LocationName = "TestLocation" }
-            }
-        };
-
-        _mockQueryRepository.Setup(repo => repo.GetCountriesByName(It.IsAny<List<string>>()))
-            .ReturnsAsync(new Dictionary<short, string> { { 1, "ValidCountry" } });
-
-        _mockQueryRepository.Setup(repo => repo.GetExistingULIds(It.IsAny<List<(int, short)>>()))
-            .ReturnsAsync(new List<string>());
-
-        // Act
-        var response = await _handler.Handle(request, CancellationToken.None);
-
-        // Assert
-        Assert.True(response.IsError);
-        Assert.Contains("Imported ULIds", response.Message);
-    }
-
-    [Fact]
-    public async Task Handle_ShouldReturnError_WhenUAIdsAreInvalid()
-    {
-        // Arrange
-        var request = new ImportLocationCommand
-        {
-            PropertyLocationAddresses = new List<ImportPropertyLocationRequest>
-            {
-                new ImportPropertyLocationRequest { UAId = "002-56789", Country = "ValidCountry", LocationAddress = "TestAddress" }
-            }
-        };
-
-        _mockQueryRepository.Setup(repo => repo.GetCountriesByName(It.IsAny<List<string>>()))
-            .ReturnsAsync(new Dictionary<short, string> { { 1, "ValidCountry" } });
-
-        _mockQueryRepository.Setup(repo => repo.GetExistingUAIds(It.IsAny<List<(int, short)>>()))
-            .ReturnsAsync(new List<string>());
-
-        // Act
-        var response = await _handler.Handle(request, CancellationToken.None);
-
-        // Assert
-        Assert.True(response.IsError);
-        Assert.Contains("Imported UAIds", response.Message);
-    }
-
-    [Fact]
-    public async Task Handle_ShouldReturnSuccess_WhenValidDataIsProvided()
-    {
-        // Arrange
-        var request = new ImportLocationCommand
-        {
-            PropertyLocationAddresses = new List<ImportPropertyLocationRequest>
-            {
-                new ImportPropertyLocationRequest { Country = "ValidCountry", LocationName = "TestLocation", LocationAddress = "TestAddress" }
-            }
-        };
-
-        _mockQueryRepository.Setup(repo => repo.GetCountriesByName(It.IsAny<List<string>>()))
-            .ReturnsAsync(new Dictionary<short, string> { { 1, "ValidCountry" } });
-
-        _mockQueryRepository.Setup(repo => repo.GetExistingULIds(It.IsAny<List<(int, short)>>()))
-            .ReturnsAsync(new List<string> { "001-12345" });
-
-        _mockQueryRepository.Setup(repo => repo.GetExistingUAIds(It.IsAny<List<(int, short)>>()))
-            .ReturnsAsync(new List<string> { "002-56789" });
-
-        _mockCommandRepository.Setup(repo => repo.AddLocationAndMappings(It.IsAny<List<ImportLocationAddressMappingRequest>>()))
-            .ReturnsAsync(1);
-
-        // Act
-        var response = await _handler.Handle(request, CancellationToken.None);
-
-        // Assert
-        Assert.False(response.IsError);
-        Assert.NotNull(response.Data);
-    }
-
-    [Fact]
-    public async Task Handle_ShouldReturnError_WhenDatabaseInsertionFails()
-    {
-        // Arrange
-        var request = new ImportLocationCommand
-        {
-            PropertyLocationAddresses = new List<ImportPropertyLocationRequest>
-            {
-                new ImportPropertyLocationRequest { Country = "ValidCountry", LocationName = "TestLocation", LocationAddress = "TestAddress" }
-            }
-        };
-
-        _mockQueryRepository.Setup(repo => repo.GetCountriesByName(It.IsAny<List<string>>()))
-            .ReturnsAsync(new Dictionary<short, string> { { 1, "ValidCountry" } });
-
-        _mockQueryRepository.Setup(repo => repo.GetExistingULIds(It.IsAny<List<(int, short)>>()))
-            .ReturnsAsync(new List<string> { "001-12345" });
-
-        _mockQueryRepository.Setup(repo => repo.GetExistingUAIds(It.IsAny<List<(int, short)>>()))
-            .ReturnsAsync(new List<string> { "002-56789" });
-
-        _mockCommandRepository.Setup(repo => repo.AddLocationAndMappings(It.IsAny<List<ImportLocationAddressMappingRequest>>()))
-            .ReturnsAsync(0);
-
-        // Act
-        var response = await _handler.Handle(request, CancellationToken.None);
-
-        // Assert
-        Assert.True(response.IsError);
-        Assert.Contains("doesn't saved in database", response.Message);
-    }
+    // Assert
+    Assert.True(response.IsError);
+    Assert.Contains("Imported UAIds", response.Message);
 }
+
+
+EnterpriseApps.RET.Application.Tests.PropertyHandlerTests.Handle_ShouldReturnError_WhenUAIdsAreInvalid
+   Source: PropertyHandlerTests.cs line 1615
+   Duration: 60 ms
+
+  Message: 
+System.ArgumentNullException : Value cannot be null. (Parameter 'second')
+
+  Stack Trace: 
+ThrowHelper.ThrowArgumentNullException(ExceptionArgument argument)
+Enumerable.Except[TSource](IEnumerable`1 first, IEnumerable`1 second)
+ImportPropertyLocationCommandHandler.Handle(ImportLocationCommand request, CancellationToken cancellationToken) line 63
+PropertyHandlerTests.Handle_ShouldReturnError_WhenUAIdsAreInvalid() line 1646
+--- End of stack trace from previous location ---
