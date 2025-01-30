@@ -1,3 +1,4 @@
+[Fact]
 public async Task Handle_ShouldReturnError_WhenUAIdsAreInvalid()
 {
     // Arrange
@@ -13,7 +14,7 @@ public async Task Handle_ShouldReturnError_WhenUAIdsAreInvalid()
         .ReturnsAsync(new Dictionary<short, string> { { 1, "ValidCountry" } });
 
     _mockQueryRepository.Setup(repo => repo.GetExistingUAIds(It.IsAny<List<(int, short)>>()))
-        .ReturnsAsync(new List<string>());
+        .ReturnsAsync(new List<string>());  // Ensuring it always returns an empty list instead of null
 
     // Act
     var response = await _handler.Handle(request, CancellationToken.None);
@@ -22,18 +23,3 @@ public async Task Handle_ShouldReturnError_WhenUAIdsAreInvalid()
     Assert.True(response.IsError);
     Assert.Contains("Imported UAIds", response.Message);
 }
-
-
-EnterpriseApps.RET.Application.Tests.PropertyHandlerTests.Handle_ShouldReturnError_WhenUAIdsAreInvalid
-   Source: PropertyHandlerTests.cs line 1615
-   Duration: 60 ms
-
-  Message: 
-System.ArgumentNullException : Value cannot be null. (Parameter 'second')
-
-  Stack Trace: 
-ThrowHelper.ThrowArgumentNullException(ExceptionArgument argument)
-Enumerable.Except[TSource](IEnumerable`1 first, IEnumerable`1 second)
-ImportPropertyLocationCommandHandler.Handle(ImportLocationCommand request, CancellationToken cancellationToken) line 63
-PropertyHandlerTests.Handle_ShouldReturnError_WhenUAIdsAreInvalid() line 1646
---- End of stack trace from previous location ---
