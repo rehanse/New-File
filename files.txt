@@ -14,7 +14,7 @@ public async Task Handle_ShouldReturnError_WhenUAIdsAreInvalid()
         .ReturnsAsync(new Dictionary<short, string> { { 1, "ValidCountry" } });
 
     _mockQueryRepository.Setup(repo => repo.GetExistingUAIds(It.IsAny<List<(int, short)>>()))
-        .ReturnsAsync(new List<string>());  // Ensuring GetExistingUAIds() never returns null
+        .ReturnsAsync(() => new List<string>());  // Always return a new empty list to avoid null
 
     // Act
     var response = await _handler.Handle(request, CancellationToken.None);
