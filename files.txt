@@ -1,38 +1,319 @@
-[Fact]
-public async Task Handle_ShouldReturnSuccess_WhenValidDataIsProvided()
-{
-    // Arrange
-    var request = new ImportLocationCommand
-    {
-        PropertyLocationAddresses = new List<ImportPropertyLocationRequest>
-        {
-            new ImportPropertyLocationRequest { Country = "ValidCountry", LocationName = "TestLocation", LocationAddress = "TestAddress" }
-        }
+import { Injectable } from '@angular/core';
+import { RedistributionWeight } from '../models/redistribution-weights';
+import { ReToolConstants } from '../constants/re-tool.constants';
+import { GeneralPropertyTypeCodeWeightsEnum } from '../models/general-property-type-code-weights-enum';
+import { RiskFactorElementEnum } from '../models/risk-factor-element-enum';
+import { GeneralProperty } from '../models/general-property';
+import { Utility } from '../utility/mapper-util';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ReToolCalculationService {
+  exchangeCurrencyRate: number = 2;
+  private redistributionWeights: RedistributionWeight[] = [];
+  private fractionDigits: number = ReToolConstants.nine;
+
+  //#region 'Weight calculation region'
+
+  setRedistributionWeights(redistributionWeights: RedistributionWeight[]) {
+    this.redistributionWeights = redistributionWeights;
+    return {
+      calculate: this.calculateAll.bind(this)
     };
+  }
 
-    _mockQueryRepository.Setup(repo => repo.GetCountriesByName(It.IsAny<List<string>>()))
-        .ReturnsAsync(new Dictionary<short, string> { { 1, "ValidCountry" } });
+  setPropertyData<T>(row: T): any {
+    return {
+      setGroupOrTypeCode: (code: number) => this.setGroupOrTypeCode(row, code),
+    }
+  }
 
-    _mockQueryRepository.Setup(repo => repo.GetExistingULIds(It.IsAny<List<(int, short)>>()))
-        .ReturnsAsync(new List<string> { "001-12345" });
+  private calculateAll(): void {
+    this.redistributionWeights.forEach((rdWeights) => {
+      this.calculate(rdWeights);
+    });
+  }
 
-    _mockQueryRepository.Setup(repo => repo.GetExistingUAIds(It.IsAny<List<(int, short)>>()))
-        .ReturnsAsync(new List<string> { "002-56789" });
+  private calculate(redistributionWeight: RedistributionWeight): RedistributionWeight {
+    let sum = 0;
+    for (const key in redistributionWeight.inputWeights) {
+      if (this.isValidInput(redistributionWeight.inputRatings[key])) {
+        sum = Number((sum + redistributionWeight.inputWeights[key] / 100).toFixed(this.fractionDigits));
+      }
+    }
 
-    // ✅ Fix: Ensure GetExistingLocationAddressesCombinations() never returns null
-    _mockQueryRepository.Setup(repo => repo.GetExistingLocationAddressesCombinations(It.IsAny<Expression<Func<Location, bool>>>()))
-        .ReturnsAsync(new List<ImportLocationAddressMappingRequest>()); 
+    Object.entries(redistributionWeight.inputRatings).forEach(([key]) => {
+      if (this.isValidInput(redistributionWeight.inputRatings[key])) {
+        const weight = ((redistributionWeight.inputWeights[key] / sum) / 100);
+        redistributionWeight.redistributedWeights[key] = parseFloat(weight.toFixed(this.fractionDigits));
+      }
+      else
+        redistributionWeight.redistributedWeights[key] = 0;
+    });
 
-    _mockQueryRepository.Setup(repo => repo.GetExistingLocationAddressesCombinations(It.IsAny<Expression<Func<Address, bool>>>()))
-        .ReturnsAsync(new List<ImportLocationAddressMappingRequest>());
+    return redistributionWeight;
+  }
 
-    _mockCommandRepository.Setup(repo => repo.AddLocationAndMappings(It.IsAny<List<ImportLocationAddressMappingRequest>>()))
-        .ReturnsAsync(1);
+  private getWeightDistributionByCode(code: number) {
+    return this.redistributionWeights[this.getIndexByCode(code)];
+  }
 
-    // Act
-    var response = await _handler.Handle(request, CancellationToken.None);
+  private getWeightDistributionRiskFactorByElement(code: number, element: RiskFactorElementEnum): number {
+    const redistributionWeight: RedistributionWeight
+      = this.getWeightDistributionByCode(code);
+    return parseFloat(
+      (
+        Number(this.isValidInput(redistributionWeight.inputRatings[element]) ? redistributionWeight.inputRatings[element] : 0) *
+        Number(redistributionWeight.redistributedWeights[element])
+      ).toFixed(this.fractionDigits));
+  }
 
-    // Assert
-    Assert.False(response.IsError);
-    Assert.NotNull(response.Data);
+  private updateWeightDistribution(row: any, code: number, value: string | number | null, element: RiskFactorElementEnum): any {
+    let index = this.getIndexByCode(code);
+    if (index === -1) {
+      return {
+        getRiskFactor: () => -1,
+        getPDIndexValue: () => -1
+      }
+    }
+
+    let redistributionWeight = this.getWeightDistributionByCode(code);
+    redistributionWeight.inputRatings[element] = value;
+    const updatedDistributedWeight = this.calculate(redistributionWeight);
+    this.redistributionWeights[index] = updatedDistributedWeight;
+
+    return {
+      getRiskFactor: () => this.getWeightDistributionRiskFactorByElement(code, element),
+      getPDIndexValue: () => this.getPDIndexValue(row, code)
+    }
+  }
+
+  private setGroupOrTypeCode(row: any, code: number): any {
+    return {
+      setElement: (element: RiskFactorElementEnum) => this.setElement(row, code, element)
+    }
+  }
+
+  private setElement(row: any, code: number, element: RiskFactorElementEnum): any {
+    return {
+      updateWeightDistribution: (value: string | number | null) => this.updateWeightDistribution(row, code, value, element)
+    }
+  }
+
+  private getIndexByCode(code: number): number {
+    if (code === GeneralPropertyTypeCodeWeightsEnum.SemiconductorCrystalGrowing
+      || code === GeneralPropertyTypeCodeWeightsEnum.SemiconductorWaferFabrication) {
+      return this.redistributionWeights.findIndex(w => w.groupTypeCode === code);
+    }
+    else {
+      return this.redistributionWeights.findIndex(w => w.occupancyGroupId === code);
+    }
+  }
+
+  private isValidInput(rating: string | number): boolean {
+    return rating !== ReToolConstants.NA && rating !== null && !isNaN(Number(rating));
+  }
+
+  private getRedistributedFactorsSum(code: number): number {
+    let sum = 0;
+    let redistributionWeight = this.getWeightDistributionByCode(code);
+    Object.entries(redistributionWeight.redistributedWeights).forEach(([key]) => {
+      const calculatedWeight = this.getWeightDistributionRiskFactorByElement(code, key as RiskFactorElementEnum);
+      sum = Number((sum + calculatedWeight).toFixed(this.fractionDigits));
+    });
+    return sum;
+  }
+
+  private getPDIndexValue(property: GeneralProperty, code: number): number | null {
+    return this.getRedistributedFactorsSum(code) * this.getMultiplierFactor(property);
+  }
+
+  private getMultiplierFactor(property: GeneralProperty) {
+    const probableMaximumLossRate: number = Number(Utility.removeComma(property.ProbableMaximumLoss)) * this.exchangeCurrencyRate;
+    const maximumForeseeableLossRate: number = Number(Utility.removeComma(property.MaximumForeseeableLoss)) * this.exchangeCurrencyRate;
+    const normalLossExpectancyRate: number = Number(Utility.removeComma(property.NormalLossExpectancy)) * this.exchangeCurrencyRate;
+    const businessInterruptionValue: number = Number(property.BusinessInterruptionValue);
+    const businessInterruptionOtherValue: number = Number(property.BusinessInterruptionOtherValue);
+    const totalPD: number = Number(property.TotalPD);
+    const payRollValue: number = Number(property.PayRollValue);
+    const indemnityPeriod: number = Number(property.IndemnityPeriod);
+    const normalLossDeficiencyDriven: boolean = property.NormalLossDeficiencyDriven || false;
+
+    const totalPdBIOrOtherAndPayRoll = Number((totalPD 
+      + (12 * (businessInterruptionValue + businessInterruptionOtherValue) 
+       / indemnityPeriod) + payRollValue)
+      ?.toFixed(1));
+
+    const totalPdBIOrOtherAndPayRollRate = totalPdBIOrOtherAndPayRoll * this.exchangeCurrencyRate;
+    const totalPdBIOrOtherAndPayRollRateFactor = 0.25 * totalPdBIOrOtherAndPayRollRate;
+
+      if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) < (probableMaximumLossRate)
+        && normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate < 100)))
+      ) {
+        return 1;
+      }
+      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate < 100)))
+      ) {
+        return 0.95;
+      }
+      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate < 100)))
+      ) {
+        return 0.75;
+      }
+      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate < 100)))
+      ) {
+        return 0.65;
+      }
+      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) < (probableMaximumLossRate)
+        && normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate >= 100)))
+      ) {
+        return 0.95;
+      }
+      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) < (probableMaximumLossRate)
+        && normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate >= 100)))
+      ) {
+        return 0.9;
+      }
+      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate >= 100)))
+      ) {
+        return 0.7;
+      }
+      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate >= 100)))
+      ) {
+        return 0.6;
+      }
+      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) < (probableMaximumLossRate)
+        && !normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate < 100)))
+      ) {
+        return 1;
+      }
+      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && !normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate < 100)))
+      ) {
+        return 0.975;
+      }
+      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && !normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate < 100)))
+      ) {
+        return 1;
+      }
+      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && !normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate < 100)))
+      ) {
+        return 0.95;
+      }
+      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) < (probableMaximumLossRate)
+        && !normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate >= 100)))
+      ) {
+        return 1;
+      }
+      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) < (probableMaximumLossRate)
+        && !normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate >= 100)))
+      ) {
+        return 0.95;
+      }
+      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && !normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate >= 100)))
+      ) {
+        return 1;
+      }
+      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+        && (normalLossExpectancyRate) === (probableMaximumLossRate)
+        && !normalLossDeficiencyDriven)
+        && (((totalPdBIOrOtherAndPayRollRate) < 400
+          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+          || ((totalPdBIOrOtherAndPayRollRate) >= 400
+            && (normalLossExpectancyRate >= 100)))
+      ) {
+        return 0.9;
+      }
+    else
+      return 0;
+  }
+  //#endregion 'Weight calculation'
 }
+
+write all unit test cases for above service file in angular in jasmin. also include unit test case for private method 
+
+please read all above code carefully and provide unit test cases scenarios without any fail.
