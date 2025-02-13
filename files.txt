@@ -134,21 +134,50 @@ fdescribe('OccupancyComponent', () => {
         expect(component.occupancyForm).toBeDefined();
     }));
 	
-	 it('should handle occupancy group change', fakeAsync(() => {
-        const mockTypes = [{ value: 'type1', dependentValue: { hazard: 'Low', equipmentBreakdown: 'High' } }];
-        mockReToolService.getOccupancyType.and.returnValue(of(mockTypes));
+	 it('should handle occupancy type change', fakeAsync(() => {
+        // Arrange
+        const mockOccupancyTypeResponse = [{
+          value: 'type1',
+          dependentValue: {
+            hazard: 'Low',
+            equipmentBreakdown: 'High'
+          }
+        }];
 
-        component.changeOccupancyGroup(0, '1');
-        tick();
+        // Configure specific mock response for this test
+        mockReToolService.getOccupancyType.and.returnValue(of(mockOccupancyTypeResponse));
 
-        const row = component['getFormArray']().at(0);
-        expect(row.get('OccupancyType').value).toBe(ReToolConstants.blank);
-        expect(mockReToolService.getOccupancyType).toHaveBeenCalledWith('1');
-    }));
+        // Initialize component with fakeAsync
+        component.ngOnInit();
+        tick(); // Process async operations
+
+        // Manually initialize form array with test data
+        component.occupancyForm = new FormBuilder().group({
+          rows: new FormArray([
+            new FormBuilder().group({
+              ULId: '1',
+              OccupancyGroup: '1',
+              OccupancyType: 'type1',
+              Hazard: 'Low',
+              EquipmentBreakdown: 'High'
+            })
+          ])
+        });
+
+        // Act
+        component.changeOccupancyType(0, 'type1');
+        tick(); // Process any async operations in the method
+
+        // Assert
+        const row = (component.occupancyForm.get('rows') as FormArray).at(0);
+        expect(row.get('Hazard')?.value).toBe('Low');
+        expect(row.get('EquipmentBreakdown')?.value).toBe('High');
+        expect(row.get('Action')?.value).toBe(ActionEnum.IsModified);
+      }));
 	});
 	
 	error:
-	OccupancyComponent > should handle occupancy group change
-TypeError: Cannot read properties of undefined (reading 'get')
+OccupancyComponent > should handle occupancy type change
+TypeError: Cannot read properties of undefined (reading 'OccupancyTypeList')
 
 fix this issue on above test case
