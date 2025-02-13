@@ -1,12 +1,93 @@
-it('should initialize data source correctly', () => {
-  component.occupancyData = [{ ULId: '123', LocationName: 'Test', Address: 'Some Address' } as Occupancy];
-  spyOn<any>(component, 'getFormArray').and.returnValue({ clear: jasmine.createSpy(), push: jasmine.createSpy() } as any);
-  component.initializeDataSource();
-  expect(component['getFormArray']().clear).toHaveBeenCalled();
-});
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { MatTableModule } from '@angular/material/table';
+import { of } from 'rxjs';
+import { OccupancyComponent } from './occupancy.component';
+import { ReToolService } from '../../../service/re-tool.service';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { Occupancy } from '../../../models/occupancy';
+import { Subscription } from 'rxjs';
 
-it('should call getOccupancyType when changing occupancy group', () => {
-  spyOn<any>(component, 'getOccupancyType');
-  component.changeOccupancyGroup(0, 'group1');
-  expect(component['getOccupancyType']).toHaveBeenCalledWith(0, 'group1', jasmine.any(Object), jasmine.any(Object));
+describe('OccupancyComponent', () => {
+  let component: OccupancyComponent;
+  let fixture: ComponentFixture<OccupancyComponent>;
+  let mockReToolService: jasmine.SpyObj<ReToolService>;
+  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+
+  beforeEach(async () => {
+    mockReToolService = jasmine.createSpyObj('ReToolService', ['getOccupancyGroup', 'getOccupancyType']);
+    mockReToolTabService = jasmine.createSpyObj('ReToolTabService', ['on', 'emit', 'showErrorMessage']);
+    
+    await TestBed.configureTestingModule({
+      declarations: [OccupancyComponent],
+      imports: [ReactiveFormsModule, MatTableModule],
+      providers: [
+        FormBuilder,
+        { provide: ReToolService, useValue: mockReToolService },
+        { provide: ReToolTabService, useValue: mockReToolTabService }
+      ]
+    }).compileComponents();
+  });
+
+  beforeEach(() => {
+    fixture = TestBed.createComponent(OccupancyComponent);
+    component = fixture.componentInstance;
+    component.subscription = new Subscription();
+    fixture.detectChanges();
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should initialize form on component init', () => {
+    spyOn(component, 'initializeForm');
+    component.ngOnInit();
+    expect(component.initializeForm).toHaveBeenCalled();
+  });
+
+  it('should initialize data source correctly', () => {
+    component.occupancyData = [{ ULId: '123', LocationName: 'Test', Address: 'Some Address' } as Occupancy];
+    spyOn<any>(component, 'getFormArray').and.returnValue({ clear: jasmine.createSpy(), push: jasmine.createSpy() } as any);
+    component.initializeDataSource();
+    expect(component['getFormArray']().clear).toHaveBeenCalled();
+  });
+
+  it('should call getOccupancyType when changing occupancy group', () => {
+    spyOn<any>(component, 'getOccupancyType');
+    component.changeOccupancyGroup(0, 'group1');
+    expect(component['getOccupancyType']).toHaveBeenCalledWith(0, 'group1', jasmine.any(Object), jasmine.any(Object));
+  });
+
+  it('should update form status when form changes', () => {
+    component.occupancyForm.patchValue({});
+    expect(mockReToolTabService.formStatus).toEqual(component.occupancyForm.status);
+  });
+
+  it('should handle onSubmit when form is valid', () => {
+    spyOn(component.reToolTabService, 'emit');
+    spyOnProperty(component, 'getOccupancyFormData', 'get').and.returnValue([]);
+    component.occupancyForm.markAsPristine();
+    component.onSubmit();
+    expect(component.reToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', { formData: [], subTabIndex: 1 });
+  });
+
+  it('should show error message onSubmit when form is invalid', () => {
+    spyOn(component.reToolTabService, 'showErrorMessage');
+    component.occupancyForm.patchValue({});
+    component.onSubmit();
+    expect(component.reToolTabService.showErrorMessage).toHaveBeenCalled();
+  });
+
+  it('should update highlight when changing hazard', () => {
+    spyOn<any>(component, 'updateHighlight');
+    component.changeHazard(0, 'type1');
+    expect(component['updateHighlight']).toHaveBeenCalledWith(0, 'type1', 'Hazard');
+  });
+
+  it('should unsubscribe from all subscriptions on destroy', () => {
+    spyOn(component.subscription, 'unsubscribe');
+    component.ngOnDestroy();
+    expect(component.subscription.unsubscribe).toHaveBeenCalled();
+  });
 });
