@@ -1,10 +1,10 @@
 it('should handle occupancy type change', fakeAsync(() => {
-    // 1. Initialize component with proper form structure
+    // Initialize component with data from service
     component.ngOnInit();
     tick();
     fixture.detectChanges();
 
-    // 2. Set up mock responses and initial data
+    // Mock occupancy type response
     const mockTypes = [{
         value: 'type1',
         dependentValue: {
@@ -13,32 +13,31 @@ it('should handle occupancy type change', fakeAsync(() => {
             equipmentBreakdown: 'High'
         }
     }];
-    
-    // Mock the occupancy type service call
     mockReToolService.getOccupancyType.and.returnValue(of(mockTypes));
 
-    // 3. Simulate initial group selection
+    // Get the form array reference
+    const formArray = component['getFormArray']();
+    
+    // Simulate initial group selection to populate rowValuesMap
     component.changeOccupancyGroup(0, '1');
     tick();
 
-    // 4. Get reference to the form row
-    const formArray = component['getFormArray']();
+    // Verify pre-conditions
     const row = formArray.at(0) as FormGroup;
+    expect(row.get('OccupancyType').value).toBe(ReToolConstants.blank); // From changeOccupancyGroup
 
-    // 5. Set initial values for the test
-    row.patchValue({
-        OccupancyGroup: '1',
-        OccupancyType: 'type1',
-        Action: ActionEnum.IsSaved
-    });
-
-    // 6. Execute the type change
+    // Execute type change
     component.changeOccupancyType(0, 'type1');
     tick();
 
-    // 7. Verify the updates
+    // Verify updates
     expect(row.get('Hazard').value).toBe('Low');
     expect(row.get('EquipmentBreakdown').value).toBe('High');
     expect(row.get('OccupancyCode').value).toBe('code1');
     expect(row.get('Action').value).toBe(ActionEnum.IsModified);
+
+    // Verify rowValuesMap updates
+    const rowValues = component.rowValuesMap.get(0);
+    expect(rowValues.OccupancyType).toBe('type1');
+    expect(rowValues.Hazard).toBe('Low');
 }));
