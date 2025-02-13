@@ -1,319 +1,353 @@
-import { Injectable } from '@angular/core';
-import { RedistributionWeight } from '../models/redistribution-weights';
-import { ReToolConstants } from '../constants/re-tool.constants';
-import { GeneralPropertyTypeCodeWeightsEnum } from '../models/general-property-type-code-weights-enum';
-import { RiskFactorElementEnum } from '../models/risk-factor-element-enum';
-import { GeneralProperty } from '../models/general-property';
-import { Utility } from '../utility/mapper-util';
+import { Component, OnInit } from '@angular/core';
+import { AbstractControl, FormArray, FormBuilder, FormControl, FormControlStatus, FormGroup, Validators } from '@angular/forms';
+import { MatTableDataSource } from '@angular/material/table';
+import { Subscription } from 'rxjs';
+import { MasterDataModel } from '../../../../dashboard/models/master-data';
+import { ReToolConstants } from '../../../constants/re-tool.constants';
+import { ActionEnum } from '../../../models/action-enum';
+import { FormDataSource } from '../../../models/form-data-source';
+import { GridRowRecord } from '../../../models/grid-row-record';
+import { Occupancy } from '../../../models/occupancy';
+import { SubTabEncodedEnum } from '../../../models/re-tool-tabs-enum';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { ReToolService } from '../../../service/re-tool.service';
+import { Utility } from '../../../utility/mapper-util';
 
-@Injectable({
-  providedIn: 'root'
+@Component({
+  selector: 're-tool-occupancy',
+  templateUrl: './occupancy.component.html',
+  styleUrl: './occupancy.component.css'
 })
-export class ReToolCalculationService {
-  exchangeCurrencyRate: number = 2;
-  private redistributionWeights: RedistributionWeight[] = [];
-  private fractionDigits: number = ReToolConstants.nine;
 
-  //#region 'Weight calculation region'
+export class OccupancyComponent implements OnInit {
+  occupancyForm: FormGroup;
+  occupancyDataSource: MatTableDataSource<AbstractControl>;
+  occupancyDisplayedColumns: string[] = [];
+  occupancyData: Occupancy[] = [];
+  subscription: Subscription | undefined = new Subscription();
+  OccupancyGroupData: MasterDataModel[] = [];
+  HazardData: MasterDataModel[] = [];
+  EquipmentBreakdownData: MasterDataModel[] = [];
+  rowValuesMap: Map<number, any> = new Map();
+  registeredAllSubscriptions: boolean = false;
+  private previousFormStatus: FormControlStatus = ReToolConstants.valid;
 
-  setRedistributionWeights(redistributionWeights: RedistributionWeight[]) {
-    this.redistributionWeights = redistributionWeights;
-    return {
-      calculate: this.calculateAll.bind(this)
+  ngOnInit(): void {
+    this.loadOccupancyGroups();
+    this.initializeForm();
+    this.reToolTabService.emit('onFormComponentInit', { encodedTabIndex: SubTabEncodedEnum.Occupancy });
+  }
+
+  constructor(private reToolService: ReToolService, private fb: FormBuilder, private reToolTabService: ReToolTabService) { }
+
+  initializeForm() {
+    const onInitializeOccupancyData = this.reToolTabService.on('onInitializeOccupancyData').subscribe({
+      next: (event: FormDataSource) => {
+        if (event.data) {
+          this.occupancyDisplayedColumns = event?.columns;
+          this.occupancyData = event?.data;
+          this.occupancyData = this.reToolTabService
+            .mergePropertyValueData<Occupancy>(this.occupancyData);
+          this.occupancyForm = this.fb.group({
+            rows: this.fb.array([])
+          });
+          this.initializeDataSource();
+          this.occupancyDataSource = new MatTableDataSource(this.tableRowsControls);
+        }
+      },
+      error: (error) => {
+        throw new error
+      }
+    });
+    this.subscription?.add(onInitializeOccupancyData);
+
+    this.subscription?.add(
+      this.reToolTabService.on('onProcessingSave').subscribe((event) => {
+        this.occupancyForm.markAllAsTouched();
+        this.occupancyForm.markAsPristine();
+        this.occupancyForm.updateValueAndValidity();
+        this.reToolTabService.formStatus = this.occupancyForm.status;
+
+        const hasFormError = this.occupancyForm.status === ReToolConstants.invalid;
+
+        if (hasFormError) {
+          this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+        } else {
+          this.reToolTabService.emit('onSaveFormData', { formData: this.getOccupancyFormData, subTabIndex: 1, tabInfo: event?.tabInfo, isTabChange: event?.isTabChange });
+        }
+      }));
+
+    this.subscription?.add(
+      this.occupancyForm?.statusChanges.subscribe((status) => {
+        if (status !== this.previousFormStatus) {
+          this.previousFormStatus = this.occupancyForm.status;
+          this.reToolTabService.formStatus = this.occupancyForm.status;
+        }
+      })
+    );
+  }
+
+  initializeDataSource() {
+    const rows = this.getFormArray();
+    rows.clear();
+    this.rowValuesMap.clear();
+    this.occupancyData?.forEach((data, index) => {
+      const row = this.createRow(data);
+      rows.push(row);
+      this.rowValuesMap.set(index, {
+        OccupancyTypeList: []
+      });
+      this.getOccupancyType(index, this.occupancyData[index].OccupancyGroup, this.rowValuesMap.get(index), row);
+      row.controls['Hazard'][ReToolConstants.isHighlighted] = data.IsHazardUpdated;
+      row.controls['EquipmentBreakdown'][ReToolConstants.isHighlighted] = data.IsEquipmentBreakdownUpdated;
+      this.reToolTabService.actionStateChange(row);
+      this.disableDropdownControl(row, false);
+    });
+  }
+
+  createRow(data: Occupancy): FormGroup {
+    return this.fb.group({
+      ULId: new FormControl(data.ULId || ''),
+      PropertyLocationId: new FormControl(data.PropertyLocationId || null),
+      LocationName: new FormControl({ value: data.LocationName || '', disabled: true }),
+      Country: new FormControl({ value: data.Country || ReToolConstants.blank, disabled: true }),
+      OccupancyGroup: new FormControl(data.OccupancyGroup || ReToolConstants.blank, Validators.required),
+      OccupancyType: new FormControl(data.OccupancyType || ReToolConstants.blank, Validators.required),
+      OccupancyCode: new FormControl({ value: data.OccupancyCode || ReToolConstants.blank, disabled: true }),
+      Hazard: new FormControl({ value: data.Hazard || '', disabled: true }, Validators.required),
+      IsHazardUpdated: new FormControl(data.IsHazardUpdated || false),
+      EquipmentBreakdown: new FormControl({ value: data.EquipmentBreakdown || ReToolConstants.blank, disabled: true }, Validators.required),
+      IsEquipmentBreakdownUpdated: new FormControl(data.IsEquipmentBreakdownUpdated || false),
+      GroupBuildingArea: new FormControl(Utility.formatGBA(data.GroupBuildingArea) || null),
+      AutomaticSprinklersPercentage: new FormControl(Utility.formatPercentage(data.AutomaticSprinklersPercentage) || null),
+      AutomaticSprinklersNeededPercentage: new FormControl(Utility.formatPercentage(data.AutomaticSprinklersNeededPercentage) || null),
+      Action: new FormControl(data.Action || ActionEnum.IsSaved),
+      VerCol: data.VerCol,
+      Address: new FormControl({ value: data.Address || '', disabled: false }, [Validators.required]),
+      StreetAddressToolTip: new FormControl(data.StreetAddressToolTip),
+    });
+  }
+
+  get tableRowsControls() {
+    return this.getFormArray().controls;
+  }
+
+  generateFormElementIdAttribute(rowIndex: number, dataId: number, columnName: string, popUp?: string): string {
+    return this.reToolService.generateFormElementIdAttribute(rowIndex, dataId, columnName);
+  }
+
+  loadOccupancyGroups(): void {
+    const loadOccupancyGroups = this.reToolService.getOccupancyGroup(0).subscribe({
+      next: (response) => {
+        this.OccupancyGroupData = response.occupancyGroups;
+        this.HazardData = response.hazard;
+        this.EquipmentBreakdownData = response.equipmentBreakdown;
+      },
+      error: (error) => {
+        throw new error;
+      }
+    });
+    this.subscription?.add(loadOccupancyGroups);
+  }
+
+  changeOccupancyGroup(index: number, selectedGroupId: string): void {
+    let row = this.getFormArray().at(index);
+    let currentValues = this.rowValuesMap.get(index);
+    this.rowValuesMap.set(index, {
+      ...currentValues,
+      OccupancyGroup: selectedGroupId
+    });
+
+    row.patchValue({
+      OccupancyType: ReToolConstants.blank,
+      OccupancyCode: ReToolConstants.blank,
+      Hazard: ReToolConstants.blank,
+      EquipmentBreakdown: ReToolConstants.blank,
+      OccupancyTypeList: [],
+      Action: ActionEnum.IsModified
+    });
+
+    if (selectedGroupId) {
+      this.getOccupancyType(index, selectedGroupId, currentValues, row);
+    } else {
+      row.patchValue({
+        OccupancyType: ReToolConstants.blank,
+        OccupancyCode: ReToolConstants.blank,
+        Hazard: ReToolConstants.blank,
+        EquipmentBreakdown: ReToolConstants.blank,
+        OccupancyTypeList: [],
+        Action: ActionEnum.IsModified
+      });
+      this.rowValuesMap.get(index).OccupancyTypeList = [];
+      this.disableDropdownControl(row, true);
+    }
+  }
+
+  changeOccupancyType(index: number, selectedTypeId: string): void {
+    const row = this.getFormArray().at(index);
+    if (selectedTypeId) {
+      this.disableDropdownControl(row, false);
+      const occupancyTypeMap = this.rowValuesMap.get(index).OccupancyTypeList.find(type => type.value === selectedTypeId);
+      if (occupancyTypeMap) {
+        row.patchValue({
+          OccupancyCode: occupancyTypeMap.dependentValue.occupancyTypeCode,
+          Hazard: occupancyTypeMap.dependentValue.hazard,
+          EquipmentBreakdown: occupancyTypeMap.dependentValue.equipmentBreakdown,
+          Action: ActionEnum.IsModified
+        });
+
+        this.rowValuesMap.set(index, {
+          ...this.rowValuesMap.get(index),
+          OccupancyType: occupancyTypeMap.value,
+          OccupancyCode: occupancyTypeMap.dependentValue.occupancyTypeCode,
+          Hazard: occupancyTypeMap.dependentValue.hazard,
+          EquipmentBreakdown: occupancyTypeMap.dependentValue.equipmentBreakdown
+        });
+      }
+    } else {
+      row.patchValue({
+        OccupancyType: ReToolConstants.blank,
+        OccupancyCode: ReToolConstants.blank,
+        Hazard: ReToolConstants.blank,
+        EquipmentBreakdown: ReToolConstants.blank,
+        Action: ActionEnum.IsModified
+      });
+      this.rowValuesMap.set(index, {
+        ...this.rowValuesMap.get(index),
+        OccupancyType: ReToolConstants.blank,
+        OccupancyCode: ReToolConstants.blank,
+        Hazard: ReToolConstants.blank,
+        EquipmentBreakdown: ReToolConstants.blank,
+      });
+      this.disableDropdownControl(row, true);
+    }
+    this.changeHazard(index, selectedTypeId);
+    this.changeEquipmentBreakdown(index, selectedTypeId);
+  }
+
+  changeHazard(index: number, selectedTypeId: string): void {
+    const row = this.getFormArray().at(index);
+    row.patchValue({ Action: ActionEnum.IsModified });
+    this.updateHighlight(index, selectedTypeId, 'Hazard');
+    localStorage.setItem('isOccupancyHazardChanged', 'true');
+  }
+
+  changeEquipmentBreakdown(index: number, selectedTypeId: string): void {
+    const row = this.getFormArray().at(index);
+    row.patchValue({ Action: ActionEnum.IsModified });
+    this.updateHighlight(index, selectedTypeId, 'EquipmentBreakdown');
+    localStorage.setItem('isOccupancyHazardChanged', 'true');
+  }
+
+  onCellValueChange(event: Event, column: FormControl) {
+    const cellElement = event.target as HTMLElement;
+    const response: GridRowRecord = this.getGidRowRecordDetail(cellElement?.id);
+    response.value = column.value;
+
+    const row = this.getFormArray().at(response.rowIndex);
+    row.patchValue({
+      [response.columnName]: response.value,
+      ['Action']: ActionEnum.IsModified
+    });
+  }
+
+  onSubmit() {
+    this.occupancyForm.markAllAsTouched();
+    this.reToolTabService.formStatus = this.occupancyForm.status;
+
+    if (this.occupancyForm.status == ReToolConstants.valid) {
+      this.reToolTabService.emit('onSaveFormData', { formData: this.getOccupancyFormData, subTabIndex: 1});
+    } else {
+      this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+    }
+  }
+
+  private updateHighlight(index: number, selectedTypeId: string, controlType: 'Hazard' | 'EquipmentBreakdown') {
+    const occupancyTypeList = this.rowValuesMap.get(index).OccupancyTypeList;
+    const selectedType = occupancyTypeList.find(item => item.value == selectedTypeId);
+    const controlKey = controlType === 'Hazard' ? ReToolConstants.hazardControl : ReToolConstants.equipmentBreakdownControl;
+    const control = this.getFormArray().at(index).get(controlKey);
+    const row = this.getFormArray().at(index) as FormGroup;
+    let isHighlighted: boolean = false;
+
+    if (control) {
+      const dropdownValue = control.value;
+      if (selectedType) {
+        isHighlighted = controlType === 'Hazard'
+          ? dropdownValue !== selectedType.dependentValue.hazard
+          : dropdownValue !== selectedType.dependentValue.equipmentBreakdown;
+        control[ReToolConstants.isHighlighted] = isHighlighted;
+      }
+    } else {
+      control[ReToolConstants.isHighlighted] = isHighlighted;
+    }
+
+    row.patchValue({
+      [controlType === 'Hazard' ? 'IsHazardUpdated' : 'IsEquipmentBreakdownUpdated']: isHighlighted
+    });
+  }
+
+  private getFormArray(): FormArray {
+    return (this.occupancyForm.get('rows') as FormArray);
+  }
+
+  private get getOccupancyFormData(): Occupancy[] {
+    return this.getFormArray()?.getRawValue() as Occupancy[];
+  }
+
+  private getOccupancyType(index: number, selectedGroupId: string, currentValues: any, row: any) {
+    this.reToolService.getOccupancyType(selectedGroupId).subscribe(types => {
+      const existingOccupancyType = currentValues?.OccupancyType || ReToolConstants.blank;
+      const validType = types.find(type => type.value === existingOccupancyType);
+      if (validType) {
+        row.patchValue({
+          OccupancyType: validType.value,
+          OccupancyCode: validType.dependentValue.occupancyTypeCode,
+          Hazard: validType.dependentValue.hazard,
+          EquipmentBreakdown: validType.dependentValue.equipmentBreakdown,
+          OccupancyTypeList: types
+        });
+      } else {
+        this.rowValuesMap.set(index, {
+          ...this.rowValuesMap.get(index),
+          OccupancyTypeList: types
+        })
+      }
+      this.rowValuesMap.set(index, {
+        ...this.rowValuesMap.get(index),
+        OccupancyTypeList: types
+      })
+    });
+  }
+
+  private getGidRowRecordDetail(input: string): GridRowRecord {
+
+    const [rowPart, idPart, column, popup] = input.split('_');
+
+    const record: GridRowRecord = {
+      rowIndex: parseInt(rowPart.split('-')[1]),
+      columnName: column,
+      rowPKId: parseInt(idPart.split('-')[1]),
+      value: '',
+      popup: popup
     };
+
+    return record;
   }
 
-  setPropertyData<T>(row: T): any {
-    return {
-      setGroupOrTypeCode: (code: number) => this.setGroupOrTypeCode(row, code),
+  private disableDropdownControl(row: any, isDisabled: boolean): void {
+    if (isDisabled) {
+      row.get('Hazard').disable();
+      row.get('EquipmentBreakdown').disable();
+    } else {
+      row.get('Hazard').enable();
+      row.get('EquipmentBreakdown').enable();
     }
   }
 
-  private calculateAll(): void {
-    this.redistributionWeights.forEach((rdWeights) => {
-      this.calculate(rdWeights);
-    });
-  }
-
-  private calculate(redistributionWeight: RedistributionWeight): RedistributionWeight {
-    let sum = 0;
-    for (const key in redistributionWeight.inputWeights) {
-      if (this.isValidInput(redistributionWeight.inputRatings[key])) {
-        sum = Number((sum + redistributionWeight.inputWeights[key] / 100).toFixed(this.fractionDigits));
-      }
-    }
-
-    Object.entries(redistributionWeight.inputRatings).forEach(([key]) => {
-      if (this.isValidInput(redistributionWeight.inputRatings[key])) {
-        const weight = ((redistributionWeight.inputWeights[key] / sum) / 100);
-        redistributionWeight.redistributedWeights[key] = parseFloat(weight.toFixed(this.fractionDigits));
-      }
-      else
-        redistributionWeight.redistributedWeights[key] = 0;
-    });
-
-    return redistributionWeight;
-  }
-
-  private getWeightDistributionByCode(code: number) {
-    return this.redistributionWeights[this.getIndexByCode(code)];
-  }
-
-  private getWeightDistributionRiskFactorByElement(code: number, element: RiskFactorElementEnum): number {
-    const redistributionWeight: RedistributionWeight
-      = this.getWeightDistributionByCode(code);
-    return parseFloat(
-      (
-        Number(this.isValidInput(redistributionWeight.inputRatings[element]) ? redistributionWeight.inputRatings[element] : 0) *
-        Number(redistributionWeight.redistributedWeights[element])
-      ).toFixed(this.fractionDigits));
-  }
-
-  private updateWeightDistribution(row: any, code: number, value: string | number | null, element: RiskFactorElementEnum): any {
-    let index = this.getIndexByCode(code);
-    if (index === -1) {
-      return {
-        getRiskFactor: () => -1,
-        getPDIndexValue: () => -1
-      }
-    }
-
-    let redistributionWeight = this.getWeightDistributionByCode(code);
-    redistributionWeight.inputRatings[element] = value;
-    const updatedDistributedWeight = this.calculate(redistributionWeight);
-    this.redistributionWeights[index] = updatedDistributedWeight;
-
-    return {
-      getRiskFactor: () => this.getWeightDistributionRiskFactorByElement(code, element),
-      getPDIndexValue: () => this.getPDIndexValue(row, code)
+  ngOnDestroy() {
+    if (this.subscription) {
+      this.subscription?.unsubscribe();
     }
   }
-
-  private setGroupOrTypeCode(row: any, code: number): any {
-    return {
-      setElement: (element: RiskFactorElementEnum) => this.setElement(row, code, element)
-    }
-  }
-
-  private setElement(row: any, code: number, element: RiskFactorElementEnum): any {
-    return {
-      updateWeightDistribution: (value: string | number | null) => this.updateWeightDistribution(row, code, value, element)
-    }
-  }
-
-  private getIndexByCode(code: number): number {
-    if (code === GeneralPropertyTypeCodeWeightsEnum.SemiconductorCrystalGrowing
-      || code === GeneralPropertyTypeCodeWeightsEnum.SemiconductorWaferFabrication) {
-      return this.redistributionWeights.findIndex(w => w.groupTypeCode === code);
-    }
-    else {
-      return this.redistributionWeights.findIndex(w => w.occupancyGroupId === code);
-    }
-  }
-
-  private isValidInput(rating: string | number): boolean {
-    return rating !== ReToolConstants.NA && rating !== null && !isNaN(Number(rating));
-  }
-
-  private getRedistributedFactorsSum(code: number): number {
-    let sum = 0;
-    let redistributionWeight = this.getWeightDistributionByCode(code);
-    Object.entries(redistributionWeight.redistributedWeights).forEach(([key]) => {
-      const calculatedWeight = this.getWeightDistributionRiskFactorByElement(code, key as RiskFactorElementEnum);
-      sum = Number((sum + calculatedWeight).toFixed(this.fractionDigits));
-    });
-    return sum;
-  }
-
-  private getPDIndexValue(property: GeneralProperty, code: number): number | null {
-    return this.getRedistributedFactorsSum(code) * this.getMultiplierFactor(property);
-  }
-
-  private getMultiplierFactor(property: GeneralProperty) {
-    const probableMaximumLossRate: number = Number(Utility.removeComma(property.ProbableMaximumLoss)) * this.exchangeCurrencyRate;
-    const maximumForeseeableLossRate: number = Number(Utility.removeComma(property.MaximumForeseeableLoss)) * this.exchangeCurrencyRate;
-    const normalLossExpectancyRate: number = Number(Utility.removeComma(property.NormalLossExpectancy)) * this.exchangeCurrencyRate;
-    const businessInterruptionValue: number = Number(property.BusinessInterruptionValue);
-    const businessInterruptionOtherValue: number = Number(property.BusinessInterruptionOtherValue);
-    const totalPD: number = Number(property.TotalPD);
-    const payRollValue: number = Number(property.PayRollValue);
-    const indemnityPeriod: number = Number(property.IndemnityPeriod);
-    const normalLossDeficiencyDriven: boolean = property.NormalLossDeficiencyDriven || false;
-
-    const totalPdBIOrOtherAndPayRoll = Number((totalPD 
-      + (12 * (businessInterruptionValue + businessInterruptionOtherValue) 
-       / indemnityPeriod) + payRollValue)
-      ?.toFixed(1));
-
-    const totalPdBIOrOtherAndPayRollRate = totalPdBIOrOtherAndPayRoll * this.exchangeCurrencyRate;
-    const totalPdBIOrOtherAndPayRollRateFactor = 0.25 * totalPdBIOrOtherAndPayRollRate;
-
-      if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) < (probableMaximumLossRate)
-        && normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate < 100)))
-      ) {
-        return 1;
-      }
-      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate < 100)))
-      ) {
-        return 0.95;
-      }
-      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate < 100)))
-      ) {
-        return 0.75;
-      }
-      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate < 100)))
-      ) {
-        return 0.65;
-      }
-      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) < (probableMaximumLossRate)
-        && normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate >= 100)))
-      ) {
-        return 0.95;
-      }
-      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) < (probableMaximumLossRate)
-        && normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate >= 100)))
-      ) {
-        return 0.9;
-      }
-      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate >= 100)))
-      ) {
-        return 0.7;
-      }
-      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate >= 100)))
-      ) {
-        return 0.6;
-      }
-      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) < (probableMaximumLossRate)
-        && !normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate < 100)))
-      ) {
-        return 1;
-      }
-      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && !normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate < 100)))
-      ) {
-        return 0.975;
-      }
-      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && !normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate < 100)))
-      ) {
-        return 1;
-      }
-      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && !normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate < 100)))
-      ) {
-        return 0.95;
-      }
-      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) < (probableMaximumLossRate)
-        && !normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate >= 100)))
-      ) {
-        return 1;
-      }
-      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) < (probableMaximumLossRate)
-        && !normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate >= 100)))
-      ) {
-        return 0.95;
-      }
-      else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && !normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate >= 100)))
-      ) {
-        return 1;
-      }
-      else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
-        && (normalLossExpectancyRate) === (probableMaximumLossRate)
-        && !normalLossDeficiencyDriven)
-        && (((totalPdBIOrOtherAndPayRollRate) < 400
-          && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
-          || ((totalPdBIOrOtherAndPayRollRate) >= 400
-            && (normalLossExpectancyRate >= 100)))
-      ) {
-        return 0.9;
-      }
-    else
-      return 0;
-  }
-  //#endregion 'Weight calculation'
 }
-
-write all unit test cases for above service file in angular in jasmin. also include unit test case for private method 
-
-please read all above code carefully and provide unit test cases scenarios without any fail.
