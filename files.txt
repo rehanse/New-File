@@ -1,38 +1,12 @@
-1. it('should initialize data source correctly', () => {
-    component.occupancyData = [{ ULId: '123', LocationName: 'Test', Address: 'Some Address' } as Occupancy];
-    spyOn(component, 'getFormArray').and.returnValue({ clear: jasmine.createSpy(), push: jasmine.createSpy() } as any);
-    component.initializeDataSource();
-    expect(component.getFormArray().clear).toHaveBeenCalled();
-  });
+it('should initialize data source correctly', () => {
+  component.occupancyData = [{ ULId: '123', LocationName: 'Test', Address: 'Some Address' } as Occupancy];
+  spyOn<any>(component, 'getFormArray').and.returnValue({ clear: jasmine.createSpy(), push: jasmine.createSpy() } as any);
+  component.initializeDataSource();
+  expect(component['getFormArray']().clear).toHaveBeenCalled();
+});
 
-error:-
-
-a.Argument of type '"getFormArray"' is not assignable to parameter of type 'never'.
-b.Argument of type 'any' is not assignable to parameter of type 'never'.
-
-
-2. it('should call getOccupancyType when changing occupancy group', () => {
-    spyOn(component, 'getOccupancyType');
-    component.changeOccupancyGroup(0, 'group1');
-    expect(component.getOccupancyType).toHaveBeenCalledWith(0, 'group1', jasmine.any(Object), jasmine.any(Object));
-  });
-
-error
-
-a.
-Argument of type '"getOccupancyType"' is not assignable to parameter of type 'never'.
-b.
-Property 'getOccupancyType' is private and only accessible within class 'OccupancyComponent'.ts(2341)
-(method) OccupancyComponent.getOccupancyType(index: number, selectedGroupId: string, currentValues: any, row: any): void
-
-
-OccupancyComponent > should create
-TypeError: Cannot read properties of undefined (reading 'subscribe')
-
-
-OccupancyComponent > should unsubscribe from all subscriptions on destroy
-TypeError: Cannot read properties of undefined (reading 'subscribe')
-
-
-OccupancyComponent > should initialize form on component init
-TypeError: Cannot read properties of undefined (reading 'subscribe')
+it('should call getOccupancyType when changing occupancy group', () => {
+  spyOn<any>(component, 'getOccupancyType');
+  component.changeOccupancyGroup(0, 'group1');
+  expect(component['getOccupancyType']).toHaveBeenCalledWith(0, 'group1', jasmine.any(Object), jasmine.any(Object));
+});
