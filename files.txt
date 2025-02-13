@@ -1,183 +1,44 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { OccupancyComponent } from './occupancy.component';
-import { ReToolService } from '../../../service/re-tool.service';
-import { ReToolTabService } from '../../../service/re-tool-tab.service';
-import { FormBuilder, ReactiveFormsModule, FormControlStatus, FormArray, FormControl, FormGroup } from '@angular/forms';
-import { MatTableModule } from '@angular/material/table';
-import { MasterDataModel } from '../../../../dashboard/models/master-data';
-import { Occupancy } from '../../../models/occupancy';
-import { of, Subscription } from 'rxjs';
-import { ActionEnum } from '../../../models/action-enum';
-import { SubTabEncodedEnum } from '../../../models/re-tool-tabs-enum';
-import { ReToolConstants } from '../../../constants/re-tool.constants';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+it('should handle occupancy type change', fakeAsync(() => {
+    // 1. Initialize component with proper form structure
+    component.ngOnInit();
+    tick();
+    fixture.detectChanges();
 
-fdescribe('OccupancyComponent', () => {
-    let component: OccupancyComponent;
-    let fixture: ComponentFixture<OccupancyComponent>;
-    let mockReToolService: jasmine.SpyObj<ReToolService>;
-    let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
-    const fb = new FormBuilder();
-
-    function createMockOccupancy(): Occupancy {
-        return {
-            ULId: '250-00001',
-            PropertyLocationId: 1,
-            Address: '1490 NW 12th.',
-            City: '1490 NW 12th.',
-            Country: 'United States',
-            LocationName: 'NYC Langone',
-            StateProvince: 'Boston',
-            OccupancyGroup: 'Wood',
-            OccupancyType: 'Wood Tpe',
-            OccupancyCode: 1233,
-            Hazard: 'Low',
-            IsHazardUpdated: true,
-            EquipmentBreakdown: 'High',
-            IsEquipmentBreakdownUpdated: true,
-            GroupBuildingArea: 0,
-            AutomaticSprinklersPercentage: 77,
-            AutomaticSprinklersNeededPercentage: 88,
-            Action: ActionEnum.IsNewRecord,
-            VerCol: '',
-            StreetAddressToolTip: ''
-        };
-    }
-
-    const mockOccupancyGroupResponse = {
-        occupancyGroups: [{ value: '1', text: 'Group 1' }],
-        hazard: [],
-        equipmentBreakdown: []
-    };
-
-    beforeEach(async () => {
-        mockReToolService = jasmine.createSpyObj('ReToolService',
-            ['getOccupancyGroup', 'getOccupancyType']);
-        mockReToolTabService = jasmine.createSpyObj('ReToolTabService',
-            ['on', 'emit', 'mergePropertyValueData', 'showErrorMessage']);
-
-        // Configure default mock responses
-        mockReToolService.getOccupancyGroup.and.returnValue(of(mockOccupancyGroupResponse));
-        mockReToolTabService.on.and.returnValue(of({
-            data: [{
-                ULId: '250-00001',
-                PropertyLocationId: 1,
-                Address: '1490 NW 12th.',
-                City: '1490 NW 12th.',
-                Country: 'United States',
-                LocationName: 'NYC Langone',
-                StateProvince: 'Boston',
-                OccupancyGroup: 'Wood',
-                OccupancyType: 'Wood Tpe',
-                OccupancyCode: 1233,
-                Hazard: 'Low',
-                IsHazardUpdated: true,
-                EquipmentBreakdown: 'High',
-                IsEquipmentBreakdownUpdated: true,
-                GroupBuildingArea: 0,
-                AutomaticSprinklersPercentage: 77,
-                AutomaticSprinklersNeededPercentage: 88,
-                Action: ActionEnum.IsNewRecord,
-                VerCol: '',
-                StreetAddressToolTip: ''
-            }],
-            columns: []
-        }));
-
-        await TestBed.configureTestingModule({
-            imports: [ReactiveFormsModule, MatTableModule],
-            declarations: [OccupancyComponent],
-            providers: [
-                { provide: ReToolService, useValue: mockReToolService },
-                { provide: ReToolTabService, useValue: mockReToolTabService },
-                FormBuilder
-            ]
-        }).compileComponents();
-
-        fixture = TestBed.createComponent(OccupancyComponent);
-        component = fixture.componentInstance;
-    });
-
-
-    afterEach(() => {
-        if (component.subscription) {
-            component.subscription.unsubscribe();
-        }
-    });
-
-    it('should create', () => {
-        fixture.detectChanges();
-        expect(component).toBeTruthy();
-    });
-
-
-    it('should initialize form and load occupancy groups on ngOnInit', fakeAsync(() => {
-        const mockMasterData: MasterDataModel[] = [{ value: '1', text: 'Group 1', category: '', defaultValue: '', dependentValue: '', disabled: false, fullText: '' }];
-        mockReToolService.getOccupancyGroup.and.returnValue(of({
-            occupancyGroups: mockMasterData,
-            hazard: [],
-            equipmentBreakdown: []
-        }));
-
-        component.ngOnInit();
-        tick();
-        fixture.detectChanges();
-
-        expect(mockReToolService.getOccupancyGroup).toHaveBeenCalledWith(0);
-        expect(mockReToolTabService.emit).toHaveBeenCalledWith(
-            'onFormComponentInit',
-            { encodedTabIndex: SubTabEncodedEnum.Occupancy }
-        );
-        expect(component.occupancyForm).toBeDefined();
-    }));
-	
-	 it('should handle occupancy type change', fakeAsync(() => {
-        // Arrange
-        const mockOccupancyTypeResponse = [{
-          value: 'type1',
-          dependentValue: {
+    // 2. Set up mock responses and initial data
+    const mockTypes = [{
+        value: 'type1',
+        dependentValue: {
+            occupancyTypeCode: 'code1',
             hazard: 'Low',
             equipmentBreakdown: 'High'
-          }
-        }];
+        }
+    }];
+    
+    // Mock the occupancy type service call
+    mockReToolService.getOccupancyType.and.returnValue(of(mockTypes));
 
-        // Configure specific mock response for this test
-        mockReToolService.getOccupancyType.and.returnValue(of(mockOccupancyTypeResponse));
+    // 3. Simulate initial group selection
+    component.changeOccupancyGroup(0, '1');
+    tick();
 
-        // Initialize component with fakeAsync
-        component.ngOnInit();
-        tick(); // Process async operations
+    // 4. Get reference to the form row
+    const formArray = component['getFormArray']();
+    const row = formArray.at(0) as FormGroup;
 
-        // Manually initialize form array with test data
-        component.occupancyForm = new FormBuilder().group({
-          rows: new FormArray([
-            new FormBuilder().group({
-              ULId: '1',
-              OccupancyGroup: '1',
-              OccupancyType: 'type1',
-              Hazard: 'Low',
-              EquipmentBreakdown: 'High'
-            })
-          ])
-        });
+    // 5. Set initial values for the test
+    row.patchValue({
+        OccupancyGroup: '1',
+        OccupancyType: 'type1',
+        Action: ActionEnum.IsSaved
+    });
 
-        // Act
-        component.changeOccupancyType(0, 'type1');
-        tick(); // Process any async operations in the method
+    // 6. Execute the type change
+    component.changeOccupancyType(0, 'type1');
+    tick();
 
-        // Assert
-        const row = (component.occupancyForm.get('rows') as FormArray).at(0);
-        expect(row.get('Hazard')?.value).toBe('Low');
-        expect(row.get('EquipmentBreakdown')?.value).toBe('High');
-        expect(row.get('Action')?.value).toBe(ActionEnum.IsModified);
-      }));
-	});
-	
-	error:
-OccupancyComponent > should handle occupancy type change
-TypeError: Cannot read properties of undefined (reading 'patchValue')
-
-fix this issue on above test case only for 'should handle occupancy type change'
+    // 7. Verify the updates
+    expect(row.get('Hazard').value).toBe('Low');
+    expect(row.get('EquipmentBreakdown').value).toBe('High');
+    expect(row.get('OccupancyCode').value).toBe('code1');
+    expect(row.get('Action').value).toBe(ActionEnum.IsModified);
+}));
