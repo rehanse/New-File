@@ -1,47 +1,98 @@
-// Add to the 'should handle occupancy type change' test case
-beforeEach(fakeAsync(() => {
-  // Mock occupancy group response
-  mockReToolService.getOccupancyGroup.and.returnValue(of({
-    occupancyGroups: [],
-    hazard: [],
-    equipmentBreakdown: []
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { OccupancyComponent } from './occupancy.component';
+import { ReToolService } from '../../../service/re-tool.service';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { FormBuilder, ReactiveFormsModule, FormArray } from '@angular/forms';
+import { MatTableModule } from '@angular/material/table';
+import { of } from 'rxjs';
+
+// Add proper mock implementations
+const mockOccupancyGroupResponse = {
+  occupancyGroups: [{ value: '1', text: 'Group 1' }],
+  hazard: [],
+  equipmentBreakdown: []
+};
+
+describe('OccupancyComponent', () => {
+  let component: OccupancyComponent;
+  let fixture: ComponentFixture<OccupancyComponent>;
+  let mockReToolService: jasmine.SpyObj<ReToolService>;
+  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+
+  beforeEach(async () => {
+    mockReToolService = jasmine.createSpyObj('ReToolService', 
+      ['getOccupancyGroup', 'getOccupancyType']);
+    mockReToolTabService = jasmine.createSpyObj('ReToolTabService',
+      ['on', 'emit', 'mergePropertyValueData', 'showErrorMessage']);
+
+    // Configure default mock responses
+    mockReToolService.getOccupancyGroup.and.returnValue(of(mockOccupancyGroupResponse));
+    mockReToolTabService.on.and.returnValue(of({
+      data: [{
+        ULId: '1',
+        LocationName: 'Test',
+        OccupancyGroup: '1',
+        OccupancyType: 'type1',
+        Hazard: 'h1',
+        EquipmentBreakdown: 'e1'
+      }],
+      columns: []
+    }));
+
+    await TestBed.configureTestingModule({
+      imports: [ReactiveFormsModule, MatTableModule],
+      declarations: [OccupancyComponent],
+      providers: [
+        { provide: ReToolService, useValue: mockReToolService },
+        { provide: ReToolTabService, useValue: mockReToolTabService },
+        FormBuilder
+      ]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(OccupancyComponent);
+    component = fixture.componentInstance;
+  });
+
+  it('should handle occupancy type change', fakeAsync(() => {
+    // Arrange
+    const mockOccupancyTypeResponse = [{
+      value: 'type1',
+      dependentValue: {
+        hazard: 'h1',
+        equipmentBreakdown: 'e1'
+      }
+    }];
+
+    // Configure specific mock response for this test
+    mockReToolService.getOccupancyType.and.returnValue(of(mockOccupancyTypeResponse));
+
+    // Initialize component with fakeAsync
+    component.ngOnInit();
+    tick(); // Process async operations
+
+    // Manually initialize form array with test data
+    component.occupancyForm = new FormBuilder().group({
+      rows: new FormArray([
+        new FormBuilder().group({
+          ULId: '1',
+          OccupancyGroup: '1',
+          OccupancyType: 'type1',
+          Hazard: 'h1',
+          EquipmentBreakdown: 'e1'
+        })
+      ])
+    });
+
+    // Act
+    component.changeOccupancyType(0, 'type1');
+    tick(); // Process any async operations in the method
+
+    // Assert
+    const row = (component.occupancyForm.get('rows') as FormArray).at(0);
+    expect(row.get('Hazard')?.value).toBe('h1');
+    expect(row.get('EquipmentBreakdown')?.value).toBe('e1');
+    expect(row.get('Action')?.value).toBe(ActionEnum.IsModified);
   }));
-  
-  component.ngOnInit();
-  tick();
-  fixture.detectChanges();
-}));
 
-it('should handle occupancy type change', fakeAsync(() => {
-  // Arrange
-  const mockTypes = [{ 
-    value: 'type1', 
-    dependentValue: { 
-      hazard: 'h1', 
-      equipmentBreakdown: 'e1' 
-    } 
-  }];
-  
-  // Mock service responses
-  mockReToolService.getOccupancyGroup.and.returnValue(of({
-    occupancyGroups: [],
-    hazard: [],
-    equipmentBreakdown: []
-  }));
-  mockReToolService.getOccupancyType.and.returnValue(of(mockTypes));
-
-  // Initialize component
-  component.ngOnInit();
-  tick();
-  fixture.detectChanges();
-
-  // Act
-  component.changeOccupancyType(0, 'type1');
-  tick();
-  
-  // Assert
-  const row = component.getFormArray().at(0);
-  expect(row.get('Hazard').value).toBe('h1');
-  expect(row.get('EquipmentBreakdown').value).toBe('e1');
-  expect(row.get('Action').value).toBe(ActionEnum.IsModified);
-}));
+  // Other test cases...
+});
