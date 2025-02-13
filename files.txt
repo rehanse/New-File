@@ -1,700 +1,238 @@
-export class MasterDataModel {
-  text: string;
-  value: string;
-  category: string;
-  defaultValue: string;
-  dependentValue: any;
-  disabled: boolean = false;
-  fullText:string;
-}
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { OccupancyComponent } from './occupancy.component';
+import { ReToolService } from '../../../service/re-tool.service';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { FormBuilder, ReactiveFormsModule, FormControlStatus } from '@angular/forms';
+import { MatTableModule } from '@angular/material/table';
+import { MasterDataModel } from '../../../../dashboard/models/master-data';
+import { Occupancy } from '../../../models/occupancy';
+import { of, Subscription } from 'rxjs';
+import { ActionEnum } from '../../../models/action-enum';
+import { SubTabEncodedEnum } from '../../../models/re-tool-tabs-enum';
+import { ReToolConstants } from '../../../constants/re-tool.constants';
 
+describe('OccupancyComponent', () => {
+  let component: OccupancyComponent;
+  let fixture: ComponentFixture<OccupancyComponent>;
+  let mockReToolService: jasmine.SpyObj<ReToolService>;
+  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+  const fb = new FormBuilder();
 
-export class Occupancy implements BaseTabModel {
-    ULId: string = '';
-    PropertyLocationId?: number = 0;
-    Address: string = '';
-    City: string = '';
-    Country: string = '';
-    LocationName: string = '';
-    StateProvince: string = '';
-    OccupancyGroup: string = '';
-    OccupancyType: string = '';
-    OccupancyCode: number = 0;
-    Hazard: string = '';
-    IsHazardUpdated: boolean = false;
-    EquipmentBreakdown: string = '';
-    IsEquipmentBreakdownUpdated: boolean = false;
-    GroupBuildingArea?: number = null;
-    AutomaticSprinklersPercentage?: number = null;
-    AutomaticSprinklersNeededPercentage?: number = null;
-    Action: ActionEnum = ActionEnum.IsNewRecord;
-    VerCol: string;
-    StreetAddressToolTip?: any = [];
-}
-
-import { Injectable } from '@angular/core';
-import { PropertyValue } from '../models/property-value';
-import { catchError, Observable, Subject, tap, throwError } from 'rxjs';
-import { ReToolConstants } from '../constants/re-tool.constants';
-import { environment } from '../../../../environments/environment';
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { NormalLossExpectancy } from '../models/normal-loss-expectancy';
-import { ProbableMaximumLoss } from '../models/probable-maximum-loss';
-import { MaximumForeseeableLoss } from '../models/maximum-foreseeable-loss';
-import { EquipmentProbableMaximumLoss } from '../models/equipment-probable-maximum-loss';
-import { PropertyMasterDataTypeEnum } from '../models/property-master-data-type-enum';
-import { GeneralPropertyWeightResponse } from '../models/general-property-weight-response';
-import { Cover } from '../models/cover';
-import { PropertyLocationImportRequest } from '../models/property-location-import-request';
-import { LocationFilterModel } from '../../loc-address/models/location-name-address';
-
-const httpOptions = {
-  headers: new HttpHeaders({
-    'Content-Type': 'application/json'
-  })
-};
-
-@Injectable({
-  providedIn: 'root'
-})
-
-export class ReToolService {
-  public addNewLocationSubject = new Subject<void>();
-  addNewLocation$ = this.addNewLocationSubject.asObservable();
-  public currencyUnitSubject = new Subject<any>();
-  currencyUnit$ = this.currencyUnitSubject.asObservable();
-  public locationApiDataSubscribe$ = new Subject<any>();
-  public countrySearchSubject$ = new Subject<any>();
-  public humanElementRiskFactorSubject = new Subject<any>();
-  humanElementRiskFactor$ = this.humanElementRiskFactorSubject.asObservable();
-  private importDataSubject = new Subject<{ locationData: any, propertyValueData: any }>();
-  importData$ = this.importDataSubject.asObservable();
-
-  private readonly httpOptions = {
-    headers: new HttpHeaders({
-      'Content-Type': 'application/json'
-    })
-  };
-
-  constructor(private http: HttpClient) { }
-
-  getLocationProperties(reviewRequestId: number, isGeneralProperty: boolean): Observable<PropertyValue[]> {
-    return this.get<any>(`${environment.baseUrl}Property/GetAllProperty/${reviewRequestId}/${isGeneralProperty}`);
-  }
-
-  getCoverWithPropertyValues(reviewRequestId: number): Observable<Cover> {
-    return this.get<any>(`${environment.baseUrl}Property/GetPropertyAccountCover/${reviewRequestId}`);
-  }
-
-  generateFormElementIdAttribute(rowIndex: number, dataId: number, columnName: string, popUp?: string): string {
-    return `row-${rowIndex}_dataKey-${dataId}_${columnName}_${popUp}`;
-  }
-
-  getLocationByAddress(query: string): Observable<any> {
-    return this.http.get<any>(`${environment.baseUrl}Location/GetAddressSearch/${query}`, httpOptions);
-  }
-
-  getLocationByGeoCode(query: string): Observable<any> {
-    return this.http.get<any>(`${environment.baseUrl}Location/GetGeoCode/${query}`, httpOptions);
-  }
-
-  getPropertyMaster(type: PropertyMasterDataTypeEnum): Observable<any> {
-    let params = new HttpParams();
-    if (type == PropertyMasterDataTypeEnum.HumanElementRiskFactor) {
-      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
-    }
-
-    if (type == PropertyMasterDataTypeEnum.BIRiskFactor) {
-      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
-    }
-
-    if (type == PropertyMasterDataTypeEnum.Cover) {
-      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
-    }
-
-    const options = {
-      ...this.httpOptions,
-      params
-    }
-
-    if (type === PropertyMasterDataTypeEnum.CurrencyAndUnit) {
-      return this.http.get<any>(`${environment.baseUrl}Property`, options)
-        .pipe(
-          tap(data => this.currencyUnitSubject.next(data)),
-          catchError(error => {
-            return throwError(() => new Error(error.message));
-          })
-        );
-    }
-    else
-      return this.http.get<any>(`${environment.baseUrl}Property`, options);
-  };
-
-  getEnumPropertyName = (value: number): string => {
-    return PropertyMasterDataTypeEnum[value];
-  };
-
-  getOccupancyGroup(productLine: any) {
-    return this.http.get<any>(`${environment.baseUrl}Master/GetRequestCompleteMaster/?productLine=${productLine}`, httpOptions);
-  }
-
-  getOccupancyType(occupancyGroupId: any) {
-    return this.http.get<any>(`${environment.baseUrl}Master/GetOccupancyType/?occupancyGroupId=${occupancyGroupId}`, httpOptions);
-  }
-
-  // Generic POST request for submitting the data to the api
-  // could update once backend API ready
-  post<T>(url: string, body: any): Observable<T> {
-    return this.http.post<any>(url, body, this.httpOptions).pipe(catchError(this.handleError));
-  }
-
-  //Generic GET request for api calling
-  // could update once backend API ready
-  get<T>(url: string): Observable<T> {
-    return this.http.get<T>(url, this.httpOptions).pipe(
-      tap((response) => response),
-      catchError(this.handleError)
-    );
-  }
-
-  handleError(error: any): Observable<never> {
-    throw new Error(error.message);
-  }
-
-  getPropertyFireLocations(reviewRequestId: number): Observable<NormalLossExpectancy[]> {
-    return this.get<any>(`${environment.baseUrl}Property/GetPropertyFireLocations?reviewRequestId=${reviewRequestId}`);
-  }
-
-  getProbableMaximumLoss(reviewRequestId: number): Observable<ProbableMaximumLoss[]> {
-    return this.get<any>(`${environment.baseUrl}Property/GetNormalLossExpectancy?reviewRequestId=${reviewRequestId}`);
-  }
-
-  getMaximumForeseeableLoss(reviewRequestId: number): Observable<MaximumForeseeableLoss[]> {
-    return this.get<any>(`${environment.baseUrl}Property/GetNormalLossExpectancy?reviewRequestId=${reviewRequestId}`);
-  }
-
-  getPropertyEquipmentBreakdownLocations(reviewRequestId: number): Observable<EquipmentProbableMaximumLoss[]> {
-    return this.get<any>(`${environment.baseUrl}Property/GetPropertyEquipmentBreakdownLocations?reviewRequestId=${reviewRequestId}`);
-  }
-
-  getGeneralPropertyWeight(occupancyCodes: any): Observable<GeneralPropertyWeightResponse[]> {
-    return this.post<GeneralPropertyWeightResponse[]>(`${environment.baseUrl}Master/GetGeneralPropertyWeight`, occupancyCodes);
-  }
-
-  importData(data: any, propertyValueData: any) {
-    this.importDataSubject.next({ locationData: data, propertyValueData: propertyValueData });
-  }
-
-  importPropertyLocations(data: PropertyLocationImportRequest[]): any {
-    const apiURL = `${environment.baseUrl}Property/PropertyLocationImport`;
-    return this.http.post(apiURL, data);
-  }
-
-  searchLocationByName(locationFilter: LocationFilterModel) {
-    const body = JSON.stringify(locationFilter);
-    return this.http.post<any>(`${environment.baseUrl}Property/GetLocationSuggestionByName`, body, httpOptions);
-  }
-  
-  searchCountryName(query: string): Observable<any> {
-    return this.http.get<any>(`${environment.baseUrl}Property/GetCountrySuggestionByName/${query}`, httpOptions);
-  }
-}
-
-
-import { Injectable } from '@angular/core';
-import { FormControlStatus, FormGroup } from '@angular/forms';
-import { ToastrService } from 'ngx-toastr';
-import { BehaviorSubject, catchError, filter, map, Observable, of, Subject, Subscription, switchMap } from 'rxjs';
-import { environment } from '../../../../environments/environment';
-import { AppConstants } from '../../../shared/constants/app.constants';
-import { ReToolConstants } from '../constants/re-tool.constants';
-import { ActionEnum } from '../models/action-enum';
-import { Cover } from '../models/cover';
-import { PropertyEquipmentLocation } from '../models/property-equipment-location';
-import { PropertyFireLocation } from '../models/property-fire-location';
-import { PropertyLocation } from '../models/property-location';
-import { PropertyValue } from '../models/property-value';
-import { SavePropertyLocationRequestModel } from '../models/savePropertyRequest';
-import { ReToolService } from './re-tool.service';
-
-interface DynamicAccessiblePropertyItem {
-  ULId?: string;
-  Address: string;
-  City?: string;
-  StateProvince: string;
-  LocationAddressMapId?: number;
-}
-
-@Injectable({
-  providedIn: 'root'
-})
-export class ReToolTabService {
-  reviewRequestId: number;
-  private dataSourceSubject$ = new Subject<{ event: string, payload: any }>();
-  public hasFormChange$ = new BehaviorSubject<boolean>(false);
-  public selectedCurrencyUnitSubject$ = new BehaviorSubject<any>(null);
-  private selectedLocAddressData = new BehaviorSubject<any>(null);
-  selectedLocAddressData$ = this.selectedLocAddressData.asObservable();
-  formStatus: FormControlStatus = ReToolConstants.valid;
-  subscription: Subscription | undefined = new Subscription();
-  propertyLocationForm: FormGroup;
-  tabIndex: number;
-  subTabIndex: number;
-  productLineId: number = 0;
-  currencyUnitValid: boolean = true;
-  allPropertyValuesDeleted: boolean = false;
-
-  propertyLocationColumns: string[] = [
-    "ULID",
-    "LocationName",
-    "StreetAddress",
-    "CityName",
-    "StateName",
-    "CountryName",
-    "BuildingValue",
-    "EquipmentValue",
-    "InventoryValue",
-    "OtherValue",
-    "TotalPD",
-    "BusinessInterruptionValue",
-    "BusinessInterruptionOtherValue",
-    "IndemnityPeriod",
-    "PayRollValue",
-    "PayRollDayValue",
-    "TotalTE",
-    "Total",
-    "Delete"
-  ];
-
-  occupancyColumns: string[] = [
-    "ULID",
-    "LocationName",
-    "StreetAddress",
-    "CountryName",
-    "OccupancyGroup",
-    "OccupancyType",
-    "OccupancyCode",
-    "Hazard",
-    "EquipmentBreakdown",
-    "GroupBuildingArea",
-    "AutomaticSprinklersPercentage",
-    "AutomaticSprinklersNeededPercentage"
-  ];
-
-  generalPropertyColumns: string[] = [
-    "PropertyLocationId",
-    "FullAddress",
-    "CountryName",
-    "NormalLossExpectancy",
-    "ProbableMaximumLoss",
-    "MaximumForeseeableLoss",
-    "HumanElementCalculated",
-    "ConstructionCalculated",
-    "ConstructionHazards",
-    "DetectionSecurity",
-    "AutomaticSprinklers",
-    "FireWaterSupply",
-    "FireManualResponse",
-    "SpecialHazards",
-    "EquipmentHazards",
-    "ExternalExposures",
-    "BusinessInterruptionCalculated",
-    "PropertyDamageIndexUpdated",
-    "PropertyDamageIndexAdjusted",
-    "BusinessInterruptionIndexCalculated",
-    "LocationQualityIndexCalculated",
-    "ConfidenceIndex",
-    "LossPreventionSource",
-    "LossPreventionDate",
-    "LossPreventionComments"
-  ];
-
-  normalLossExpectancyColumns: string[] = [
-    "ULID",
-    "FullAddress",
-    "StreetAddress",
-    "CountryName",
-    "GroupBuildingArea",
-    "BuildingValue",
-    "EquipmentValue",
-    "InventoryValue",
-    "OtherValue",
-    "TotalPD",
-    "AnnualBusinessInterruptionValue",
-    "IndemnityPeriodMonth",
-    "PayRollValue",
-    "PayRollDayValue",
-    "NormalLossCompare",
-    "NormalLossScenario",
-    "NormalLossDeficiencyDriven",
-    "NormalLossPropertyDamage",
-    "NormalLossOtherPropertyDamage",
-    "TotalPDNLE",
-    "NormalLossBusinessInterruption",
-    "NormalLossInterBusinessInterruption",
-    "NormalLossOtherTimeElement",
-    "TotalTE",
-    "NLEActual",
-    "NormalLossIndemnityPeriodBI",
-    "IPFactTotal",
+  beforeEach(async () => {
+    mockReToolService = jasmine.createSpyObj('ReToolService', ['getOccupancyGroup', 'getOccupancyType']);
+    mockReToolTabService = jasmine.createSpyObj('ReToolTabService', 
+      ['on', 'emit', 'mergePropertyValueData', 'showErrorMessage', 'actionStateChange']);
     
-  ];
+    await TestBed.configureTestingModule({
+      imports: [ReactiveFormsModule, MatTableModule],
+      declarations: [OccupancyComponent],
+      providers: [
+        { provide: ReToolService, useValue: mockReToolService },
+        { provide: ReToolTabService, useValue: mockReToolTabService },
+        FormBuilder
+      ]
+    }).compileComponents();
 
-  probableMaximumLossColumns: string[] = [
-    "ULID",
-    "FullAddress",
-    "StreetAddress",
-    "CountryName",
-    "GroupBuildingArea",
-    "BuildingValue",
-    "EquipmentValue",
-    "InventoryValue",
-    "OtherValue",
-    "TotalPD",
-    "AnnualBusinessInterruptionValue",
-    "IndemnityPeriodMonth",
-    "PayRollValue",
-    "PayRollDayValue",
-    "ProbableLossCompare",
-    "ProbableLossScenario",
-    "ProbableLossPropertyDamage",
-    "ProbableLossOtherPropertyDamage",
-    "TotalPDPML",
-    "ProbableLossBusinessInterruption",
-    "ProbableLossInterBusinessInterruption",
-    "ProbableLossOtherTimeElement",
-    "TotalTE",
-    "PML",
-    "ProbableLossIndemnityPeriodBI",
-    "IPFactTotal",
-  ];
+    fixture = TestBed.createComponent(OccupancyComponent);
+    component = fixture.componentInstance;
+  });
 
-  maximumForeseeableLossColumns: string[] = [
-    "ULID",
-    "FullAddress",
-    "StreetAddress",
-    "CountryName",
-    "GroupBuildingArea",
-    "BuildingValue",
-    "EquipmentValue",
-    "InventoryValue",
-    "OtherValue",
-    "TotalPD",
-    "AnnualBusinessInterruptionValue",
-    "IndemnityPeriodMonth",
-    "PayRollValue",
-    "PayRollDayValue",
-    "MaximumLossCompare",
-    "MaximumLossScenario",
-    "MaximumLossPropertyDamage",
-    "MaximumLossOtherPropertyDamage",
-    "TotalPDMFL",
-    "MaximumLossBusinessInterruption",
-    "MaximumLossInterBusinessInterruption",
-    "MaximumLossOtherTimeElement",
-    "TotalTE",
-    "MFL",
-    "MaximumLossIndemnityPeriodBI",
-    "IPFactTotal",
-  ];
+  afterEach(() => {
+    if (component.subscription) {
+      component.subscription.unsubscribe();
+    }
+  });
 
-  equipmentProbableMaximumLossColumns: string[] = [
-    "ULID",
-    "FullAddress",
-    "StreetAddress",
-    "CountryName",
-    "GroupBuildingArea",
-    "BuildingValue",
-    "EquipmentValue",
-    "InventoryValue",
-    "OtherValue",
-    "TotalPD",
-    "AnnualBusinessInterruptionValue",
-    "IndemnityPeriodMonth",
-    "PayRollValue",
-    "PayRollDayValue",
-    "ProbableLossCompare",
-    "ProbableLossScenario",
-    "ProbableLossPropertyDamage",
-    "ProbableLossOtherPropertyDamage",
-    "TotalPDPML",
-    "ProbableLossBusinessInterruption",
-    "ProbableLossInterBusinessInterruption",
-    "ProbableLossOtherTimeElement",
-    "TotalTE",
-    "EBPML",
-    "ProbableLossIndemnityPeriodBI",
-    "IPFactTotal"
-  ];
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
 
-  equipmentMaximumForeseeableLossColumns: string[] = [
-    "ULID",
-    "FullAddress",
-    "StreetAddress",
-    "CountryName",
-    "GroupBuildingArea",
-    "BuildingValue",
-    "EquipmentValue",
-    "InventoryValue",
-    "OtherValue",
-    "TotalPD",
-    "AnnualBusinessInterruptionValue",
-    "IndemnityPeriodMonth",
-    "PayRollValue",
-    "PayRollDayValue",
-    "MaximumLossCompare",
-    "MaximumLossScenario",
-    "MaximumLossPropertyDamage",
-    "MaximumLossOtherPropertyDamage",
-    "TotalPDMFL",
-    "MaximumLossBusinessInterruption",
-    "MaximumLossInterBusinessInterruption",
-    "MaximumLossOtherTimeElement",
-    "TotalTE",
-    "EBMFL",
-    "MaximumLossIndemnityPeriodBI",
-    "IPFactTotal"
-  ];
-
-  coverColumns: string[] = [
-    "ReportedBuildingValue",
-    "ReportedContentsValue",
-    "ReportedTotalPD",
-    "ReportedTotalBivalue",
-    "ReportedTIV",
-    "ReviewedBuilding",
-    "ReviewedContents",
-    "ReviewedTotalPD",
-    "ReviewedTotalBI",
-    "ReviewedTIV",
-    "ReviewedPercentageBuilding",
-    "ReviewedPercentageContents",
-    "ReviewedPercentageTotalPD",
-    "ReviewedPercentageTotalBI",
-    "ReviewedPercentageTIV",
-    "TimeElementExcluded",
-    "RecommendedReviewFrequency",
-    "RecommendedAccountPercentageTIV",
-    "OccupancyGroupTIV",
-    "OccupancyTypeTIV",
-    "OccupancyCodeTIV",
-    "HazardTIV",
-    "EquipmentBreakdownTIV",
-    "DeviationTIV",
-    "IsHazardTIVUpdated",
-    "IsEquipmentBreakdownUpdatedTIV",
-    "OccupancyGroupHighestHazardReview",
-    "OccupancyTypeHighestHazardReview",
-    "OccupancyCodeHighestHazardReview",
-    "OccupancyHighestHazardReview",
-    "EquipmentBreakdownHazardReview",
-    "DeviationHighestHazardReview",
-    "IsHighestHazardReviewUpdated",
-    "IsEBRHighestHazardReviewUpdated",
-    "IsHazardUpdated",
-    "IsEquipmentBreakdownUpdated",
-    "Interdependency",
-    "ContingentTimeElement",
-    "QualityOfSupplyChainInfo",
-    "SCRiskMgmt",
-    "SupplyChainConfidence"
-  ];
-
-  constructor(private reToolService: ReToolService, private toastr: ToastrService) { }
-
-  emit(event: string, ds: any) {
-    this.dataSourceSubject$.next({ event: event, payload: ds });
-  }
-
-  on(event: string): Observable<any> {
-    return this.dataSourceSubject$.asObservable().pipe(
-      filter(e => e.event === event),
-      map(e => e.payload)
-    );
-  }
-
-  setUpPropertyValuesData(isGeneralProperty:boolean = false): Observable<any> {
-    return this.reToolService.getLocationProperties(this.reviewRequestId,isGeneralProperty);
-  }
-
-  setUpCoverWithPropertyValuesData(): Observable<any> {
-    return this.reToolService.getCoverWithPropertyValues(this.reviewRequestId);
-  }
-
-  setUpPropertyValueWithDefaultData(): Observable<any> {
-    return of([new PropertyValue(), new PropertyValue()]);
-  }
-
-  setUpPropertyFireLocationData(): Observable<any> {
-    return this.reToolService.getPropertyFireLocations(this.reviewRequestId);
-  }
-
-  setUpProbableMaximumLossData(): Observable<any> {
-    return this.reToolService.getProbableMaximumLoss(this.reviewRequestId);
-  }
-
-  setUpMaximumForeseeableLossData(): Observable<any> {
-    return this.reToolService.getMaximumForeseeableLoss(this.reviewRequestId);
-  }
-
-  setUpPropertyEquipmentLocationData(): Observable<any> {
-    return this.reToolService.getPropertyEquipmentBreakdownLocations(this.reviewRequestId);
-  }
-
-  // The purpose of this logic is to maintain a parent and sub tab association
-  // which can be used individually as a single value to determine tab relationships
-  encodeTabIndex(parentTabIndex: number, subTabIndex: number): number {
-    if(parentTabIndex === 0) return 1;
-    return ((parentTabIndex << 3) | subTabIndex);
-  }
-
-  // This is to fetch parent and sub tab indexes out of association value
-  // it could be removed if not needed in future
-  decodeTabIndex(encodedTabIndexValue: number): { parentTabIndex: number, subtabIndex: number } {
-    const parentIndex = (encodedTabIndexValue >> 3) & 7;//shift right by 3 bits and mask with 7 (0111)
-    const subIndex = encodedTabIndexValue & 7;
-    return { parentTabIndex: parentIndex, subtabIndex: subIndex } as any;
-  }
-
-  saveUpdateDeleteAndFetchThePropertyValueFormData(data: SavePropertyLocationRequestModel, isTabChange: boolean = false): Observable<any> {
-    const isGeneralProperty = false;
-    const postUrl = `${environment.baseUrl}Property`;
-    const getUrl = `${environment.baseUrl}Property/GetAllProperty/${this.reviewRequestId}/${isGeneralProperty}`;
-    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
-  }
-
-  updatePropertyLocationFormData(data: PropertyLocation[], isTabChange: boolean = false): Observable<any> {
-    const isGeneralProperty = false;
-    const postUrl = `${environment.baseUrl}Property/UpdateOccupancy`;
-    const getUrl = `${environment.baseUrl}Property/GetAllProperty/${this.reviewRequestId}/${isGeneralProperty}`;
-    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
-  }
-
-  saveUpdateAndFetchThePropertyFireLocationFormData(data: PropertyFireLocation[], isTabChange: boolean = false): Observable<any> {
-    const postUrl = `${environment.baseUrl}Property/AddOrUpdatePropertyFireLocation`;
-    const getUrl = `${environment.baseUrl}Property/GetPropertyFireLocations?reviewRequestId=${this.reviewRequestId}`;
-    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
-  }
-
-  private saveUpdateAndFetchTheLatestActiveFormData<T>(postUrl: string, data: any, getUrl: string): Observable<T> {
-    return this.reToolService.post(postUrl, data).pipe(
-      switchMap((postResponse) => {
-        if (getUrl) {
-          return this.reToolService.get<T>(getUrl);
-        } else {
-          return of(postResponse as T);
-        }
-      }),
-      catchError(this.reToolService.handleError)
-    )
-  }
-
-  showErrorMessage(message: string, action: string) {
-    this.toastr.error(message, '', {
-      timeOut: AppConstants.snackbarDuration,
-      closeButton: true,
-      progressBar: true,
-      positionClass: "toast-top-right"
+  describe('Initialization', () => {
+    it('should initialize form and load occupancy groups on ngOnInit', () => {
+      const mockMasterData: MasterDataModel[] = [{ value: '1', text: 'Group 1' }];
+      mockReToolService.getOccupancyGroup.and.returnValue(of({
+        occupancyGroups: mockMasterData,
+        hazard: [],
+        equipmentBreakdown: []
+      }));
+      
+      component.ngOnInit();
+      
+      expect(mockReToolService.getOccupancyGroup).toHaveBeenCalledWith(0);
+      expect(mockReToolTabService.emit).toHaveBeenCalledWith(
+        'onFormComponentInit', 
+        { encodedTabIndex: SubTabEncodedEnum.Occupancy }
+      );
     });
-  }
+  });
 
-  showSuccessMessage(message: string, action: string) {
-    this.toastr.success(message, '', {
-      timeOut: AppConstants.snackbarDuration,
-      closeButton: true,
-      progressBar: true,
-      positionClass: "toast-top-right"
-    });
-  }
-
-  actionStateChange(formGroup: FormGroup) {
-    this.subscription?.add(
-      formGroup?.get('Action').valueChanges.subscribe(value => {
-        this.hasFormChange$.next((value != ActionEnum.IsSaved))
-      })
-    );
-  }
-
-  saveUpdateAndFetchThePropertyEquipmentLocationFormData(data: PropertyEquipmentLocation[], isTabChange: boolean = false): Observable<any> {
-    const postUrl = `${environment.baseUrl}Property/UpdatePropertyEquipmentBreakdownLocation`;
-    const getUrl = `${environment.baseUrl}Property/GetPropertyEquipmentBreakdownLocations?reviewRequestId=${this.reviewRequestId}`;
-    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
-  }
-
-  saveUpdateAndFetchTheCoverFormData(data: Cover, isTabChange: boolean = false): Observable<any> {
-    const postUrl = `${environment.baseUrl}Property/SaveOrUpdatePropertyAccountCover`;
-    const getUrl = `${environment.baseUrl}Property/GetPropertyAccountCover/${this.reviewRequestId}`;
-    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
-  }
-
-  mergePropertyValueData<T extends DynamicAccessiblePropertyItem>(data: T[]): T[] {
-    const mergeMap = new Map<string, Partial<T & {
-      StreetAddresses: string[],
-      CityNames: string[],
-      StateProvinces: string[],
-      LocationAddressMapIds: number[]
-    }>>();
-
-    let mergedData: any[] = [];
-    data.forEach(item => {
-      const key = item.ULId;
-
-      if (!mergeMap.has(key)) {
-        mergeMap.set(key, {
-          ...item,
-          StreetAddresses: [],
-          CityNames: [],
-          StateProvinces: [],
-          LocationAddressMapIds: []
-        });
-      }
-
-      const existing = mergeMap.get(key);
-      existing.StreetAddresses.push(item.Address);
-      existing.CityNames.push(item.City);
-      existing.StateProvinces.push(item.StateProvince);
-      if (item instanceof PropertyValue)
-        existing.LocationAddressMapIds.push(item.LocationAddressMapId);
+  describe('Form Initialization', () => {
+    beforeEach(() => {
+      component.occupancyData = [createMockOccupancy()];
+      component.occupancyDisplayedColumns = ['LocationName'];
     });
 
-    mergedData = Array.from(mergeMap.values());
-    mergedData.forEach(x => this.setAddressAndToolTip(x));
-    return mergedData;
+    it('should initialize form with data from service', () => {
+      const mockEvent = {
+        data: [createMockOccupancy()],
+        columns: ['LocationName']
+      };
+      
+      mockReToolTabService.on.and.returnValue(of(mockEvent));
+      mockReToolTabService.mergePropertyValueData.and.returnValue(mockEvent.data);
+      
+      component.initializeForm();
+      
+      expect(component.occupancyForm).toBeDefined();
+      expect(component.occupancyDataSource).toBeTruthy();
+      expect(component.tableRowsControls.length).toBe(1);
+    });
+  });
+
+  describe('Form Interactions', () => {
+    beforeEach(() => {
+      initializeFormWithData();
+    });
+
+    it('should create form row with correct controls', () => {
+      const row = component.createRow(createMockOccupancy());
+      expect(row.get('LocationName').disabled).toBeTrue();
+      expect(row.get('OccupancyGroup').validator).toBeTruthy();
+    });
+
+    it('should handle occupancy group change', () => {
+      const mockTypes = [{ value: 'type1', dependentValue: { hazard: 'h1', equipmentBreakdown: 'e1' } }];
+      mockReToolService.getOccupancyType.and.returnValue(of(mockTypes));
+      
+      component.changeOccupancyGroup(0, '1');
+      const row = component.getFormArray().at(0);
+      
+      expect(row.get('OccupancyType').value).toBe(ReToolConstants.blank);
+      expect(mockReToolService.getOccupancyType).toHaveBeenCalledWith('1');
+    });
+
+    it('should handle occupancy type change', () => {
+      const row = component.getFormArray().at(0);
+      component.rowValuesMap.set(0, {
+        OccupancyTypeList: [{ value: 'type1', dependentValue: { hazard: 'h1', equipmentBreakdown: 'e1' } }]
+      });
+      
+      component.changeOccupancyType(0, 'type1');
+      
+      expect(row.get('Hazard').value).toBe('h1');
+      expect(row.get('EquipmentBreakdown').value).toBe('e1');
+      expect(row.get('Action').value).toBe(ActionEnum.IsModified);
+    });
+
+    it('should update highlights when values differ from default', () => {
+      const row = component.getFormArray().at(0);
+      component.rowValuesMap.set(0, {
+        OccupancyTypeList: [{ value: 'type1', dependentValue: { hazard: 'default', equipmentBreakdown: 'default' } }]
+      });
+      
+      row.get('Hazard').setValue('modified');
+      component.updateHighlight(0, 'type1', 'Hazard');
+      
+      expect(row.controls['Hazard'][ReToolConstants.isHighlighted]).toBeTrue();
+      expect(row.get('IsHazardUpdated').value).toBeTrue();
+    });
+  });
+
+  describe('Form Validation', () => {
+    it('should mark form invalid when required fields are empty', () => {
+      initializeFormWithData();
+      const row = component.getFormArray().at(0);
+      row.get('OccupancyGroup').setValue('');
+      
+      component.occupancyForm.markAllAsTouched();
+      
+      expect(component.occupancyForm.invalid).toBeTrue();
+      expect(mockReToolTabService.formStatus).toBe(ReToolConstants.invalid);
+    });
+  });
+
+  describe('Submission Handling', () => {
+    it('should emit valid form data on submit', () => {
+      initializeFormWithValidData();
+      
+      component.onSubmit();
+      
+      expect(mockReToolTabService.emit).toHaveBeenCalledWith(
+        'onSaveFormData', 
+        jasmine.objectContaining({ formData: jasmine.any(Array) })
+      );
+    });
+
+    it('should show error message on invalid submission', () => {
+      initializeFormWithData();
+      const row = component.getFormArray().at(0);
+      row.get('OccupancyGroup').setValue('');
+      
+      component.onSubmit();
+      
+      expect(mockReToolTabService.showErrorMessage).toHaveBeenCalledWith(
+        ReToolConstants.requiredFieldsValidationMessage, 
+        ''
+      );
+    });
+  });
+
+  describe('Private Methods', () => {
+    it('should get form array through private method', () => {
+      initializeFormWithData();
+      const formArray = component['getFormArray']();
+      expect(formArray).toBeInstanceOf(FormArray);
+    });
+
+    it('should disable dropdown controls when no group selected', () => {
+      const row = fb.group({
+        Hazard: new FormControl({ value: '', disabled: false }),
+        EquipmentBreakdown: new FormControl({ value: '', disabled: false })
+      });
+      
+      component['disableDropdownControl'](row, true);
+      
+      expect(row.get('Hazard').disabled).toBeTrue();
+      expect(row.get('EquipmentBreakdown').disabled).toBeTrue();
+    });
+  });
+
+  describe('Lifecycle Hooks', () => {
+    it('should unsubscribe on destroy', () => {
+      component.subscription = new Subscription();
+      spyOn(component.subscription, 'unsubscribe');
+      
+      component.ngOnDestroy();
+      
+      expect(component.subscription.unsubscribe).toHaveBeenCalled();
+    });
+  });
+
+  // Helper functions
+  function createMockOccupancy(): Occupancy {
+    return {
+      ULId: '1',
+      LocationName: 'Test Location',
+      OccupancyGroup: '1',
+      OccupancyType: 'type1',
+      Hazard: 'h1',
+      EquipmentBreakdown: 'e1',
+      Action: ActionEnum.IsSaved
+    };
   }
 
-  // handle tooltip and final grid values
-  setAddressAndToolTip(data: any) {
-    if (Array.from(new Set(data.StreetAddresses)).length > 1
-      || Array.from(new Set(data.CityNames)).length > 1
-      || Array.from(new Set(data.StateProvinces)).length > 1) {
-      data.Address = ReToolConstants.multiple;
-    } else {
-      data.Address = data.StreetAddresses[0];
-    }
-
-    if (Array.from(new Set(data.CityNames)).length > 1) {
-      data.City = ReToolConstants.multiple;
-    } else {
-      data.City = data.CityNames[0];
-    }
-
-    if (Array.from(new Set(data.StateProvinces)).length > 1) {
-      data.StateProvince = ReToolConstants.multiple;
-    } else {
-      data.StateProvince = data.StateProvinces[0];
-    }
-
-    const streetAddressToolTip = [];
-    streetAddressToolTip.push(data.StreetAddresses.map((address, index) => {
-      const city = data.CityNames[index] ? `${data.CityNames[index]}, ` : '';
-      return `${address}, ${city} ${data.StateProvinces[index]}`
-    }));
-
-    data.StreetAddressToolTip = [...new Set(streetAddressToolTip[0])].join('\n');
+  function initializeFormWithData() {
+    component.occupancyForm = fb.group({
+      rows: fb.array([component.createRow(createMockOccupancy())])
+    });
+    component.occupancyDataSource = new MatTableDataSource(component.tableRowsControls);
   }
 
-  SetLocAddressSelectedData(data: any[])
-  {
-    this.selectedLocAddressData.next(data);
+  function initializeFormWithValidData() {
+    const occupancy = createMockOccupancy();
+    occupancy.OccupancyGroup = 'valid';
+    component.occupancyForm = fb.group({
+      rows: fb.array([component.createRow(occupancy)])
+    });
   }
-}
+});
