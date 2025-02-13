@@ -1,12 +1,47 @@
-OccupancyComponent > Form Interactions > should handle occupancy type change
-TypeError: Cannot read properties of undefined (reading 'subscribe')
-    at OccupancyComponent.loadOccupancyGroups (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/occupancy/occupancy.component.ts:140:72)
-    at OccupancyComponent.ngOnInit (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/occupancy/occupancy.component.ts:36:10)
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/occupancy/occupancy.component.spec.ts:108:23)
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:1987:30)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
-    at Zone.run (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:129:43)
-    at runInTestZone (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:555:34)
-    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:570:20)
+// Add to the 'should handle occupancy type change' test case
+beforeEach(fakeAsync(() => {
+  // Mock occupancy group response
+  mockReToolService.getOccupancyGroup.and.returnValue(of({
+    occupancyGroups: [],
+    hazard: [],
+    equipmentBreakdown: []
+  }));
+  
+  component.ngOnInit();
+  tick();
+  fixture.detectChanges();
+}));
+
+it('should handle occupancy type change', fakeAsync(() => {
+  // Arrange
+  const mockTypes = [{ 
+    value: 'type1', 
+    dependentValue: { 
+      hazard: 'h1', 
+      equipmentBreakdown: 'e1' 
+    } 
+  }];
+  
+  // Mock service responses
+  mockReToolService.getOccupancyGroup.and.returnValue(of({
+    occupancyGroups: [],
+    hazard: [],
+    equipmentBreakdown: []
+  }));
+  mockReToolService.getOccupancyType.and.returnValue(of(mockTypes));
+
+  // Initialize component
+  component.ngOnInit();
+  tick();
+  fixture.detectChanges();
+
+  // Act
+  component.changeOccupancyType(0, 'type1');
+  tick();
+  
+  // Assert
+  const row = component.getFormArray().at(0);
+  expect(row.get('Hazard').value).toBe('h1');
+  expect(row.get('EquipmentBreakdown').value).toBe('e1');
+  expect(row.get('Action').value).toBe(ActionEnum.IsModified);
+}));
