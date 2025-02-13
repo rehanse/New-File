@@ -1,93 +1,154 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
-import { MatTableModule } from '@angular/material/table';
-import { of } from 'rxjs';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { OccupancyComponent } from './occupancy.component';
 import { ReToolService } from '../../../service/re-tool.service';
 import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { FormBuilder, ReactiveFormsModule, FormControlStatus, FormArray, FormControl, FormGroup } from '@angular/forms';
+import { MatTableModule } from '@angular/material/table';
+import { MasterDataModel } from '../../../../dashboard/models/master-data';
 import { Occupancy } from '../../../models/occupancy';
-import { Subscription } from 'rxjs';
+import { of, Subscription } from 'rxjs';
+import { ActionEnum } from '../../../models/action-enum';
+import { SubTabEncodedEnum } from '../../../models/re-tool-tabs-enum';
+import { ReToolConstants } from '../../../constants/re-tool.constants';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 
-describe('OccupancyComponent', () => {
-  let component: OccupancyComponent;
-  let fixture: ComponentFixture<OccupancyComponent>;
-  let mockReToolService: jasmine.SpyObj<ReToolService>;
-  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+fdescribe('OccupancyComponent', () => {
+    let component: OccupancyComponent;
+    let fixture: ComponentFixture<OccupancyComponent>;
+    let mockReToolService: jasmine.SpyObj<ReToolService>;
+    let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+    const fb = new FormBuilder();
 
-  beforeEach(async () => {
-    mockReToolService = jasmine.createSpyObj('ReToolService', ['getOccupancyGroup', 'getOccupancyType']);
-    mockReToolTabService = jasmine.createSpyObj('ReToolTabService', ['on', 'emit', 'showErrorMessage']);
-    
-    await TestBed.configureTestingModule({
-      declarations: [OccupancyComponent],
-      imports: [ReactiveFormsModule, MatTableModule],
-      providers: [
-        FormBuilder,
-        { provide: ReToolService, useValue: mockReToolService },
-        { provide: ReToolTabService, useValue: mockReToolTabService }
-      ]
-    }).compileComponents();
-  });
+    function createMockOccupancy(): Occupancy {
+        return {
+            ULId: '250-00001',
+            PropertyLocationId: 1,
+            Address: '1490 NW 12th.',
+            City: '1490 NW 12th.',
+            Country: 'United States',
+            LocationName: 'NYC Langone',
+            StateProvince: 'Boston',
+            OccupancyGroup: 'Wood',
+            OccupancyType: 'Wood Tpe',
+            OccupancyCode: 1233,
+            Hazard: 'Low',
+            IsHazardUpdated: true,
+            EquipmentBreakdown: 'High',
+            IsEquipmentBreakdownUpdated: true,
+            GroupBuildingArea: 0,
+            AutomaticSprinklersPercentage: 77,
+            AutomaticSprinklersNeededPercentage: 88,
+            Action: ActionEnum.IsNewRecord,
+            VerCol: '',
+            StreetAddressToolTip: ''
+        };
+    }
 
-  beforeEach(() => {
-    fixture = TestBed.createComponent(OccupancyComponent);
-    component = fixture.componentInstance;
-    component.subscription = new Subscription();
-    fixture.detectChanges();
-  });
+    const mockOccupancyGroupResponse = {
+        occupancyGroups: [{ value: '1', text: 'Group 1' }],
+        hazard: [],
+        equipmentBreakdown: []
+    };
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
+    beforeEach(async () => {
+        mockReToolService = jasmine.createSpyObj('ReToolService',
+            ['getOccupancyGroup', 'getOccupancyType']);
+        mockReToolTabService = jasmine.createSpyObj('ReToolTabService',
+            ['on', 'emit', 'mergePropertyValueData', 'showErrorMessage']);
 
-  it('should initialize form on component init', () => {
-    spyOn(component, 'initializeForm');
-    component.ngOnInit();
-    expect(component.initializeForm).toHaveBeenCalled();
-  });
+        // Configure default mock responses
+        mockReToolService.getOccupancyGroup.and.returnValue(of(mockOccupancyGroupResponse));
+        mockReToolTabService.on.and.returnValue(of({
+            data: [{
+                ULId: '250-00001',
+                PropertyLocationId: 1,
+                Address: '1490 NW 12th.',
+                City: '1490 NW 12th.',
+                Country: 'United States',
+                LocationName: 'NYC Langone',
+                StateProvince: 'Boston',
+                OccupancyGroup: 'Wood',
+                OccupancyType: 'Wood Tpe',
+                OccupancyCode: 1233,
+                Hazard: 'Low',
+                IsHazardUpdated: true,
+                EquipmentBreakdown: 'High',
+                IsEquipmentBreakdownUpdated: true,
+                GroupBuildingArea: 0,
+                AutomaticSprinklersPercentage: 77,
+                AutomaticSprinklersNeededPercentage: 88,
+                Action: ActionEnum.IsNewRecord,
+                VerCol: '',
+                StreetAddressToolTip: ''
+            }],
+            columns: []
+        }));
 
-  it('should initialize data source correctly', () => {
-    component.occupancyData = [{ ULId: '123', LocationName: 'Test', Address: 'Some Address' } as Occupancy];
-    spyOn<any>(component, 'getFormArray').and.returnValue({ clear: jasmine.createSpy(), push: jasmine.createSpy() } as any);
-    component.initializeDataSource();
-    expect(component['getFormArray']().clear).toHaveBeenCalled();
-  });
+        await TestBed.configureTestingModule({
+            imports: [ReactiveFormsModule, MatTableModule],
+            declarations: [OccupancyComponent],
+            providers: [
+                { provide: ReToolService, useValue: mockReToolService },
+                { provide: ReToolTabService, useValue: mockReToolTabService },
+                FormBuilder
+            ]
+        }).compileComponents();
 
-  it('should call getOccupancyType when changing occupancy group', () => {
-    spyOn<any>(component, 'getOccupancyType');
-    component.changeOccupancyGroup(0, 'group1');
-    expect(component['getOccupancyType']).toHaveBeenCalledWith(0, 'group1', jasmine.any(Object), jasmine.any(Object));
-  });
+        fixture = TestBed.createComponent(OccupancyComponent);
+        component = fixture.componentInstance;
+    });
 
-  it('should update form status when form changes', () => {
-    component.occupancyForm.patchValue({});
-    expect(mockReToolTabService.formStatus).toEqual(component.occupancyForm.status);
-  });
 
-  it('should handle onSubmit when form is valid', () => {
-    spyOn(component.reToolTabService, 'emit');
-    spyOnProperty(component, 'getOccupancyFormData', 'get').and.returnValue([]);
-    component.occupancyForm.markAsPristine();
-    component.onSubmit();
-    expect(component.reToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', { formData: [], subTabIndex: 1 });
-  });
+    afterEach(() => {
+        if (component.subscription) {
+            component.subscription.unsubscribe();
+        }
+    });
 
-  it('should show error message onSubmit when form is invalid', () => {
-    spyOn(component.reToolTabService, 'showErrorMessage');
-    component.occupancyForm.patchValue({});
-    component.onSubmit();
-    expect(component.reToolTabService.showErrorMessage).toHaveBeenCalled();
-  });
+    it('should create', () => {
+        fixture.detectChanges();
+        expect(component).toBeTruthy();
+    });
 
-  it('should update highlight when changing hazard', () => {
-    spyOn<any>(component, 'updateHighlight');
-    component.changeHazard(0, 'type1');
-    expect(component['updateHighlight']).toHaveBeenCalledWith(0, 'type1', 'Hazard');
-  });
 
-  it('should unsubscribe from all subscriptions on destroy', () => {
-    spyOn(component.subscription, 'unsubscribe');
-    component.ngOnDestroy();
-    expect(component.subscription.unsubscribe).toHaveBeenCalled();
-  });
-});
+    it('should initialize form and load occupancy groups on ngOnInit', fakeAsync(() => {
+        const mockMasterData: MasterDataModel[] = [{ value: '1', text: 'Group 1', category: '', defaultValue: '', dependentValue: '', disabled: false, fullText: '' }];
+        mockReToolService.getOccupancyGroup.and.returnValue(of({
+            occupancyGroups: mockMasterData,
+            hazard: [],
+            equipmentBreakdown: []
+        }));
+
+        component.ngOnInit();
+        tick();
+        fixture.detectChanges();
+
+        expect(mockReToolService.getOccupancyGroup).toHaveBeenCalledWith(0);
+        expect(mockReToolTabService.emit).toHaveBeenCalledWith(
+            'onFormComponentInit',
+            { encodedTabIndex: SubTabEncodedEnum.Occupancy }
+        );
+        expect(component.occupancyForm).toBeDefined();
+    }));
+	
+	 it('should handle occupancy group change', fakeAsync(() => {
+        const mockTypes = [{ value: 'type1', dependentValue: { hazard: 'Low', equipmentBreakdown: 'High' } }];
+        mockReToolService.getOccupancyType.and.returnValue(of(mockTypes));
+
+        component.changeOccupancyGroup(0, '1');
+        tick();
+
+        const row = component['getFormArray']().at(0);
+        expect(row.get('OccupancyType').value).toBe(ReToolConstants.blank);
+        expect(mockReToolService.getOccupancyType).toHaveBeenCalledWith('1');
+    }));
+	});
+	
+	error:
+	OccupancyComponent > should handle occupancy group change
+TypeError: Cannot read properties of undefined (reading 'get')
+
+fix this issue on above test case
