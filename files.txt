@@ -1,25 +1,52 @@
-NormalLossExpectancyComponent > should call emit onSaveFormData when form is valid
-TypeError: Cannot read properties of undefined (reading 'withArgs')
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.spec.ts:215:48)
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:1987:30)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
-    at Zone.run (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:129:43)
-    at runInTestZone (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:555:34)
-    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:570:20)
-	
-	
-	--------------------
-	
-	NormalLossExpectancyComponent > should call emit onSaveFormData when form is valid
-Error: <spyOn> : emit has already been spied upon
-Usage: spyOn(<object>, <methodName>)
-    at <Jasmine>
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.spec.ts:219:7)
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:1987:30)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
-    at Zone.run (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:129:43)
-    at runInTestZone (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:555:34)
+beforeEach(async () => {
+    reToolServiceMock = jasmine.createSpyObj('ReToolService', ['generateFormElementIdAttribute']);
+    reToolServiceMock.generateFormElementIdAttribute.and.callFake((rowIndex: number, dataId: number, columnName: string, popUp?: string) => {
+        return `row-${rowIndex}_dataKey-${dataId}_${columnName}`;
+    });
+
+    reToolTabServiceMock = jasmine.createSpyObj('ReToolTabService', ['reviewRequestId', 'emit', 'showErrorMessage', 'actionStateChange']);
+    reToolTabServiceMock.hasFormChange$ = new BehaviorSubject<boolean>(false);
+
+    await TestBed.configureTestingModule({
+        declarations: [NormalLossExpectancyComponent],
+        schemas: [NO_ERRORS_SCHEMA],
+        imports: [
+            ReactiveFormsModule,
+            MatTableModule,
+            HttpClientTestingModule,
+            ToastrModule.forRoot()
+        ],
+        providers: [
+            FormBuilder,
+            { provide: ReToolService, useValue: reToolServiceMock },
+            { provide: ReToolTabService, useValue: reToolTabServiceMock }
+        ]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(NormalLossExpectancyComponent);
+    component = fixture.componentInstance;
+    component.showHideColumn = showHideColumns;
+    component.normalLossExpectancyForm = new FormGroup({
+        rows: new FormArray([
+            new FormGroup({
+                NormalLossScenario: new FormControl("test scenario", Validators.required),
+                NormalLossDeficiencyDriven: new FormControl(true, Validators.required)
+            })
+        ])
+    });
+
+    fixture.detectChanges();
+});
+
+it("should call emit onSaveFormData when form is valid", fakeAsync(() => {
+    // No need to redefine spyOn since it's already in beforeEach()
+    component.normalLossExpectancyForm.markAllAsTouched();
+    component.normalLossExpectancyForm.updateValueAndValidity();
+    component.onSubmit();
+
+    expect(reToolTabServiceMock.emit).toHaveBeenCalledWith('onSaveFormData', {
+        formData: component['getNormalExpectancyFormData'],
+        subTabIndex: 0
+    });
+}));
+----------------------------
