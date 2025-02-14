@@ -1,254 +1,59 @@
-import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { ComponentFixture, TestBed, tick } from '@angular/core/testing';
-import { FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatTableModule } from '@angular/material/table';
-import { ActionEnum } from '../../../models/action-enum';
-import { NormalLossExpectancy } from '../../../models/normal-loss-expectancy';
-import { ReToolTabService } from '../../../service/re-tool-tab.service';
-import { ReToolService } from '../../../service/re-tool.service';
-import { NormalLossExpectancyComponent } from './normal-loss-expectancy.component';
-import { ToastrModule } from 'ngx-toastr';
-import { BehaviorSubject } from 'rxjs';
-import { fakeAsync } from '@angular/core/testing';
+it("should call emit onSaveFormData when form is valid", fakeAsync(() => {
+  // Mock service response for initialization event
+  const formDataSource = { 
+    data: mockTableData, 
+    columns: mockTableColumns 
+  };
+  
+  // Setup event listener mock
+  (reToolTabServiceMock.on as jasmine.Spy).withArgs('onInitializeNormmalLossExpectancyData')
+    .and.returnValue(of(formDataSource));
 
-fdescribe('NormalLossExpectancyComponent', () => {
-    let component: NormalLossExpectancyComponent;
-    let fixture: ComponentFixture<NormalLossExpectancyComponent>;
-    let reToolServiceMock: jasmine.SpyObj<ReToolService>;
-    let reToolTabServiceMock: jasmine.SpyObj<ReToolTabService>;
-    let showHideColumns: boolean = true;
-    
-    const mockTableData: NormalLossExpectancy[] = [
-        {
-            PropertyFireLocationId: 1,
-            LocationId: 1,
-            BuildingValue: 20.0,
-            EquipmentValue: 0.0,
-            InventoryValue: 0.0,
-            OtherValue: 0.0,
-            TotalPD: 0.0,
-            AnnualBusinessInterruptionValue: 0.0,
-            IndemnityPeriodMonth: 0,
-            PayRollValue: 0.0,
-            PayRollDayValue: 0,
-            FullAddress: "",
-            GroupBuildingArea: 0.0,
-            NormalLossBusinessInterruption: 0.0,
-            NormalLossCompare: "",
-            NormalLossDeficiencyDriven: false,
-            NormalLossInterBusinessInterruption: 0.0,
-            NormalLossIndemnityPeriodBI: 0.0,
-            IPFactTotal: 0.0,
-            NLEActual: 0.0,
-            NormalLossOtherPropertyDamage: 0.0,
-            NormalLossOtherTimeElement: 0.0,
-            NormalLossPropertyDamage: 0.0,
-            NormalLossScenario: "test",
-            TotalPDNLE: 0.0,
-            TotalTE: 0.0,
-            VerCol: '',
-            Action: ActionEnum.IsSaved,
-            PropertyLocationId: 1,
-            ULId: '',
-            LocationName: '',
-            Country: '',
-            City: '',
-            Address: '',
-            StateProvince: ''
-        },
-        {
-            PropertyFireLocationId: 2,
-            LocationId: 2,
-            BuildingValue: 20.0,
-            EquipmentValue: 0.0,
-            InventoryValue: 0.0,
-            OtherValue: 0.0,
-            TotalPD: 0.0,
-            AnnualBusinessInterruptionValue: 0.0,
-            IndemnityPeriodMonth: 0,
-            PayRollValue: 0.0,
-            PayRollDayValue: 0,
-            FullAddress: "",
-            GroupBuildingArea: 0.0,
-            NormalLossBusinessInterruption: 0.0,
-            NormalLossCompare: "",
-            NormalLossDeficiencyDriven: false,
-            NormalLossInterBusinessInterruption: 0.0,
-            NormalLossIndemnityPeriodBI: 0.0,
-            IPFactTotal: 0.0,
-            NLEActual: 0.0,
-            NormalLossOtherPropertyDamage: 0.0,
-            NormalLossOtherTimeElement: 0.0,
-            NormalLossPropertyDamage: 0.0,
-            NormalLossScenario: "test",
-            TotalPDNLE: 0.0,
-            TotalTE: 0.0,
-            VerCol: '',
-            Action: ActionEnum.IsSaved,
-            PropertyLocationId: 2,
-            ULId: '',
-            LocationName: '',
-            Country: '',
-            City: '',
-            Address: '',
-            StateProvince: ''
-        }
-    ];
+  // Initialize component properly
+  component.ngOnInit();
+  tick(); // Allow async operations to complete
+  
+  // Set valid values for required fields
+  const firstRow = (component.getFormArray().at(0) as FormGroup);
+  firstRow.get('NormalLossScenario').setValue('Valid Scenario');
+  firstRow.get('NormalLossDeficiencyDriven').setValue(true);
 
-    const mockTableColumns: string[] = [
-        "ULID",
-        "FullAddress",
-        "StreetAddress",
-        "CountryName",
-        "GroupBuildingArea",
-        "BuildingValue",
-        "EquipmentValue",
-        "InventoryValue",
-        "OtherValue",
-        "TotalPD",
-        "AnnualBusinessInterruptionValue",
-        "IndemnityPeriodMonth",
-        "PayRollValue",
-        "PayRollDayValue",
-        "NormalLossCompare",
-        "NormalLossScenario",
-        "NormalLossDeficiencyDriven",
-        "NormalLossPropertyDamage",
-        "NormalLossOtherPropertyDamage",
-        "TotalPDNLE",
-        "NormalLossBusinessInterruption",
-        "NormalLossInterBusinessInterruption",
-        "NormalLossOtherTimeElement",
-        "TotalTE",
-        "NLEActual",
-        "NormalLossIndemnityPeriodBI",
-        "IPFactTotal",
-    ];
+  // Trigger submission
+  component.onSubmit();
 
-    beforeEach(async () => {
-        reToolServiceMock = jasmine.createSpyObj('ReToolService', ['generateFormElementIdAttribute'])
-        reToolServiceMock.generateFormElementIdAttribute.and.callFake((rowIndex: number, dataId: number, columnName: string, popUp?: string) => {
-            return `row-${rowIndex}_dataKey-${dataId}_${columnName}`;
-        });
-        reToolTabServiceMock = jasmine.createSpyObj('ReToolTabService', ['reviewRequestId', 'emit','showErrorMessage','actionStateChange','hasFormChange$']);
-        reToolTabServiceMock.hasFormChange$ = new BehaviorSubject<boolean>(false);
-        
-        await TestBed.configureTestingModule({
-            declarations: [NormalLossExpectancyComponent],
-            schemas: [NO_ERRORS_SCHEMA],
-            imports: [
-                ReactiveFormsModule,
-                MatTableModule,
-                HttpClientTestingModule,
-                ToastrModule.forRoot()
-            ],
-            providers: [
-                FormBuilder,
-                { provide: ReToolService, useValue: reToolServiceMock }
-            ]
-        })
-            .compileComponents();
+  // Verify expectations
+  expect(reToolTabServiceMock.emit).toHaveBeenCalledWith(
+    'onSaveFormData', 
+    jasmine.objectContaining({
+      formData: jasmine.any(Array),
+      subTabIndex: 0
+    })
+  );
+}));
 
-        fixture = TestBed.createComponent(NormalLossExpectancyComponent);
-        component = fixture.componentInstance;
-        component.showHideColumn = showHideColumns;
-        component.normmalLossExpectancyDisplayedColumns = mockTableColumns;
-        component.normmalLossExpectancyData = mockTableData;
-        component.normalLossExpectancyForm = new FormGroup({
-            rows: new FormArray([])
-        });
-        fixture.detectChanges();
+----------------------------
+it("should call emit onSaveFormData when form is valid", fakeAsync(() => {
+    // Arrange: Ensure form is properly initialized with valid data
+    component.initializeForm(); 
+    component.normalLossExpectancyForm = new FormGroup({
+        rows: new FormArray([
+            new FormGroup({
+                NormalLossScenario: new FormControl("test scenario", Validators.required),
+                NormalLossDeficiencyDriven: new FormControl(true, Validators.required)
+            })
+        ])
     });
 
-    it('should create', () => {
-        expect(component).toBeTruthy();
+    spyOn(reToolTabServiceMock, 'emit');
+
+    // Act: Mark form as touched and submit
+    component.normalLossExpectancyForm.markAllAsTouched();
+    component.normalLossExpectancyForm.updateValueAndValidity();
+    component.onSubmit();
+
+    // Assert: Expect emit to be called with expected parameters
+    expect(reToolTabServiceMock.emit).toHaveBeenCalledWith('onSaveFormData', {
+        formData: component['getNormalExpectancyFormData'],
+        subTabIndex: 0
     });
-
-    
-
-    it("should call the initializeDataSource", () => {
-        const tableRows = component.normalLossExpectancyForm.get('rows') as FormArray;
-        spyOn(component, 'initializeDataSource').and.callThrough();
-
-        component.initializeDataSource();
-
-        expect(component.initializeDataSource).toHaveBeenCalled();
-        expect(tableRows.length).toBe(2);
-    });
-
-    it("should call the createRow", () => {
-        const formGroup = (component.getFormArray().at(0) as FormGroup);
-        const propValue = (component.getFormArray()?.value as NormalLossExpectancy);
-
-        spyOn(component, 'createRow').and.returnValue(formGroup);
-
-        expect(component.createRow(propValue)).toEqual(formGroup);
-    });
-    
-    it('should call ShowHideColumns when true', () => {
-        showHideColumns = true;
-    
-        spyOn(component, 'ShowHideColumns').and.callThrough();
-    
-        component.ShowHideColumns(); // Invoke the method
-    
-        expect(component.ShowHideColumns).toHaveBeenCalled();
-    });
-    
-    it("should call ShowHideColumns when false", () => {
-        showHideColumns = false;
-
-        spyOn(component, 'ShowHideColumns').and.returnValue();
-
-        expect(component.ShowHideColumns()).toBeFalsy();
-    });
-
-       it("should call emit onSaveFormData when form is valid", () => {
-
-        component.normmalLossExpectancyDisplayedColumns = mockTableColumns;
-        component.normmalLossExpectancyData = mockTableData;
-        component.initializeForm();
-
-        component.normalLossExpectancyForm.markAsTouched();
-        component.onSubmit();
-
-        expect(reToolTabServiceMock.emit).toHaveBeenCalledWith('onSaveFormData', { formData: component['getNormalExpectancyFormData'], subTabIndex: 0 })
-
-    });
-    
-    
-
-    it("should emit hasFormChange$ based on ActionEnum comparison", () => {
-        const formGroupMock = new FormGroup({
-            Action: new FormControl()
-        });
-
-        const spy = spyOn(reToolTabServiceMock.hasFormChange$, 'next');
-
-        // Ensure that actionStateChange method is mocked
-        reToolTabServiceMock.actionStateChange = jasmine.createSpy().and.callFake((formGroup: FormGroup) => {
-            formGroup.get('Action')!.valueChanges.subscribe((action: ActionEnum) => {
-                reToolTabServiceMock.hasFormChange$.next(action === ActionEnum.IsModified);
-            });
-        });
-
-        reToolTabServiceMock.actionStateChange(formGroupMock);
-
-        formGroupMock.get('Action')!.setValue(ActionEnum.IsModified);
-        expect(spy).toHaveBeenCalledWith(true);
-
-        formGroupMock.get('Action')!.setValue(ActionEnum.IsSaved);
-        expect(spy).toHaveBeenCalledWith(false);
-    });
-});
--------------------------
-NormalLossExpectancyComponent > should call emit onSaveFormData when form is valid
-Expected spy ReToolTabService.emit to have been called with:
-  [ 'onSaveFormData', Object({ formData: [  ], subTabIndex: 0 }) ]
-but it was never called.
-    at <Jasmine>
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.spec.ts:216:43)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
+}));
