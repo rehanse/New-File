@@ -1,84 +1,49 @@
-NormalLossExpectancyComponent > should emit hasFormChange$ based on ActionEnum comparison
-TypeError: this.reToolTabService.on is not a function
-    at NormalLossExpectancyComponent.initializeForm (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:39:50)
-    at NormalLossExpectancyComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:34:10)
-    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
-    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
-    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
-    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
-    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
-    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
-    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
-    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
-NormalLossExpectancyComponent > should call emit onSaveFormData when form is valid
-TypeError: this.reToolTabService.on is not a function
-    at NormalLossExpectancyComponent.initializeForm (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:39:50)
-    at NormalLossExpectancyComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:34:10)
-    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
-    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
-    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
-    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
-    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
-    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
-    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
-    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
-NormalLossExpectancyComponent > should call ShowHideColumns when false
-TypeError: this.reToolTabService.on is not a function
-    at NormalLossExpectancyComponent.initializeForm (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:39:50)
-    at NormalLossExpectancyComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:34:10)
-    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
-    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
-    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
-    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
-    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
-    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
-    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
-    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
-NormalLossExpectancyComponent > should call ShowHideColumns when true
-TypeError: this.reToolTabService.on is not a function
-    at NormalLossExpectancyComponent.initializeForm (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:39:50)
-    at NormalLossExpectancyComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:34:10)
-    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
-    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
-    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
-    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
-    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
-    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
-    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
-    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
-NormalLossExpectancyComponent > should create
-TypeError: this.reToolTabService.on is not a function
-    at NormalLossExpectancyComponent.initializeForm (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:39:50)
-    at NormalLossExpectancyComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:34:10)
-    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
-    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
-    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
-    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
-    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
-    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
-    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
-    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
-NormalLossExpectancyComponent > should call the createRow
-TypeError: this.reToolTabService.on is not a function
-    at NormalLossExpectancyComponent.initializeForm (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:39:50)
-    at NormalLossExpectancyComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:34:10)
-    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
-    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
-    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
-    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
-    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
-    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
-    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
-    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
-NormalLossExpectancyComponent > should call the initializeDataSource
-TypeError: this.reToolTabService.on is not a function
-    at NormalLossExpectancyComponent.initializeForm (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:39:50)
-    at NormalLossExpectancyComponent.call [as ngOnInit] (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.ts:34:10)
-    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
-    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
-    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
-    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
-    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13426:21)
-    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
-    at detectChangesInViewWhileDirty (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13352:5)
-    at detectChangesInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13332:9)
+beforeEach(async () => {
+    reToolServiceMock = jasmine.createSpyObj('ReToolService', ['generateFormElementIdAttribute']);
+    reToolServiceMock.generateFormElementIdAttribute.and.callFake((rowIndex: number, dataId: number, columnName: string, popUp?: string) => {
+        return `row-${rowIndex}_dataKey-${dataId}_${columnName}`;
+    });
+
+    reToolTabServiceMock = jasmine.createSpyObj('ReToolTabService', [
+        'reviewRequestId', 
+        'emit', 
+        'showErrorMessage', 
+        'actionStateChange', 
+        'on'
+    ]);
+
+    // ✅ Fix: Mock `on()` to return a BehaviorSubject as an Observable
+    reToolTabServiceMock.on.and.returnValue(new BehaviorSubject(null).asObservable());
+
+    reToolTabServiceMock.hasFormChange$ = new BehaviorSubject<boolean>(false);
+
+    await TestBed.configureTestingModule({
+        declarations: [NormalLossExpectancyComponent],
+        schemas: [NO_ERRORS_SCHEMA],
+        imports: [
+            ReactiveFormsModule,
+            MatTableModule,
+            HttpClientTestingModule,
+            ToastrModule.forRoot()
+        ],
+        providers: [
+            FormBuilder,
+            { provide: ReToolService, useValue: reToolServiceMock },
+            { provide: ReToolTabService, useValue: reToolTabServiceMock }  // Ensure mock is injected
+        ]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(NormalLossExpectancyComponent);
+    component = fixture.componentInstance;
+    component.showHideColumn = true;
+    component.normalLossExpectancyForm = new FormGroup({
+        rows: new FormArray([
+            new FormGroup({
+                NormalLossScenario: new FormControl("test scenario", Validators.required),
+                NormalLossDeficiencyDriven: new FormControl(true, Validators.required)
+            })
+        ])
+    });
+
+    fixture.detectChanges();
+});
