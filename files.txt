@@ -1,59 +1,25 @@
-it("should call emit onSaveFormData when form is valid", fakeAsync(() => {
-  // Mock service response for initialization event
-  const formDataSource = { 
-    data: mockTableData, 
-    columns: mockTableColumns 
-  };
-  
-  // Setup event listener mock
-  (reToolTabServiceMock.on as jasmine.Spy).withArgs('onInitializeNormmalLossExpectancyData')
-    .and.returnValue(of(formDataSource));
-
-  // Initialize component properly
-  component.ngOnInit();
-  tick(); // Allow async operations to complete
-  
-  // Set valid values for required fields
-  const firstRow = (component.getFormArray().at(0) as FormGroup);
-  firstRow.get('NormalLossScenario').setValue('Valid Scenario');
-  firstRow.get('NormalLossDeficiencyDriven').setValue(true);
-
-  // Trigger submission
-  component.onSubmit();
-
-  // Verify expectations
-  expect(reToolTabServiceMock.emit).toHaveBeenCalledWith(
-    'onSaveFormData', 
-    jasmine.objectContaining({
-      formData: jasmine.any(Array),
-      subTabIndex: 0
-    })
-  );
-}));
-
-----------------------------
-it("should call emit onSaveFormData when form is valid", fakeAsync(() => {
-    // Arrange: Ensure form is properly initialized with valid data
-    component.initializeForm(); 
-    component.normalLossExpectancyForm = new FormGroup({
-        rows: new FormArray([
-            new FormGroup({
-                NormalLossScenario: new FormControl("test scenario", Validators.required),
-                NormalLossDeficiencyDriven: new FormControl(true, Validators.required)
-            })
-        ])
-    });
-
-    spyOn(reToolTabServiceMock, 'emit');
-
-    // Act: Mark form as touched and submit
-    component.normalLossExpectancyForm.markAllAsTouched();
-    component.normalLossExpectancyForm.updateValueAndValidity();
-    component.onSubmit();
-
-    // Assert: Expect emit to be called with expected parameters
-    expect(reToolTabServiceMock.emit).toHaveBeenCalledWith('onSaveFormData', {
-        formData: component['getNormalExpectancyFormData'],
-        subTabIndex: 0
-    });
-}));
+NormalLossExpectancyComponent > should call emit onSaveFormData when form is valid
+TypeError: Cannot read properties of undefined (reading 'withArgs')
+    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.spec.ts:215:48)
+    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:1987:30)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
+    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
+    at Zone.run (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:129:43)
+    at runInTestZone (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:555:34)
+    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:570:20)
+	
+	
+	--------------------
+	
+	NormalLossExpectancyComponent > should call emit onSaveFormData when form is valid
+Error: <spyOn> : emit has already been spied upon
+Usage: spyOn(<object>, <methodName>)
+    at <Jasmine>
+    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/normal-loss-expectancy/normal-loss-expectancy.component.spec.ts:219:7)
+    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:1987:30)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
+    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
+    at Zone.run (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:129:43)
+    at runInTestZone (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:555:34)
