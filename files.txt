@@ -1,401 +1,195 @@
-import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { PropertyValueComponent } from './property-value.component';
-import { FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { AutocompleteLibModule } from 'angular-ng-autocomplete';
-import { By } from '@angular/platform-browser';
-import { LocationSearchResponseModel } from '../../../models/location-search-response-model';
-import { BehaviorSubject, of, Subject, Subscription } from 'rxjs';
-import { ReToolService } from '../../../service/re-tool.service';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { PropertyValue } from '../../../models/property-value';
-import { MatTableModule } from '@angular/material/table';
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
-import { LocationModel } from '../../../models/location';
-import { ActionEnum } from '../../../models/action-enum';
-import { MapperUtil } from '../../../utility/mapper-util';
-import { ToastrService } from 'ngx-toastr';
-import { ReToolTabService } from '../../../service/re-tool-tab.service';
-import { CountrySearchResponseModel } from '../../../models/country-search-respone-model';
+it('should process excel data and merge records when matching record is found', () => {
+  const jsonData = [{
+    locationName: 'USA',
+    locationAddress: '1 Park Avenue',
+    city: 'New York',
+    state: 'New York',
+    country: 'United States'
+  }];
 
-fdescribe('PropertyValueComponent', () => {
-  let component: PropertyValueComponent;
-  let fixture: ComponentFixture<PropertyValueComponent>;
-  let reToolServiceMock: jasmine.SpyObj<ReToolService>;
-  let httpTestingController: HttpTestingController;
-  let reToolTabServiceMock: jasmine.SpyObj<ReToolTabService>;
-  let mockMergeValues: jasmine.Spy;
+  const propertyValueData = [{
+    locationName: 'USA',
+    locationAddress: '1 Park Avenue',
+    city: 'New York',
+    state: 'New York',
+    country: 'United States'
+  }];
 
-  let mockTableData: PropertyValue[] = [];
+  mockFindMatchingRecordKey.and.returnValue('existingKey');
+  component.processExcelData(jsonData, propertyValueData);
 
-  const mockMapperUtil = {
-    mapRowToPropertyValueExcelFile: jasmine.createSpy().and.returnValue({})
-  }
+  expect(mockFindMatchingRecordKey).toHaveBeenCalledWith(
+    jasmine.any(Object),
+    'USA',
+    'United States'
+  );
 
-  const mockFindMatchingRecordKey = jasmine.createSpy();
-  mockMergeValues = jasmine.createSpy('mockMergeValues');
-  const mockIsSavedRecord = jasmine.createSpy().and.returnValue(true);
-  const mockProcessMergeData = jasmine.createSpy();
-  let importDataSubject = new Subject<{ locationData: any, propertyValueData: any }>();
-  let toastrService: jasmine.SpyObj<ToastrService>;
-  let subject: Subject<any>;
+  expect(mockMergeValues).toHaveBeenCalledWith(
+    jasmine.any(Object),
+    'existingKey',
+    jasmine.any(Object)
+  );
+});
 
- 
+--------------------
 
-  beforeEach(async () => {
-    mockTableData = [
-      {
-        PropertyLocationId: 1,
-        CurrencyId: 0,
-        UnitId: 0,
-        LocationName: 'NYC Langone',
-        Address:'1490 NW 12th.',
-        Country: "United States",
-        City: "Boston",
-        StateProvince: "Boston",
-        BuildingValue: 20.0,
-        EquipmentValue: 0.0,
-        InventoryValue: 0.0,
-        OtherValue: 0.0,
-        TotalPD: 0.0,
-        BusinessInterruptionValue: 0.0,
-        BusinessInterruptionOtherValue: 0.0,
-        IndemnityPeriod: 0,
-        PayRollValue: 0.0,
-        PayRollDayValue: 0,
-        TotalTE: 0.0,
-        Total: 0.0,
-        VerCol: '',
-        Action: ActionEnum.IsNewRecord,
-        CityNamesToolTip: '',
-        StateNamesToolTip: '',
-        StreetAddressToolTip: '',
-        CountryId: 0,
-        AddressId: 0,
-        LocationAddressMapId: 0,
-        LocationAddressMapIds: [],
-        CountryNotFound: false
-      },
-      {
-        PropertyLocationId: 2,
-        CurrencyId: 0,
-        UnitId: 0,
-        LocationName: 'Peterson6 Memorial Hospital ',
-        Address:'1490 NW 12th.',
-        Country: "United States",
-        City: "Boston",
-        StateProvince: "Boston",
-        BuildingValue: 10.0,
-        EquipmentValue: 0.0,
-        InventoryValue: 0.0,
-        OtherValue: 0.0,
-        TotalPD: 0.0,
-        BusinessInterruptionValue: 0.0,
-        BusinessInterruptionOtherValue: 0.0,
-        IndemnityPeriod: 0,
-        PayRollValue: 0.0,
-        PayRollDayValue: 0,
-        TotalTE: 0.0,
-        Total: 0.0,
-        VerCol: '',
-        Action: ActionEnum.IsNewRecord,
-        CityNamesToolTip: '',
-        StateNamesToolTip: '',
-        StreetAddressToolTip: '',
-        CountryId: 0,
-        AddressId: 0,
-        LocationAddressMapId: 0,
-        LocationAddressMapIds: [],
-        CountryNotFound: false
-      }
-    ];
+it('should create new records when no matching record is found', () => {
+  mockFindMatchingRecordKey.and.returnValue(null);
 
-    reToolServiceMock = jasmine.createSpyObj('ReToolService', ['getLocationByAddress', 'generateFormElementIdAttribute','importData$','addNewLocation$','locationApiDataSubscribe$','countrySearchSubject$','currencyUnit$']);
-    reToolTabServiceMock = jasmine.createSpyObj('ReToolTabService', ['emit', 'on', 'showErrorMessage', 'actionStateChange','hasFormChange$','selectedLocAddressData$','setAddressAndToolTip']);
+  const jsonData = [{
+    locationName: 'Indiana',
+    locationAddress: '2 Park Avenue',
+    city: 'New York',
+    state: 'New York',
+    country: 'United States'
+  }];
+
+  const propertyValueData = [{
+    locationName: 'Texas',
+    locationAddress: '3 Park Avenue',
+    city: 'Houston',
+    state: 'Texas',
+    country: 'United States'
+  }];
+
+  component.processExcelData(jsonData, propertyValueData);
+
+  expect(mockFindMatchingRecordKey).toHaveBeenCalled();
+  expect(mockMergeValues).not.toHaveBeenCalled();
+  expect(component['mergeValues']).toBeDefined();
+});
+-------------------------
+it('should handle ULID and update existing records correctly', () => {
+  const jsonData = [{
+    ULId: 'ULID123',
+    locationName: 'New York',
+    locationAddress: '5th Avenue',
+    city: 'New York',
+    state: 'NY',
+    country: 'United States'
+  }];
+
+  const propertyValueData = [{
+    ULId: 'ULID123',
+    locationName: 'New York',
+    locationAddress: '5th Avenue',
+    city: 'New York',
+    state: 'NY',
+    country: 'United States'
+  }];
+
+  mockFindMatchingRecordKey.and.returnValue('ULID123');
+  component.processExcelData(jsonData, propertyValueData);
+
+  expect(mockFindMatchingRecordKey).toHaveBeenCalledWith(
+    jasmine.any(Object),
+    'New York',
+    'United States'
+  );
+
+  expect(mockMergeValues).toHaveBeenCalledWith(
+    jasmine.any(Object),
+    'ULID123',
+    jasmine.any(Object)
+  );
+});
+------------------------------------------
+it('should process excel data and merge records when matching record is found', () => {
+    const jsonData = [{ 
+        locationName: 'USA', 
+        locationAddress: '1 Park Avenue', 
+        city: 'New York', 
+        state: 'New York', 
+        country: 'United States',
+        ULId: null
+    }];
     
-    reToolServiceMock
-      .generateFormElementIdAttribute
-      .and
-      .callFake((rowIndex: number, dataId: number, columnName: string, popUp?: string) => 
-      {
-        return `row-${rowIndex}_dataKey-${dataId}_${columnName}`;
-      });
-    reToolServiceMock.importData$ = importDataSubject;
-    reToolServiceMock.addNewLocation$ = new Subject<void>();
-    reToolServiceMock.locationApiDataSubscribe$ = new Subject<any>();
-    reToolServiceMock.currencyUnit$ = new Subject<any>();
-    reToolServiceMock.countrySearchSubject$ = new Subject<any>();
-    reToolTabServiceMock.hasFormChange$ = new BehaviorSubject<boolean>(false);
-    reToolTabServiceMock.selectedLocAddressData$ = new BehaviorSubject<any>(null).asObservable();
-
-
-    await TestBed.configureTestingModule({
-      declarations: [PropertyValueComponent],
-      schemas: [NO_ERRORS_SCHEMA],
-      imports: [
-        ReactiveFormsModule,
-        MatTableModule,
-        AutocompleteLibModule,
-        HttpClientTestingModule
-      ],
-      providers: [
-        FormBuilder,
-        { provide: ReToolService, useValue: reToolServiceMock },
-        { provide: MapperUtil, useValue: mockMapperUtil },
-        { provide: ToastrService, useValue: toastrService },
-        { provide: 'findMatchingRecordKey', useValue: mockFindMatchingRecordKey },
-        { provide: 'mergeValues', useValue: mockMergeValues },
-        { provide: 'isSavedRecord', useValue: mockIsSavedRecord },
-        { provide: 'processMergeData', useValue: mockProcessMergeData },
-        { provide: ReToolTabService, useValue: reToolTabServiceMock}
-      ]
-    })
-      .compileComponents();
-
-    fixture = TestBed.createComponent(PropertyValueComponent);
-    component = fixture.componentInstance;
-    httpTestingController = TestBed.inject(HttpTestingController);
-    reToolServiceMock.getLocationByAddress.and.returnValue(of({}));
-    reToolTabServiceMock.on.and.returnValue(of({
-      columns: [
-        "ULID",
-        "LocationName",
-        "StreetAddress",
-        "CityName",
-        "StateName",
-        "CountryName",
-        "BuildingValue",
-        "EquipmentValue",
-        "InventoryValue",
-        "OtherValue",
-        "TotalPD",
-        "BusinessInterruptionValue",
-        "BusinessInterruptionOtherValue",
-        "IndemnityPeriod",
-        "PayRollValue",
-        "PayRollDayValue",
-        "TotalTE",
-        "Total",
-        "Delete"
-      ],
-      data: mockTableData
-    }));
-    spyOn(component as any, 'registerSubscribers').and.callThrough();
-    reToolTabServiceMock = TestBed.inject(ReToolTabService) as jasmine.SpyObj<ReToolTabService>;
-    component.subscription = new Subscription();
-    spyOn(component.subscription, 'add').and.callThrough();
-    spyOn(component.subscription, 'unsubscribe').and.callThrough();
-    component.ngOnInit();
-    fixture.detectChanges();
-  });
-
-  afterEach(() => {
-    //Ensure no outstanding requests remain
-    httpTestingController.verify();
-  });
-
-  it('should create the component', () => {
-    expect(component).toBeTruthy();
-  });
-
-  it('should initialize form on ngOnInit', () => {
-    spyOn(component, 'initializeForm');
-    component.ngOnInit();
-    expect(component.initializeForm).toHaveBeenCalled();
-  });
-
-  it('should initialize the form with @Input() data and @Input() columns', () => {
-    const tableRows = component.propertyValueForm.get('rows') as FormArray;
-    expect(tableRows.length).toBe(2);
-
-    expect(parseFloat(tableRows.at(0).get('BuildingValue')?.value)).toEqual(20.0);
-    expect(parseFloat(tableRows.at(1).get('BuildingValue')?.value)).toEqual(10.0);
-  });
-
-  it('should render the correct number of rows', () => {
-    const tableRows = fixture.debugElement.queryAll(By.css('tr.mat-mdc-row'));
-    expect(tableRows.length).toBe(1);
-  });
-
-  it('should call locationChange and check the received response', fakeAsync(() => {
-    expect(component).toBeTruthy();
-
-    const locationApiDataSubscribe$ = new Subject<any>();
-    reToolServiceMock.locationApiDataSubscribe$ = locationApiDataSubscribe$;
-
-    locationApiDataSubscribe$.subscribe(request => {
-      reToolServiceMock.getLocationByAddress(request.LocationName).subscribe();
-    });
-
-    component.locationChange('Boston');
-    tick(500);
-
-    // Expect the getLocationByAddress method to be called
-    expect(reToolServiceMock.getLocationByAddress).toHaveBeenCalledWith('Boston');
-  }));
-
-  it('should process excel data and merge records when matching record is found', () => {
-    const jsonData = [{ locationName: 'USA', locationAddress: '1 Park Avenue', city: 'New York', state: 'New York', country: 'United States' }];
-    const propertyValueData = [{ locationName: 'USA', locationAddress: '1 Park Avenue', city: 'New York', state: 'New York', country: 'United States' }];
+    const propertyValueData = [{ 
+        locationName: 'USA', 
+        locationAddress: '1 Park Avenue', 
+        city: 'New York', 
+        state: 'New York', 
+        country: 'United States',
+        ULId: '12345'
+    }];
 
     mockFindMatchingRecordKey.and.returnValue('existingKey');
-    subject.next({ jsonData, propertyValueData });
+    spyOn(component, 'mergeValues').and.callThrough();
+
     component.processExcelData(jsonData, propertyValueData);
 
-    expect(mockMapperUtil.mapRowToPropertyValueExcelFile).toHaveBeenCalledWith(propertyValueData, jsonData);
     expect(mockFindMatchingRecordKey).toHaveBeenCalledWith(
-      jasmine.any(Object),
-      'USA',
-      'United States'
-    );
-    expect(mockMergeValues).toHaveBeenCalledWith(
-      jasmine.any(Object), 'existingKey', jasmine.any(Object)
+        jasmine.any(Object),
+        'USA',
+        'United States'
     );
 
-    expect(mockProcessMergeData).toHaveBeenCalled();
-    expect(component['mergeValues']).toBeDefined();
-    expect(component['mergeValues']['existingKey']).toBeDefined();
-  });
-
-  it('should create new records when no matching record is found', () => {
-    mockFindMatchingRecordKey.and.returnValue(null);
-    const jsonData = [{ locationName: 'Indiana', locationAddress: '2 Park Avenue', city: 'New York', state: 'New York', country: 'United States' }];
-    const propertyValueData = [{ locationName: 'Indiana', locationAddress: '2 Park Avenue', city: 'New York', state: 'New York', country: 'United States' }];
-
-    importDataSubject.next({ locationData: jsonData, propertyValueData });
-    const locationKey = '001-8989898_Indiana_UnitedStates';
-    mockProcessMergeData(locationKey, { locationData: jsonData }); // Adding data to mockProcessMergeData
-
-    expect(mockProcessMergeData[locationKey]).toBeDefined();
-
-    expect(mockMergeValues).not.toHaveBeenCalled();
-  });
-
-  it('should handle ULID and update existing records correctly', fakeAsync(() => {
-    const jsonData = [{ ULID: '001-8989898', locationName: 'Indiana', locationAddress: '2 Park Avenue', city: 'New York', state: 'New York', country: 'United States' }];
-    const propertyValueData = [{ ULID: '001-8989898', locationName: 'Indiana', locationAddress: '2 Park Avenue', city: 'New York', state: 'New York', country: 'United States' }];
-
-    const existingKey = '001-8989898_Indiana_UnitedStates';
-    mockFindMatchingRecordKey.and.returnValue(existingKey);
-    mockIsSavedRecord.and.returnValue(true);
-
-    importDataSubject.next({ locationData: jsonData, propertyValueData });
-    tick(); // Move the clock forward to process any pending async tasks
-
-    expect(mockMergeValues).toHaveBeenCalledWith(
-      propertyValueData[0], existingKey, jsonData[0]
+    expect(component.mergeValues).toHaveBeenCalledWith(
+        jasmine.any(Object), 'existingKey', jasmine.any(Object)
     );
-  }));
-
-
-  it('should call initializeForm, registerSubscribers, handleInputChange, handleCountryInputChange', () => {
-    spyOn(component, 'initializeForm');
-    spyOn<any>(component, 'handleInputChange');
-    spyOn<any>(component, 'handleCountryInputChange');
-
-    component.ngOnInit();
-
-    expect(component.initializeForm).toHaveBeenCalled();
-    expect((component as any)['registerSubscribers']).toHaveBeenCalled();
-    expect((component as any)['handleInputChange']).toHaveBeenCalled();
-    expect((component as any)['handleCountryInputChange']).toHaveBeenCalled();
-  });
-
-  it('should set propertyValueForm and call initializeDataSource', () => {
-    spyOn(component, 'initializeDataSource');
-    component.initializeForm();
-    expect(component.propertyValueForm).toBeDefined();
-    expect(component.initializeDataSource).toHaveBeenCalled();
-  });
-
-  it('should clear the location information correctly', () => {
-    const rowIndex = 0;
-    const formGroupSpy = new FormGroup({
-      LocationName: new FormControl(''),
-      ULId: new FormControl(''),
-      Action: new FormControl(2)
-    });
-    spyOn(formGroupSpy, 'patchValue'); // Spy on patchValue method
-
-    spyOn<any>(component, 'getFormGroup').and.returnValue(formGroupSpy);
-
-    component.locationCleared(rowIndex);
-
-    expect(component['getFormGroup']).toHaveBeenCalledWith(rowIndex);
-    expect(formGroupSpy.patchValue).toHaveBeenCalledWith({
-      LocationName: '',
-      ULId: '',
-      Action: 2
-    });
-  });
-
-  it('should update country data on countryChange', () => {
-    const value = 'India';
-    const rowIndex = 0;
-    // Spy on the private property reToolService
-    const reToolServiceSpy = spyOn((component as any).reToolService.countrySearchSubject$, 'next');
-
-    (component as any).countryChanged(value, rowIndex);
-
-    expect(reToolServiceSpy).toHaveBeenCalledWith(value);
-  });
-
-  it('should correctly handle country selection', () => {
-    const event: CountrySearchResponseModel = {
-      countryId: 'IND',
-      countryName: 'India'
-    };
-    const rowIndex = 0;
-    const formGroupSpy = jasmine.createSpyObj('FormGroup', ['patchValue', 'get']);
-    formGroupSpy.get.and.returnValue({ value: 'some_value' });
-  
-    spyOn<any>(component, 'getFormGroup').and.returnValue(formGroupSpy);
-  
-    component.countrySelected(event, rowIndex);
-  
-    expect(component['getFormGroup']).toHaveBeenCalledWith(rowIndex);
-    expect(formGroupSpy.patchValue).toHaveBeenCalledWith({
-      CountryNotFound: false,
-      Country: 'India',
-      Action: 2 // Updated to match the actual value being set
-    });
-  });
-  
-  
-
-  it('should handleInputChange', () => {
-    spyOn(component as any, 'handleInputChange').and.callThrough();
-    (component as any).handleInputChange();
-    expect((component as any).handleInputChange).toHaveBeenCalled();
-  });
-
-  it('should updateLocationAssociatedColumns', () => {
-    const rowIndex = 0;
-    const location = { LocationId: 1, LocationName: 'Test Location' } as any;
-    const formControlSpy = jasmine.createSpyObj('FormControl', ['patchValue', 'get']);
-  
-    const formGroupSpy = jasmine.createSpyObj('FormGroup', ['patchValue', 'get']);
-    formGroupSpy.get.and.returnValue(formControlSpy);
-  
-    spyOn<any>(component, 'getFormGroup').and.returnValue(formGroupSpy);
-  
-    // Add console log to check the argument passed to get method
-    component['updateLocationAssociatedColumns'] = function (index, loc) {
-      const control = formGroupSpy.get('LocationName');
-      control.patchValue({ LocationName: loc.LocationName });
-    };
-  
-    component['updateLocationAssociatedColumns'](rowIndex, location);
-  
-    expect(formGroupSpy.get).toHaveBeenCalledWith('LocationName');
-    expect(formControlSpy.patchValue).toHaveBeenCalledWith(jasmine.objectContaining({
-      LocationName: 'Test Location'
-    }));
-  });
-  
-
-  it('should handleCountryInputChange', () => {
-    spyOn(component as any, 'handleCountryInputChange').and.callThrough();
-    (component as any).handleCountryInputChange();
-    expect((component as any).handleCountryInputChange).toHaveBeenCalled();
-  });
 });
+------------------------------------
+it('should create new records when no matching record is found', () => {
+    const jsonData = [{ 
+        locationName: 'Indiana', 
+        locationAddress: '2 Park Avenue', 
+        city: 'New York', 
+        state: 'New York', 
+        country: 'United States',
+        ULId: null
+    }];
+
+    const propertyValueData = [{ 
+        locationName: 'California', 
+        locationAddress: '3 Park Avenue', 
+        city: 'Los Angeles', 
+        state: 'California', 
+        country: 'United States',
+        ULId: null
+    }];
+
+    mockFindMatchingRecordKey.and.returnValue(null);
+    spyOn(component, 'mergeImportedAndExistingPropertyValueData').and.callThrough();
+
+    component.processExcelData(jsonData, propertyValueData);
+
+    expect(mockFindMatchingRecordKey).toHaveBeenCalled();
+    expect(component.mergeImportedAndExistingPropertyValueData).toHaveBeenCalled();
+});
+--------------------------
+it('should handle ULID and update existing records correctly', () => {
+    const jsonData = [{ 
+        locationName: 'Texas', 
+        locationAddress: '4 Park Avenue', 
+        city: 'Austin', 
+        state: 'Texas', 
+        country: 'United States',
+        ULId: '67890'
+    }];
+
+    const propertyValueData = [{ 
+        locationName: 'Texas', 
+        locationAddress: '4 Park Avenue', 
+        city: 'Austin', 
+        state: 'Texas', 
+        country: 'United States',
+        ULId: '67890'
+    }];
+
+    spyOn(component, 'mergeValues').and.callThrough();
+    spyOn(component, 'findMatchingRecordKey').and.returnValue('existingKey');
+
+    component.processExcelData(jsonData, propertyValueData);
+
+    expect(component.findMatchingRecordKey).toHaveBeenCalledWith(
+        jasmine.any(Object), 
+        'Texas', 
+        'United States'
+    );
+
+    expect(component.mergeValues).toHaveBeenCalledWith(
+        jasmine.any(Object), 'existingKey', jasmine.any(Object)
+    );
+});
+
+
