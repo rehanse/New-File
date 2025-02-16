@@ -1,5 +1,16 @@
-spyOn(console, 'log'); // Spy on console log to capture debug messages
-component.processExcelData(jsonData, propertyValueData);
-console.log("Debug: processExcelData executed"); 
-
-expect(console.log).toHaveBeenCalledWith("Debug: processExcelData executed");
+| Failures
+PropertyValueComponent > should process excel data and merge records when matching record is found
+Expected spy findMatchingRecordKey to have been called with:
+  [ <jasmine.any(Object)>, 'USA', 'United States' ]
+but it was never called.
+    at <Jasmine>
+    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/property-value/property-value.component.spec.ts:310:48)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
+    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
+Expected spy mergeValues to have been called with:
+  [ <jasmine.any(Object)>, 'existingKey', <jasmine.objectContaining(Object({ BuildingValue: 5000 }))> ]
+but it was never called.
+    at <Jasmine>
+    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/property-value/property-value.component.spec.ts:317:38)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
