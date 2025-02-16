@@ -1,8 +1,28 @@
-PropertyValueComponent > should process excel data and merge records when matching record is found
-TypeError: Cannot read properties of undefined (reading 'BuildingValue')
-    at PropertyValueComponent.mergeValues (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/property-value/property-value.component.ts:613:5)
-    at <Jasmine>
-    at forEach (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/property-value/property-value.component.ts:221:16)
-    at Array.forEach (<anonymous>)
-    at PropertyValueComponent.processExcelData (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/property-value/property-value.component.ts:212:14)
-    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/property-value/prope
+static mapRowToPropertyValueExcelFile(row: any, apiImportRowData: any): PropertyValue {
+        const propertyValue = new PropertyValue();
+        propertyValue.ULId = apiImportRowData ? apiImportRowData.ulId : (row[0] || row[0]?.ULId || '');
+        propertyValue.PropertyLocationId = row[1] || '0';
+        propertyValue.CurrencyId = 0;
+        propertyValue.UnitId = 0;
+        propertyValue.LocationName = apiImportRowData ? apiImportRowData.locationName : (row[2] || row[0]?.LocationName || '');
+        propertyValue.Address = apiImportRowData ? apiImportRowData.locationAddress : (row[3] || row[0]?.Address || '');
+        propertyValue.City = apiImportRowData ? apiImportRowData.city : (row[4] || row[0]?.City || '');
+        propertyValue.StateProvince = apiImportRowData ? apiImportRowData.state : (row[5] || row[0]?.State || '');
+        propertyValue.Country = apiImportRowData ? apiImportRowData.country : (row[6] || row[0]?.Country || '');
+        propertyValue.BuildingValue = Utility.parseAndSumValue(row[7] || row[0]?.BuildingValue || '0.0');
+        propertyValue.EquipmentValue = Utility.parseAndSumValue(row[8] || row[0]?.EquipmentValue || '0.0');
+        propertyValue.InventoryValue = Utility.parseAndSumValue(row[9] || row[0]?.InventoryValue || '0.0');
+        propertyValue.OtherValue = Utility.parseAndSumValue(row[10] || row[0]?.OtherValue || '0.0');
+        propertyValue.TotalPD = 0.0;
+        propertyValue.BusinessInterruptionValue = Utility.parseAndSumValue(row[12] || row[0]?.BusinessInterruptionValue || '0.0');
+        propertyValue.BusinessInterruptionOtherValue = Utility.parseAndSumValue(row[13] || row[0]?.BusinessInterruptionOtherValue || '0.0');
+        propertyValue.IndemnityPeriod = row[14] || row[0]?.IndemnityPeriod || '0';
+        propertyValue.PayRollValue = Utility.parseAndSumValue(row[15] || row[0]?.PayRollValue || '0.0');
+        propertyValue.PayRollDayValue = Utility.parseAndSumValue(row[16] || row[0]?.PayrollDayValue || '0.0');
+        propertyValue.TotalTE = 0.0;
+        propertyValue.Total = 0.0;
+        propertyValue.Action = ActionEnum.IsNewRecord;
+        propertyValue.VerCol = '';
+        propertyValue.LocationAddressMapId = apiImportRowData ? apiImportRowData.locationAddressMapId : null;
+        return propertyValue;
+    }
