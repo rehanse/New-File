@@ -1,6 +1,56 @@
-Argument of type '"findMatchingRecordKey"' is not assignable to parameter of type 'keyof PropertyValueComponent'.
+it('should process excel data and merge records when matching record is found', () => {
+    // Arrange: Sample input data
+    const jsonData = [{ 
+        locationName: 'USA', 
+        locationAddress: '1 Park Avenue', 
+        city: 'New York', 
+        state: 'New York', 
+        country: 'United States',
+        ULId: null
+    }];
+    
+    const propertyValueData = [{
+        ULId: '12345',
+        PropertyLocationId: '1',
+        LocationName: 'USA',
+        Address: '1 Park Avenue',
+        City: 'New York',
+        StateProvince: 'New York',
+        Country: 'United States',
+        BuildingValue: '5000'
+    }];
 
-Argument of type '"mergeValues"' is not assignable to parameter of type 'keyof PropertyValueComponent'.
+    // ✅ Bypass private method using `any`
+    spyOn<any>(component, 'findMatchingRecordKey').and.returnValue('existingKey');
 
-Property 'findMatchingRecordKey' is private and only accessible within class 'PropertyValueComponent'.ts(2341)
-(method) PropertyValueComponent.findMatchingRecordKey(mergedRecords: any, fullAddress: string, countryName: string): string | null
+    // ✅ Mock `mapRowToPropertyValueExcelFile` to return a valid object
+    spyOn(MapperUtil, 'mapRowToPropertyValueExcelFile').and.returnValue({
+        ULId: '12345',
+        LocationName: 'USA',
+        Address: '1 Park Avenue',
+        City: 'New York',
+        StateProvince: 'New York',
+        Country: 'United States',
+        BuildingValue: '5000'
+    });
+
+    // ✅ Bypass private method using `any`
+    spyOn<any>(component, 'mergeValues').and.callThrough();
+
+    // Act
+    component.processExcelData(jsonData, propertyValueData);
+
+    // Assert: Ensure `findMatchingRecordKey` was called
+    expect(component['findMatchingRecordKey']).toHaveBeenCalledWith(
+        jasmine.any(Object),
+        'USA',
+        'United States'
+    );
+
+    // Assert: Ensure `mergeValues` was called with a valid `propertyValue`
+    expect(component['mergeValues']).toHaveBeenCalledWith(
+        jasmine.any(Object), // mergedRecords
+        'existingKey',       // Matching record key
+        jasmine.objectContaining({ BuildingValue: '5000' })  // Ensuring valid property value
+    );
+});
