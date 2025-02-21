@@ -1,12 +1,14 @@
-GeneralPropertyComponent > should trigger dialog open when openPopupOnCellClick is called
-Expected spy MatDialog.open to have been called.
-    at <Jasmine>
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/general-property/general-property.component.spec.ts:122:29)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
-GeneralPropertyComponent > should subscribe to services on initialization
-Expected spy ReToolService.getGeneralPropertyWeight to have been called.
-    at <Jasmine>
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/general-property/general-property.component.spec.ts:97:56)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
+it('should subscribe to services on initialization', () => {
+    fixture.detectChanges();
+    expect(mockReToolService.getGeneralPropertyWeight).toHaveBeenCalled();
+    expect(mockReToolService.getPropertyMaster).toHaveBeenCalled();
+    expect(mockReToolTabService.on).toHaveBeenCalled();
+  });
+
+  it('should trigger dialog open when openPopupOnCellClick is called', () => {
+    mockDialog.open.and.returnValue({ afterClosed: () => of({ action: 1 }) } as any);
+    spyOn(component, 'getGidRowRecordDetail').and.returnValue({ columnName: 'Test Column', value: 'Test Value' });
+    const event = new MouseEvent('click');
+    component.openPopupOnCellClick(event, { columnName: 'Test Column', value: 'Test Value' }, 'column');
+    expect(mockDialog.open).toHaveBeenCalled();
+  });
