@@ -1,94 +1,16 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { GeneralPropertyComponent } from './general-property.component';
-import { FormBuilder, ReactiveFormsModule, FormGroup } from '@angular/forms';
-import { MatDialog } from '@angular/material/dialog';
-import { MatTableDataSource } from '@angular/material/table';
-import { of } from 'rxjs';
-import { ReToolService } from '../../../service/re-tool.service';
-import { ReToolTabService } from '../../../service/re-tool-tab.service';
-import { ReToolCalculationService } from '../../../service/re-tool-calculation-service';
-import { CommonService } from '../../../../../shared/services/common.service';
-
-describe('GeneralPropertyComponent', () => {
-  let component: GeneralPropertyComponent;
-  let fixture: ComponentFixture<GeneralPropertyComponent>;
-  let mockReToolService: jasmine.SpyObj<ReToolService>;
-  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
-  let mockCalculationService: jasmine.SpyObj<ReToolCalculationService>;
-  let mockCommonService: jasmine.SpyObj<CommonService>;
-  let mockDialog: jasmine.SpyObj<MatDialog>;
-
-  beforeEach(async () => {
-    mockReToolService = jasmine.createSpyObj('ReToolService', ['getGeneralPropertyWeight']);
-    mockReToolTabService = jasmine.createSpyObj('ReToolTabService', ['emit', 'on', 'showErrorMessage']);
-    mockCalculationService = jasmine.createSpyObj('ReToolCalculationService', ['setRedistributionWeights', 'calculate']);
-    mockCommonService = jasmine.createSpyObj('CommonService', ['getDateByTimeZone']);
-    mockDialog = jasmine.createSpyObj('MatDialog', ['open']);
-
-    await TestBed.configureTestingModule({
-      declarations: [GeneralPropertyComponent],
-      imports: [ReactiveFormsModule],
-      providers: [
-        FormBuilder,
-        { provide: ReToolService, useValue: mockReToolService },
-        { provide: ReToolTabService, useValue: mockReToolTabService },
-        { provide: ReToolCalculationService, useValue: mockCalculationService },
-        { provide: CommonService, useValue: mockCommonService },
-        { provide: MatDialog, useValue: mockDialog }
-      ]
-    }).compileComponents();
-  });
-
-  beforeEach(() => {
-    fixture = TestBed.createComponent(GeneralPropertyComponent);
-    component = fixture.componentInstance;
-    fixture.detectChanges();
-  });
-
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
-  it('should initialize form on ngOnInit', () => {
-    spyOn(component, 'initializeForm');
-    component.ngOnInit();
-    expect(component.initializeForm).toHaveBeenCalled();
-  });
-
-  it('should create form group in initializeForm', () => {
-    component.initializeForm();
-    expect(component.generalPropertyForm).toBeDefined();
-  });
-
-  it('should mark form as touched and call emit on onSubmit', () => {
-    mockReToolTabService.emit.and.stub();
-    component.onSubmit();
-    expect(component.generalPropertyForm.touched).toBeTrue();
-    expect(mockReToolTabService.emit).toHaveBeenCalled();
-  });
-
-  it('should call openDialog when openPopupOnCellClick is called', () => {
+ it('should call openDialog when openPopupOnCellClick is called', () => {
     spyOn(component, 'openDialog');
     const event = new MouseEvent('click');
     component.openPopupOnCellClick(event, {}, 'column');
     expect(component.openDialog).toHaveBeenCalled();
   });
 
-  it('should update form value when onCellValueChange is called', () => {
-    component.generalPropertyForm = new FormBuilder().group({
-      rows: new FormBuilder().array([])
-    });
-    component.onCellValueChange(new Event('input'), { value: 'test' } as any);
-    expect(component.generalPropertyForm.dirty).toBeTrue();
-  });
+error:-Argument of type '"openDialog"' is not assignable to parameter of type 'never'.
 
-  it('should handle dialog close when openDialog is called', () => {
-    mockDialog.open.and.returnValue({ afterClosed: () => of({ action: 1 }) } as any);
-    component.openDialog({ columnName: 'test' } as any);
-    expect(mockDialog.open).toHaveBeenCalled();
-  });
+Property 'openDialog' is private and only accessible within class 'GeneralPropertyComponent'.ts(2341)
+(method) GeneralPropertyComponent.openDialog(request: GridRowRecord, element?: any, popUpTitle?: string): void
 
-  it('should disable PropertyDamageIndexAdjusted if PropertyDamageIndexCalculated is zero', () => {
+it('should disable PropertyDamageIndexAdjusted if PropertyDamageIndexCalculated is zero', () => {
     component.generalPropertyForm = new FormBuilder().group({
       PropertyDamageIndexCalculated: new FormGroup({ value: 0 }),
       PropertyDamageIndexAdjusted: new FormGroup({ value: '', disabled: true })
@@ -97,21 +19,15 @@ describe('GeneralPropertyComponent', () => {
     expect(component.generalPropertyForm.get('PropertyDamageIndexAdjusted')?.disabled).toBeTrue();
   });
 
-  it('should correctly calculate and update PropertyDamageIndexUpdated', () => {
-    let row = new FormGroup({
-      PropertyDamageIndexCalculated: new FormGroup({ value: 5 }),
-      PropertyDamageIndexAdjusted: new FormGroup({ value: 2 }),
-      PropertyDamageIndexUpdated: new FormGroup({ value: '' })
-    });
-    component.setPropertyDamageIndexDisplayValue(row);
-    expect(row.get('PropertyDamageIndexUpdated')?.value).toBe('7.0');
-  });
+Type 'number' is not assignable to type 'AbstractControl<any, any>'.ts(2322)
+general-property.component.spec.ts(93, 54): The expected type comes from property 'value' which is declared here on type '{ value: AbstractControl<any, any>; }'
+(property) value: AbstractControl<any, any>
 
-  it('should trigger validation when setValidatorForPdIndexValue is called', () => {
-    let row = new FormGroup({
-      PDIndexIndexUpdatedValidationControl: new FormGroup({ value: 0 })
-    });
-    component.setValidatorForPdIndexValue(row, 11);
-    expect(row.get('PDIndexIndexUpdatedValidationControl')?.errors).toEqual({ max: true });
-  });
-});
+Type 'boolean' is not assignable to type 'AbstractControl<any, any>'.ts(2322)
+general-property.component.spec.ts(94, 63): The expected type comes from property 'disabled' which is declared here on type '{ value: AbstractControl<any, any>; disabled: AbstractControl<any, any>; }'
+
+Property 'disablePDIndexAdjustByBasedOnPDIndexValue' is private and only accessible within class 'GeneralPropertyComponent'.ts(2341)
+(method) GeneralPropertyComponent.disablePDIndexAdjustByBasedOnPDIndexValue(): void
+No quick fixes available
+
+
