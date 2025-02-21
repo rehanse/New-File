@@ -1,15 +1,33 @@
-1. mockReToolTabService.actionStateChange.and.returnValue(of({}));
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { GeneralPropertyComponent } from './general-property.component';
+import { FormBuilder, ReactiveFormsModule, FormGroup, FormControl, FormArray, Validators } from '@angular/forms';
+import { MatDialog } from '@angular/material/dialog';
+import { MatTableDataSource } from '@angular/material/table';
+import { of } from 'rxjs';
+import { ReToolService } from '../../../service/re-tool.service';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { ReToolCalculationService } from '../../../service/re-tool-calculation-service';
+import { CommonService } from '../../../../../shared/services/common.service';
 
-error:- Argument of type 'Observable<{}>' is not assignable to parameter of type 'void'.ts(2345)
-(alias) of<{}>(value: {}): Observable<{}> (+7 overloads)
-import of
+describe('GeneralPropertyComponent', () => {
+  let component: GeneralPropertyComponent;
+  let fixture: ComponentFixture<GeneralPropertyComponent>;
+  let mockReToolService: jasmine.SpyObj<ReToolService>;
+  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+  let mockCalculationService: jasmine.SpyObj<ReToolCalculationService>;
+  let mockCommonService: jasmine.SpyObj<CommonService>;
+  let mockDialog: jasmine.SpyObj<MatDialog>;
 
-2.mockCalculationService.setRedistributionWeights.and.returnValue(of({}));
-error: Argument of type 'Observable<{}>' is not assignable to parameter of type '{ calculate: any; }'.
-  Property 'calculate' is missing in type 'Observable<{}>' but required in type '{ calculate: any; }'.ts(2345)
-re-tool-calculation-service.ts(22, 7): 'calculate' is declared here.
+  beforeEach(async () => {
+    mockReToolService = jasmine.createSpyObj('ReToolService', ['getGeneralPropertyWeight', 'getPropertyMaster']);
+    mockReToolTabService = jasmine.createSpyObj('ReToolTabService', ['emit', 'on', 'showErrorMessage', 'actionStateChange']);
+    mockCalculationService = jasmine.createSpyObj('ReToolCalculationService', ['setRedistributionWeights']);
+    mockCommonService = jasmine.createSpyObj('CommonService', ['getDateByTimeZone']);
+    mockDialog = jasmine.createSpyObj('MatDialog', ['open']);
 
-3.mockCalculationService.calculate.and.returnValue(of({}));
-
-error: Property 'calculate' is private and only accessible within class 'ReToolCalculationService'.ts(2341)
-(method) ReToolCalculationService.calculate(redistributionWeight: RedistributionWeight): RedistributionWeight
+    mockReToolTabService.on.and.returnValue(of({}));
+    mockReToolTabService.actionStateChange.and.callFake(() => {});
+    mockReToolService.getGeneralPropertyWeight.and.returnValue(of([]));
+    mockReToolService.getPropertyMaster.and.returnValue(of([]));
+    mockCalculationService.setRedistributionWeights.and.returnValue({ calculate: jasmine.createSpy('calculate').and.returnValue({}) });
+    mockCommonService.getDateByTimeZone.and.returnValue(of('2025-02-21'));
