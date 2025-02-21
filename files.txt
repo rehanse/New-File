@@ -1,2 +1,19 @@
-GeneralPropertyComponent > should trigger dialog open when openPopupOnCellClick is called
-Expected spy MatDialog.open to have been called.
+  it('should trigger dialog open when openPopupOnCellClick is called', fakeAsync(() => {
+    mockDialog.open.and.returnValue({ afterClosed: () => of({ action: 1 }) } as any);
+    spyOn(component, 'getGidRowRecordDetail').and.returnValue({
+      columnName: 'Test Column',
+      value: 'Test Value',
+      additionalData: 'Some Data'
+    });
+    fixture.detectChanges(); // Ensure component updates before interaction
+    
+    const event = new MouseEvent('click');
+    component.openPopupOnCellClick(event, {
+      columnName: 'Test Column',
+      value: 'Test Value',
+      additionalData: 'Some Data'
+    }, 'column');
+    
+    tick(); // Ensure async operations complete
+    expect(mockDialog.open).toHaveBeenCalled();
+  }));
