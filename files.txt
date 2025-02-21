@@ -1,6 +1,2 @@
-GeneralPropertyComponent > should subscribe to services on initialization
-Error: <toHaveBeenCalled> : Expected a spy, but got Function.
-Usage: expect(<spyObj>).toHaveBeenCalled()
-
 GeneralPropertyComponent > should trigger dialog open when openPopupOnCellClick is called
 Expected spy MatDialog.open to have been called.
