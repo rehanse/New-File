@@ -25,7 +25,9 @@ describe('GeneralPropertyComponent', () => {
     mockCommonService = jasmine.createSpyObj('CommonService', ['getDateByTimeZone']);
     mockDialog = jasmine.createSpyObj('MatDialog', ['open']);
 
-    mockReToolTabService.on.and.returnValue(of({}));
+    mockReToolTabService.on.and.callFake((event: string) => {
+      return of({}); // Always return an observable
+    });
     mockReToolService.getGeneralPropertyWeight.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
