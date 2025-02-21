@@ -1,15 +1,1 @@
-it('should trigger dialog open when openPopupOnCellClick is called', () => {
-    mockDialog.open.and.returnValue({ afterClosed: () => of({ action: 1 }) } as any);
-    spyOn(component, 'getGidRowRecordDetail').and.returnValue({ columnName: 'Test Column', value: 'Test Value' });
-    const event = new MouseEvent('click');
-    component.openPopupOnCellClick(event, { columnName: 'Test Column', value: 'Test Value' }, 'column');
-    expect(mockDialog.open).toHaveBeenCalled();
-  });
-
-error: 
-on line code-  spyOn(component, 'getGidRowRecordDetail').and.returnValue({ columnName: 'Test Column', value: 'Test Value' });
-error:-
-Argument of type '"getGidRowRecordDetail"' is not assignable to parameter of type 'never'.t
-
-Argument of type '{ columnName: string; value: string; }' is not assignable to parameter of type 'never'.ts(2345)
-(property) columnName: string
+spyOn<any>(component, 'getGidRowRecordDetail').and.returnValue({ columnName: 'Test Column', value: 'Test Value' });
