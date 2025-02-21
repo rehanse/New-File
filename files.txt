@@ -1,2 +1,2 @@
-GeneralPropertyComponent > should create
-TypeError: Cannot read properties of undefined (reading 'subscribe')
+mockReToolTabService.on.and.returnValue(of({}));
+    mockReToolService.getGeneralPropertyWeight.and.returnValue(of([]));
