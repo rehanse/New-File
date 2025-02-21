@@ -1,1 +1,6 @@
-getGeneralPropertyWeight
+ it('should call getGeneralPropertyWeight service on initialization', fakeAsync(() => {
+    spyOn<any>(component, 'getGeneralPropertyWeight').and.callThrough();
+    component.ngOnInit();
+    tick();
+    expect(mockReToolService.getGeneralPropertyWeight).toHaveBeenCalled();
+  }));
