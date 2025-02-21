@@ -2091,4 +2091,490 @@ export class CommonService {
   }
 }
 
+------------------------Unit test case -------------------
+import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { GeneralPropertyComponent } from './general-property.component';
+import { ReToolService } from '../../../service/re-tool.service';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { FormBuilder, ReactiveFormsModule, FormControl, FormArray, FormGroup } from '@angular/forms';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { of, Subscription } from 'rxjs';
+import { FormDataSource } from '../../../models/form-data-source';
+import { SubTabEncodedEnum } from '../../../models/re-tool-tabs-enum';
+import { ActionEnum } from '../../../models/action-enum';
+import { GeneralProperty } from '../../../models/general-property';
+import { MatDialog, MatDialogConfig } from '@angular/material/dialog';
+import { PopupResponse } from '../../../models/popup-response';
+import { ReToolCalculationService } from '../../../service/re-tool-calculation-service';
+import { GeneralPropertyWeightResponse } from '../../../models/general-property-weight-response';
+import { DatePipe } from '@angular/common';
+import { CommonService } from '../../../../../shared/services/common.service';
+
+fdescribe('GeneralPropertyComponent', () => {
+    let component: GeneralPropertyComponent;
+    let fixture: ComponentFixture<GeneralPropertyComponent>;
+    let reToolService: jasmine.SpyObj<ReToolService>;
+    let reToolTabService: jasmine.SpyObj<ReToolTabService>;
+    let dialogSpy: jasmine.SpyObj<MatDialog>;
+    let reToolCalculationService: jasmine.SpyObj<ReToolCalculationService>;
+    let commonService: jasmine.SpyObj<CommonService>;
+    let subscription: Subscription;
+
+    const mockGPData: GeneralProperty[] = [
+        {
+            OccupancyGroupCode: 1200,
+            OccupancyTypeCode: 0,
+            Address: '',
+            Country: '',
+            ConstructionCalculated: 0,
+            ConstructionHazards: '',
+            DetectionSecurity: '',
+            FireWaterSupply: '',
+            FireManualResponse: '',
+            SpecialHazards: '',
+            EquipmentHazards: '',
+            ExternalExposures: '',
+            ConfidenceIndex: '',
+            LossPreventionSource: '',
+            LossPreventionComments: '',
+            Action: ActionEnum.IsSaved,
+            VerCol: '',
+            City: '',
+            StateProvince: '',
+            LocationName: '',
+            BuildingValue: 0,
+            EquipmentValue: 0,
+            InventoryValue: 0,
+            OtherValue: 0,
+            BusinessInterruptionValue: 0,
+            BusinessInterruptionOtherValue: 0,
+            PayRollValue: 0,
+            NormalLossDeficiencyDriven: false,
+            IndemnityPeriod: 0,
+            ULId: ''
+        },
+        {
+            OccupancyGroupCode: 1300,
+            OccupancyTypeCode: 0,
+            Address: '',
+            Country: '',
+            ConstructionCalculated: 0,
+            ConstructionHazards: '',
+            DetectionSecurity: '',
+            FireWaterSupply: '',
+            FireManualResponse: '',
+            SpecialHazards: '',
+            EquipmentHazards: '',
+            ExternalExposures: '',
+            ConfidenceIndex: '',
+            LossPreventionSource: '',
+            LossPreventionComments: '',
+            Action: ActionEnum.IsSaved,
+            VerCol: '',
+            City: '',
+            StateProvince: '',
+            LocationName: '',
+            BuildingValue: 0,
+            EquipmentValue: 0,
+            InventoryValue: 0,
+            OtherValue: 0,
+            BusinessInterruptionValue: 0,
+            BusinessInterruptionOtherValue: 0,
+            PayRollValue: 0,
+            NormalLossDeficiencyDriven: false,
+            IndemnityPeriod: 0,
+            ULId: ''
+        },
+        {
+            OccupancyGroupCode: 1300,
+            OccupancyTypeCode: 0,
+            Address: '',
+            Country: '',
+            ConstructionCalculated: 0,
+            ConstructionHazards: '',
+            DetectionSecurity: '',
+            FireWaterSupply: '',
+            FireManualResponse: '',
+            SpecialHazards: '',
+            EquipmentHazards: '',
+            ExternalExposures: '',
+            ConfidenceIndex: '',
+            LossPreventionSource: '',
+            LossPreventionComments: '',
+            Action: ActionEnum.IsSaved,
+            VerCol: '',
+            City: '',
+            StateProvince: '',
+            LocationName: '',
+            BuildingValue: 0,
+            EquipmentValue: 0,
+            InventoryValue: 0,
+            OtherValue: 0,
+            BusinessInterruptionValue: 0,
+            BusinessInterruptionOtherValue: 0,
+            PayRollValue: 0,
+            NormalLossDeficiencyDriven: false,
+            IndemnityPeriod: 0,
+            ULId: ''
+        }
+    ];
+
+    const mockGeneralPropertyWeightResponse: GeneralPropertyWeightResponse[] = [
+        {
+            automaticSprinklers: 15,
+            construction: 5,
+            constructionHazards: 10,
+            detectionSecurity: 5,
+            equipmentHazards: 10,
+            externalExposures: 5,
+            fireManualResponse: 5,
+            fireWaterSupply: 5,
+            generalPropertyGroupCodeWeightId: 0,
+            groupCode: 0,
+            humanElement: 15,
+            occupancyGroupId: 0,
+            specialHazards: 25,
+            statusId: 1,
+            totalBusinessInterruption: 25,
+            totalPropertyDamage: 75,
+            typeCode: 1409
+        }
+    ];
+
+    let popupResponse: PopupResponse = { data: {}, action: 1, gridRecordDetail: {} } as PopupResponse;
+    popupResponse.data.humanElementRisk = {};
+    popupResponse.data.humanElementRisk.hotWorkManagement = 0;
+    popupResponse.data.humanElementRisk.otherIgnitionSourceControl = 0;
+    popupResponse.data.humanElementRisk.contractorManagement = 0;
+    popupResponse.data.humanElementRisk.maintenance = 0;
+    popupResponse.data.humanElementRisk.housekeeping = 0;
+    popupResponse.data.humanElementRisk.employeeTraining = 0;
+    popupResponse.data.humanElementRisk.managementOfchange = 0;
+    popupResponse.data.humanElementRisk.imapairmentManagement = 0;
+    popupResponse.data.humanElementRisk.preIncidentPlanEmergencyResponse = 0;
+    popupResponse.data.humanElementRisk.supervisionMaintenanceOfFireProtEquip = 0;
+    popupResponse.data.humanElementRisk.fireProtectionWaterSuppliesAndOther = 0;
+    popupResponse.data.humanElementCalculated = 3;
+    popupResponse.data.humanElementUpdated = 'NA'
+    popupResponse.data.humanElementUpdatedComment = '';
+    popupResponse.gridRecordDetail = {
+        rowIndex: 0,
+        columnIndex: null,
+        columnName: 'HumanElementDisplayValue',
+        rowPKId: 1,
+        value: 0.0,
+        popup: 'HumanElementRiskFactorCalculatorComponent'
+    };
+
+    const mockPopupColumnEvent = {
+        target: {
+            id: 'row-0_dataKey-1_HumanElementDisplayValue_HumanElementRiskFactorCalculatorComponent'
+        }
+    };
+
+    beforeEach(async () => {
+        const reToolServiceSpy = jasmine.createSpyObj('ReToolService', ['generateFormElementIdAttribute', 'getGeneralPropertyWeight', 'getPropertyMaster']);
+        const reToolTabServiceSpy = jasmine.createSpyObj('ReToolTabService', ['emit', 'on', 'showErrorMessage', 'actionStateChange']);
+        const matDialogMock = jasmine.createSpyObj('MatDialog', ['open']);
+        const reToolCalculationServiceSpy = jasmine.createSpyObj('ReToolCalculationService', ['setRedistributionWeights', 'calculate']);
+
+        reToolServiceSpy.getPropertyMaster.and.returnValue(of([
+            { text: 'no deficiencies', value: 3, category: '', defaultValue: '', dependentValue: '', disabled: false },
+            { text: 'minor deficiencies', value: 2, category: '', defaultValue: '', dependentValue: '', disabled: false },
+            { text: 'significant deficiencies', value: 1, category: '', defaultValue: '', dependentValue: '', disabled: false },
+            { text: 'no program or severe deficiencies', value: 0, category: '', defaultValue: '', dependentValue: '', disabled: false },
+        ]));
+
+        const formDataSource: FormDataSource = {
+            data: [{}, {}, {}] as GeneralProperty[],
+            columns: ['col1', 'col2']
+        };
+
+        await TestBed.configureTestingModule({
+            declarations: [GeneralPropertyComponent],
+            providers: [
+                { provide: ReToolService, useValue: reToolServiceSpy },
+                { provide: ReToolTabService, useValue: reToolTabServiceSpy },
+                { provide: MatDialog, useValue: matDialogMock },
+                { provide: ReToolCalculationService, useValue: reToolCalculationServiceSpy },
+                FormBuilder,
+                DatePipe
+            ],
+            imports: [ReactiveFormsModule],
+            schemas: [NO_ERRORS_SCHEMA]
+        }).compileComponents();
+
+        reToolService = TestBed.inject(ReToolService) as jasmine.SpyObj<ReToolService>;
+        reToolTabService = TestBed.inject(ReToolTabService) as jasmine.SpyObj<ReToolTabService>;
+        reToolTabService.on.and.callFake((eventName: string) => { return of({}); });
+        dialogSpy = TestBed.inject(MatDialog) as jasmine.SpyObj<MatDialog>;
+        reToolCalculationService = TestBed.inject(ReToolCalculationService) as jasmine.SpyObj<ReToolCalculationService>;
+        fixture = TestBed.createComponent(GeneralPropertyComponent);
+        component = fixture.componentInstance;
+        component.generalPropertyForm = new FormGroup({
+            rows: new FormArray([
+                new FormGroup({
+                    // Add necessary form controls here
+                    someControl: new FormControl('')
+                })
+            ])
+        });
+
+        reToolTabService.on.and.returnValue(of(formDataSource));
+
+        component.weights = null;
+        (component as any).redistributionWeights = [];
+        fixture.detectChanges();
+    });
+
+    it('should create', () => {
+        expect(component).toBeTruthy();
+    });
+
+    it('ngOnInit should initialize form and emit event', () => {
+        spyOn(component, 'initializeForm');
+        component.ngOnInit();
+        expect(component.initializeForm).toHaveBeenCalled();
+        expect(component['reToolTabService'].emit).toHaveBeenCalledWith('onFormComponentInit', { encodedTabIndex: SubTabEncodedEnum.GeneralProperty });
+    });
+
+    it('should initialize form with data', () => {
+        component.initializeForm();
+        expect(component.generalPropertyDisplayedColumns).toEqual(['col1', 'col2']);
+        expect(component.generalPropertyData.length).toBe(3);
+        expect(component.generalPropertyForm).toBeTruthy();
+    });
+
+    // it('should handle form status changes', () => {
+    //   const statusChangeSpy = spyOn(component.generalPropertyForm.statusChanges, 'subscribe');
+    //   component.initializeForm();
+    //   expect(statusChangeSpy).toHaveBeenCalled();
+    // });
+
+    it('should initialize data source with rows', () => {
+        component.generalPropertyData = [{}] as GeneralProperty[];
+        component.generalPropertyForm = component['fb'].group({
+            rows: component['fb'].array([])
+        });
+        component.initializeDataSource();
+
+        expect(component.tableRowsControls.length).toBe(1);
+        expect(component['reToolTabService'].actionStateChange).toHaveBeenCalled();
+    });
+
+    it('createRow should create a row form group', () => {
+        const data: GeneralProperty = {
+            PropertyLocationId: 1,
+            Address: '',
+            Country: '',
+            NormalLossExpectancy: 100,
+            ProbableMaximumLoss: 200,
+            MaximumForeseeableLoss: 300,
+            HumanElementCalculated: 10,
+            ConstructionCalculated: 20,
+            ConstructionHazards: '0',
+            DetectionSecurity: '9',
+            AutomaticSprinklers: 5,
+            FireWaterSupply: '7',
+            FireManualResponse: '4',
+            SpecialHazards: '8',
+            EquipmentHazards: '9',
+            ExternalExposures: '10',
+            BusinessInterruptionCalculated: 99,
+            PropertyDamageIndexCalculated: 77,
+            PropertyDamageIndexAdjusted: 99,
+            BusinessInterruptionIndexCalculated: 55,
+            LocationQualityIndexCalculated: 66,
+            ConfidenceIndex: '2',
+            LossPreventionSource: 'Source',
+            LossPreventionDate: new Date(),
+            LossPreventionComments: 'Comments',
+            Action: ActionEnum.IsSaved,
+            VerCol: 'ggggg',
+            OccupancyGroupCode: 0,
+            OccupancyTypeCode: 0,
+            City: '',
+            StateProvince: '',
+            LocationName: '',
+            BuildingValue: 0,
+            EquipmentValue: 0,
+            InventoryValue: 0,
+            OtherValue: 0,
+            BusinessInterruptionValue: 0,
+            BusinessInterruptionOtherValue: 0,
+            PayRollValue: 0,
+            NormalLossDeficiencyDriven: false,
+            IndemnityPeriod: 0,
+            ULId: ''
+        };
+
+        const row = component.createRow(data);
+        expect(row).toBeTruthy();
+        expect(row.get('PropertyLocationId').value).toBe(1);
+        expect(row.get('FullAddress').value).toBe('Address 1');
+        expect(row.get('CountryName').value).toBe('Country 1');
+        expect(row.get('NormalLossExpectancy').value).toBe("100.0");
+    });
+
+    it('generateFormElementIdAttribute should generate form element ID attribute', () => {
+        component.generateFormElementIdAttribute(1, 1, 'column');
+        expect(reToolService.generateFormElementIdAttribute).toHaveBeenCalledWith(1, 1, 'column');
+    });
+
+    it('should handle cell value change', () => {
+        const event = { target: { id: 'row-0_id-1_column' } } as any;
+        const column = new FormControl('new value');
+        component.generalPropertyForm = component['fb'].group({
+            rows: component['fb'].array([component.createRow({} as GeneralProperty)])
+        });
+
+        const row = component['getFormArray']().at(0) as FormGroup;
+        row.addControl('column', new FormControl('old value'));
+
+        component.onCellValueChange(event, column);
+        expect(row.get('column').value).toBe('new value');
+        expect(row.get('Action').value).toBe(ActionEnum.IsModified);
+    });
+
+    it('should update confidence index selection and set flag', () => {
+        component.generalPropertyForm = component['fb'].group({
+            rows: component['fb'].array([component.createRow({} as GeneralProperty)])
+        });
+
+        component.updateConfidenceIndexSelection(0, 'ConfidenceIndex', 5);
+        const row = component['getFormArray']().at(0) as FormGroup;
+        expect(row.get('ConfidenceIndex').value).toBe('0');
+        expect(row.get('Action').value).toBe(ActionEnum.IsModified);
+        expect(component.isConfidenceIndexSelect).toBe(false);
+
+        component.updateConfidenceIndexSelection(0, 'ConfidenceIndex', 0);
+        expect(row.get('ConfidenceIndex').value).toBe('0');
+        expect(component.isConfidenceIndexSelect).toBe(false);
+    });
+
+    it('handleBlur should clear "-" value on blur', () => {
+        const event = { target: { value: '-' } } as any;
+        component.handleBlur(event, 1);
+        expect(event.target.value).toBe('');
+    });
+
+    it('should not change value if not "-"', () => {
+        const event = { target: { value: 'Some Value' } } as any;
+        component.handleBlur(event, 1);
+        expect(event.target.value).toBe('');
+    });
+
+    it('should call getGeneralPropertyWeight and update the weights', () => {
+        reToolService.getGeneralPropertyWeight.and.returnValue(of(mockGeneralPropertyWeightResponse));
+        spyOn(component as any, 'buildRedistributedWeightData').and.callThrough();
+        (component as any).getGeneralPropertyWeight(mockGPData);
+        expect(reToolService.getGeneralPropertyWeight).toHaveBeenCalledWith([1, 2]);
+        expect(component.weights).toEqual(mockGeneralPropertyWeightResponse);
+        expect(component['buildRedistributedWeightData']).toHaveBeenCalledWith(mockGPData);
+        expect(reToolCalculationService.setRedistributionWeights).toHaveBeenCalled();
+    });
+
+    it('should handle null response', () => {
+        reToolService.getGeneralPropertyWeight.and.returnValue(of(null));
+        (component as any).getGeneralPropertyWeight(mockGPData);
+        expect(component.weights).toBeNull();
+        let redistributedWeights = (component as any).redistributionWeights;
+        expect(redistributedWeights.length).toBe(0);
+        expect(component['buildRedistributedWeightData']).not.toHaveBeenCalled();
+    });
+
+    it('should unsubscribe from subscriptions', () => {
+        component.subscription = new Subscription();
+        spyOn(component.subscription, 'unsubscribe');
+        component.ngOnDestroy();
+        expect(component.subscription.unsubscribe).toHaveBeenCalled();
+    });
+
+    it('should open human element popup on human element cell click and update human element calculated value in human element column ', () => {
+        popupResponse.data.humanElementCalculated = 3;
+        popupResponse.data.humanElementUpdated = 0.0
+
+        dialogSpy.open.and.returnValue({
+            afterClosed: () => of(popupResponse)
+        } as any
+        );
+
+        component.openPopupOnCellClick(mockPopupColumnEvent as any, {
+            value:
+            {
+                HumanElementCalculated: 0.0,
+                HumanElementUpdated: 0.0,
+                HumanElementUpdatedComment: ''
+            }
+        }, '');
+
+        expect(dialogSpy.open).toHaveBeenCalled();
+
+        const dialogConfig: MatDialogConfig<any> = dialogSpy.open.calls.mostRecent().args[1];
+        expect(dialogConfig.data.title).toBe('Property/Human Element Risk Factor Calculator');
+        expect(dialogConfig.data.data.humanElementCalculated).toBe(0);
+
+        const row = component['getFormArray']().at(0) as FormGroup;
+        expect(row.get('HumanElementDisplayValue').value).toBe('3.0');
+    });
+
+    it('should open human element popup on human element cell click and update human element updated (NA) value in human element column ', () => {
+        popupResponse.data.humanElementCalculated = 3;
+        popupResponse.data.humanElementUpdated = 'NA'
+
+        dialogSpy.open.and.returnValue({
+            afterClosed: () => of(popupResponse)
+        } as any
+        );
+
+        component.openPopupOnCellClick(mockPopupColumnEvent as any, {
+            value:
+            {
+                HumanElementCalculated: 0.0,
+                HumanElementUpdated: 0.0,
+                HumanElementUpdatedComment: ''
+            }
+        }, '');
+
+        expect(dialogSpy.open).toHaveBeenCalled();
+
+        const dialogConfig: MatDialogConfig<any> = dialogSpy.open.calls.mostRecent().args[1];
+        expect(dialogConfig.data.title).toBe('Property/Human Element Risk Factor Calculator');
+        expect(dialogConfig.data.data.humanElementCalculated).toBe(0);
+
+        const row = component['getFormArray']().at(0) as FormGroup;
+        expect(row.get('HumanElementDisplayValue').value).toBe('NA');
+    });
+
+    it('should open human element popup on human element cell click and display human element override value in human element column when both humanElementCalculated and humanElementUpdated values provided', () => {
+        popupResponse.data.humanElementCalculated = 3;
+        popupResponse.data.humanElementUpdated = 4.5
+
+        dialogSpy.open.and.returnValue({
+            afterClosed: () => of(popupResponse)
+        } as any
+        );
+
+        component.openPopupOnCellClick(mockPopupColumnEvent as any, {
+            value:
+            {
+                HumanElementCalculated: 0.0,
+                HumanElementUpdated: 0.0,
+                HumanElementUpdatedComment: ''
+            }
+        }, '');
+
+        expect(dialogSpy.open).toHaveBeenCalled();
+
+        const dialogConfig: MatDialogConfig<any> = dialogSpy.open.calls.mostRecent().args[1];
+        expect(dialogConfig.data.title).toBe('Property/Human Element Risk Factor Calculator');
+        expect(dialogConfig.data.data.humanElementCalculated).toBe(0);
+
+        const row = component['getFormArray']().at(0) as FormGroup;
+        expect(row.get('HumanElementDisplayValue').value).toBe('4.5');
+    });
+
+});
+
+
 
