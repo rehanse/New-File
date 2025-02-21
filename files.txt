@@ -1,14 +1,6 @@
-it('should subscribe to services on initialization', () => {
-    fixture.detectChanges();
-    expect(mockReToolService.getGeneralPropertyWeight).toHaveBeenCalled();
-    expect(mockReToolService.getPropertyMaster).toHaveBeenCalled();
-    expect(mockReToolTabService.on).toHaveBeenCalled();
-  });
+GeneralPropertyComponent > should subscribe to services on initialization
+Error: <toHaveBeenCalled> : Expected a spy, but got Function.
+Usage: expect(<spyObj>).toHaveBeenCalled()
 
-  it('should trigger dialog open when openPopupOnCellClick is called', () => {
-    mockDialog.open.and.returnValue({ afterClosed: () => of({ action: 1 }) } as any);
-    spyOn(component, 'getGidRowRecordDetail').and.returnValue({ columnName: 'Test Column', value: 'Test Value' });
-    const event = new MouseEvent('click');
-    component.openPopupOnCellClick(event, { columnName: 'Test Column', value: 'Test Value' }, 'column');
-    expect(mockDialog.open).toHaveBeenCalled();
-  });
+GeneralPropertyComponent > should trigger dialog open when openPopupOnCellClick is called
+Expected spy MatDialog.open to have been called.
