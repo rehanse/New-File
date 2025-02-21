@@ -1,6 +1,90 @@
-mockReToolService.getGeneralPropertyWeight.and.returnValue(of([{ weight: 10 }]));
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { GeneralPropertyComponent } from './general-property.component';
+import { FormBuilder, ReactiveFormsModule, FormGroup, FormControl, FormArray, Validators } from '@angular/forms';
+import { MatDialog } from '@angular/material/dialog';
+import { MatTableDataSource } from '@angular/material/table';
+import { of } from 'rxjs';
+import { ReToolService } from '../../../service/re-tool.service';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { ReToolCalculationService } from '../../../service/re-tool-calculation-service';
+import { CommonService } from '../../../../../shared/services/common.service';
 
-error: Argument of type 'Observable<{ weight: number; }[]>' is not assignable to parameter of type 'Observable<GeneralPropertyWeightResponse[]>'.
-  Type '{ weight: number; }[]' is not assignable to type 'GeneralPropertyWeightResponse[]'.
-    Type '{ weight: number; }' is missing the following properties from type 'GeneralPropertyWeightResponse': generalPropertyGroupCodeWeightId, occupancyGroupId, groupCode, typeCode, and 13 more.ts(2345)
-(property) weight: number
+describe('GeneralPropertyComponent', () => {
+  let component: GeneralPropertyComponent;
+  let fixture: ComponentFixture<GeneralPropertyComponent>;
+  let mockReToolService: jasmine.SpyObj<ReToolService>;
+  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+  let mockCalculationService: jasmine.SpyObj<ReToolCalculationService>;
+  let mockCommonService: jasmine.SpyObj<CommonService>;
+  let mockDialog: jasmine.SpyObj<MatDialog>;
+
+  beforeEach(async () => {
+    mockReToolService = jasmine.createSpyObj('ReToolService', ['getGeneralPropertyWeight', 'getPropertyMaster']);
+    mockReToolTabService = jasmine.createSpyObj('ReToolTabService', ['emit', 'on', 'showErrorMessage', 'actionStateChange']);
+    mockCalculationService = jasmine.createSpyObj('ReToolCalculationService', ['setRedistributionWeights']);
+    mockCommonService = jasmine.createSpyObj('CommonService', ['getDateByTimeZone']);
+    mockDialog = jasmine.createSpyObj('MatDialog', ['open']);
+
+    mockReToolTabService.on.and.returnValue(of({}));
+    mockReToolTabService.actionStateChange.and.callFake(() => {});
+    mockReToolService.getGeneralPropertyWeight.and.returnValue(of([
+      {
+        generalPropertyGroupCodeWeightId: 1,
+        occupancyGroupId: 2,
+        groupCode: 'G1',
+        typeCode: 'T1',
+        riskCategoryId: 3,
+        riskCategoryName: 'Low',
+        weight: 10,
+        status: 'Active',
+        createdBy: 'TestUser',
+        createdDate: '2024-02-20',
+        updatedBy: 'TestUser2',
+        updatedDate: '2024-02-21'
+      }
+    ])); // Ensure valid mock return
+    mockReToolService.getPropertyMaster.and.returnValue(of([]));
+    mockCalculationService.setRedistributionWeights.and.returnValue({ calculate: jasmine.createSpy('calculate').and.returnValue({}) });
+    mockCommonService.getDateByTimeZone.and.returnValue(of('2025-02-21'));
+
+    await TestBed.configureTestingModule({
+      declarations: [GeneralPropertyComponent],
+      imports: [ReactiveFormsModule],
+      providers: [
+        FormBuilder,
+        { provide: ReToolService, useValue: mockReToolService },
+        { provide: ReToolTabService, useValue: mockReToolTabService },
+        { provide: ReToolCalculationService, useValue: mockCalculationService },
+        { provide: CommonService, useValue: mockCommonService },
+        { provide: MatDialog, useValue: mockDialog }
+      ]
+    }).compileComponents();
+  });
+
+  beforeEach(() => {
+    fixture = TestBed.createComponent(GeneralPropertyComponent);
+    component = fixture.componentInstance;
+    component.generalPropertyForm = new FormGroup({ rows: new FormArray([]) }); // Ensure form is initialized
+    fixture.detectChanges();
+    component.ngOnInit(); // Ensure ngOnInit() is executed
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should subscribe to services on initialization', () => {
+    component.ngOnInit(); // Ensure ngOnInit is executed
+    expect(mockReToolService.getGeneralPropertyWeight).toHaveBeenCalled();
+    expect(mockReToolService.getPropertyMaster).toHaveBeenCalled();
+    expect(mockReToolTabService.on).toHaveBeenCalled();
+  });
+
+  it('should trigger dialog open when openPopupOnCellClick is called', () => {
+    mockDialog.open.and.returnValue({ afterClosed: () => of({ action: 1 }) } as any);
+    spyOn(component, 'getGidRowRecordDetail').and.returnValue({ columnName: 'Test Column', value: 'Test Value' });
+    const event = new MouseEvent('click');
+    component.openPopupOnCellClick(event, { columnName: 'Test Column', value: 'Test Value' }, 'column');
+    expect(mockDialog.open).toHaveBeenCalled();
+  });
+});
