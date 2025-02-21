@@ -1,15 +1,117 @@
-GeneralPropertyComponent > should create
-Error: NG01052: formGroup expects a FormGroup instance. Please pass one in.
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { GeneralPropertyComponent } from './general-property.component';
+import { FormBuilder, ReactiveFormsModule, FormGroup, FormControl, FormArray, Validators } from '@angular/forms';
+import { MatDialog } from '@angular/material/dialog';
+import { MatTableDataSource } from '@angular/material/table';
+import { of } from 'rxjs';
+import { ReToolService } from '../../../service/re-tool.service';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { ReToolCalculationService } from '../../../service/re-tool-calculation-service';
+import { CommonService } from '../../../../../shared/services/common.service';
 
-      Example:
+describe('GeneralPropertyComponent', () => {
+  let component: GeneralPropertyComponent;
+  let fixture: ComponentFixture<GeneralPropertyComponent>;
+  let mockReToolService: jasmine.SpyObj<ReToolService>;
+  let mockReToolTabService: jasmine.SpyObj<ReToolTabService>;
+  let mockCalculationService: jasmine.SpyObj<ReToolCalculationService>;
+  let mockCommonService: jasmine.SpyObj<CommonService>;
+  let mockDialog: jasmine.SpyObj<MatDialog>;
 
-      
-  <div [formGroup]="myGroup">
-    <input formControlName="firstName">
-  </div>
+  beforeEach(async () => {
+    mockReToolService = jasmine.createSpyObj('ReToolService', ['getGeneralPropertyWeight', 'getPropertyMaster']);
+    mockReToolTabService = jasmine.createSpyObj('ReToolTabService', ['emit', 'on', 'showErrorMessage', 'actionStateChange']);
+    mockCalculationService = jasmine.createSpyObj('ReToolCalculationService', ['setRedistributionWeights']);
+    mockCommonService = jasmine.createSpyObj('CommonService', ['getDateByTimeZone']);
+    mockDialog = jasmine.createSpyObj('MatDialog', ['open']);
 
-  In your class:
+    mockReToolTabService.on.and.returnValue(of({}));
+    mockReToolTabService.actionStateChange.and.callFake(() => {});
+    mockReToolService.getGeneralPropertyWeight.and.returnValue(of([]));
+    mockReToolService.getPropertyMaster.and.returnValue(of([]));
+    mockCalculationService.setRedistributionWeights.and.returnValue({ calculate: jasmine.createSpy('calculate').and.returnValue({}) });
+    mockCommonService.getDateByTimeZone.and.returnValue(of('2025-02-21'));
 
-  this.myGroup = new FormGroup({
-      firstName: new FormControl()
+    await TestBed.configureTestingModule({
+      declarations: [GeneralPropertyComponent],
+      imports: [ReactiveFormsModule],
+      providers: [
+        FormBuilder,
+        { provide: ReToolService, useValue: mockReToolService },
+        { provide: ReToolTabService, useValue: mockReToolTabService },
+        { provide: ReToolCalculationService, useValue: mockCalculationService },
+        { provide: CommonService, useValue: mockCommonService },
+        { provide: MatDialog, useValue: mockDialog }
+      ]
+    }).compileComponents();
   });
+
+  beforeEach(() => {
+    fixture = TestBed.createComponent(GeneralPropertyComponent);
+    component = fixture.componentInstance;
+    component.generalPropertyForm = new FormGroup({ rows: new FormArray([]) }); // Ensure form is initialized
+    fixture.detectChanges();
+    component.ngOnInit(); // Ensure ngOnInit() is executed
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should initialize form on ngOnInit', () => {
+    spyOn(component, 'initializeForm');
+    component.ngOnInit();
+    expect(component.initializeForm).toHaveBeenCalled();
+  });
+
+  it('should create form group in initializeForm', () => {
+    component.initializeForm();
+    expect(component.generalPropertyForm).toBeDefined();
+  });
+
+  it('should subscribe to services on initialization', () => {
+    expect(mockReToolService.getGeneralPropertyWeight).toHaveBeenCalled();
+    expect(mockReToolService.getPropertyMaster).toHaveBeenCalled();
+    expect(mockReToolTabService.on).toHaveBeenCalled();
+  });
+
+  it('should mark form as touched and emit on valid onSubmit', () => {
+    component.generalPropertyForm = new FormGroup({ rows: new FormArray([new FormGroup({ testField: new FormControl('validValue', Validators.required) })]) });
+    mockReToolTabService.emit.and.stub();
+    component.onSubmit();
+    expect(component.generalPropertyForm.touched).toBeTrue();
+    expect(mockReToolTabService.emit).toHaveBeenCalledWith('onSaveFormData', jasmine.any(Object));
+  });
+
+  it('should show error message on invalid onSubmit', () => {
+    component.generalPropertyForm = new FormGroup({ rows: new FormArray([new FormGroup({ testField: new FormControl('', Validators.required) })]) });
+    mockReToolTabService.showErrorMessage.and.stub();
+    component.onSubmit();
+    expect(mockReToolTabService.showErrorMessage).toHaveBeenCalled();
+  });
+
+  it('should trigger dialog open when openPopupOnCellClick is called', () => {
+    mockDialog.open.and.returnValue({ afterClosed: () => of({ action: 1 }) } as any);
+    const event = new MouseEvent('click');
+    component.openPopupOnCellClick(event, {}, 'column');
+    expect(mockDialog.open).toHaveBeenCalled();
+  });
+
+  it('should correctly calculate and update PropertyDamageIndexUpdated', () => {
+    let row = new FormGroup({
+      PropertyDamageIndexCalculated: new FormControl(5),
+      PropertyDamageIndexAdjusted: new FormControl(2),
+      PropertyDamageIndexUpdated: new FormControl('')
+    });
+    component.setPropertyDamageIndexDisplayValue(row);
+    expect(row.get('PropertyDamageIndexUpdated')?.value).toBe('7.0');
+  });
+
+  it('should trigger validation when setValidatorForPdIndexValue is called', () => {
+    let row = new FormGroup({
+      PDIndexIndexUpdatedValidationControl: new FormControl(0)
+    });
+    component.setValidatorForPdIndexValue(row, 11);
+    expect(row.get('PDIndexIndexUpdatedValidationControl')?.errors).toEqual({ max: true });
+  });
+});
