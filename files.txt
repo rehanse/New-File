@@ -1,19 +1,15 @@
- it('should handle blur event correctly', () => {
-        const event = { target: { value: '2.5' } } as any;
-      
-        // Mock the form group and ensure it has the necessary control
-        const rowIndex = 0;
-        const mockFormGroup = new FormGroup({
-          SomeField: new FormControl('') // Replace 'SomeField' with the actual field name from handleBlur
-        });
-      
-        spyOn(component, 'getFormGroup').and.returnValue(mockFormGroup); // Ensure the correct form group is returned
-      
-        expect(() => {
-          component.handleBlur(event, rowIndex);
-        }).not.toThrow(); // Ensure it does not throw an error
-      
-        expect(event.target.value).toBe('2.5');
-      });
+it('should handle blur event correctly', () => {
+    const event = { target: { value: '2.5' } } as any;
+    const rowIndex = 0;
+    const mockFormGroup = new FormGroup({
+      SomeField: new FormControl('') // Replace 'SomeField' with the actual field name from handleBlur
+    });
 
-error: Argument of type '"getFormGroup"' is not assignable to parameter of type 'keyof GeneralPropertyComponent'
+    spyOn<any>(component, 'getFormGroup').and.returnValue(mockFormGroup);
+
+    expect(() => {
+      component.handleBlur(event, rowIndex);
+    }).not.toThrow();
+    
+    expect(event.target.value).toBe('2.5');
+  });
