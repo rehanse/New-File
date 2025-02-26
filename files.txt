@@ -1,61 +1,56 @@
- it('should open popup on cell click', () => {
-        spyOn<any>(component, 'openDialog'); // Ensure correct method reference
-        const event = new MouseEvent('click');
-        const element = { value: 'TestValue' };
-        
-        component.openPopupOnCellClick(event, element, 'TestColumn');
-        
-        expect(component['openDialog']).toHaveBeenCalled();
-      });
-	  
-	  GeneralPropertyComponent > should open popup on cell click
-TypeError: Cannot read properties of undefined (reading 'split')
+it('should open popup on cell click', () => {
+  spyOn<any>(component, 'openDialog'); // Ensure correct method reference
+  const event = new MouseEvent('click');
+  const element = { value: 'TestValue', columnName: 'TestColumn' }; // Ensure required properties exist
 
+  expect(() => {
+    component.openPopupOnCellClick(event, element, 'TestColumn');
+  }).not.toThrow(); // Ensure it does not throw an error
 
+  expect(component['openDialog']).toHaveBeenCalled();
+});
 
- it('should handle blur event correctly', () => {
-        const event = { target: { value: '2.5' } } as any;
-        component.handleBlur(event, 0);
-        expect(event.target.value).toBe('2.5');
-      });
+it('should handle blur event correctly', () => {
+  const event = { target: { value: '2.5' } } as any;
+
+  // Mock the form group and ensure it has the necessary control
+  const rowIndex = 0;
+  const mockFormGroup = new FormGroup({
+    SomeField: new FormControl('') // Replace 'SomeField' with the actual field name from handleBlur
+  });
+
+  spyOn(component, 'getFormGroup').and.returnValue(mockFormGroup); // Ensure the correct form group is returned
+
+  expect(() => {
+    component.handleBlur(event, rowIndex);
+  }).not.toThrow(); // Ensure it does not throw an error
+
+  expect(event.target.value).toBe('2.5');
+});
+
+it('should open popup on cell click', () => {
+    spyOn<any>(component, 'openDialog'); // Ensure correct method reference
+    const event = new MouseEvent('click');
+    const element = { value: 'TestValue' };
     
+    component.openPopupOnCellClick(event, element, 'TestColumn');
+    
+    expect(component['openDialog']).toHaveBeenCalled();
+  });
 
-GeneralPropertyComponent > should handle blur event correctly
-TypeError: Cannot read properties of null (reading 'setValue')
-
-
-it('should open dialog', () => {
-        spyOn(matDialogMock, 'open');
-      
-        const mockGridRowRecord = {
-          rowIndex: 1,
-          columnName: 'TestColumn',
-          value: 'TestValue'
-        }; // Ensure all required properties are included
-      
-        component['openDialog'](mockGridRowRecord); // Call the private method safely
-      
-        expect(matDialogMock.open).toHaveBeenCalled();
-      });
-	  
-	  
-	   it('should open dialog', () => {
-        spyOn(matDialogMock, 'open');
-      
-        const mockGridRowRecord = {
-          rowIndex: 1,
-          columnName: 'TestColumn',
-          value: 'TestValue',
-          rowPKId:2
-        }; // Ensure all required properties are included
-      
-        component['openDialog'](mockGridRowRecord); // Call the private method safely
-      
-        expect(matDialogMock.open).toHaveBeenCalled();
-      });
-	  
-	  error :GeneralPropertyComponent > should open dialog
-Error: <spyOn> : open has already been spied upon
-Usage: spyOn(<object>, <methodName>)
-
-
+  it('should open dialog', () => {
+    if (!dialogSpy.open.calls) {
+      spyOn(dialogSpy, 'open');
+    }
+    
+    const mockGridRowRecord = {
+      rowIndex: 1,
+      columnName: 'TestColumn',
+      value: 'TestValue',
+      rowPKId: 2
+    };
+    
+    component['openDialog'](mockGridRowRecord);
+    
+    expect(dialogSpy.open).toHaveBeenCalled();
+  });
