@@ -1,6 +1,3796 @@
- it('should call getGeneralPropertyWeight service on initialization', fakeAsync(() => {
-    spyOn<any>(component, 'getGeneralPropertyWeight').and.callThrough();
-    component.ngOnInit();
-    tick();
-    expect(mockReToolService.getGeneralPropertyWeight).toHaveBeenCalled();
-  }));
+import { Component } from '@angular/core';
+import { AbstractControl, FormArray, FormBuilder, FormControl, FormControlStatus, FormGroup, Validators } from '@angular/forms';
+import { provideMomentDateAdapter } from '@angular/material-moment-adapter';
+import { MatDatepickerInputEvent } from '@angular/material/datepicker';
+import { MatDialog, MatDialogConfig } from '@angular/material/dialog';
+import { MatTableDataSource } from '@angular/material/table';
+import { pairwise, startWith, Subscription } from 'rxjs';
+import { CommonService } from '../../../../../shared/services/common.service';
+import { MasterDataModel } from '../../../../dashboard/models/master-data';
+import { ReToolConstants } from '../../../constants/re-tool.constants';
+import { ActionEnum } from '../../../models/action-enum';
+import { BusinessInterruptionRiskFactor } from '../../../models/business-interruption-risk-factor';
+import { ConstructionRiskFactor } from '../../../models/construction-risk-factor';
+import { FormDataSource } from '../../../models/form-data-source';
+import { GeneralProperty } from '../../../models/general-property';
+import { GeneralPropertyWeightResponse } from '../../../models/general-property-weight-response';
+import { GridRowRecord } from '../../../models/grid-row-record';
+import { HumanElementRiskFactor } from '../../../models/human-element-risk-factor';
+import { PopupRequest } from '../../../models/popup-request';
+import { PopupResponse } from '../../../models/popup-response';
+import { PropertyMasterDataTypeEnum } from '../../../models/property-master-data-type-enum';
+import { SubTabEncodedEnum } from '../../../models/re-tool-tabs-enum';
+import { RedistributionWeight } from '../../../models/redistribution-weights';
+import { RiskFactor } from '../../../models/risk-factor';
+import { RiskFactorElementEnum } from '../../../models/risk-factor-element-enum';
+import { BusinessInterruptionRiskCalculatorComponent } from '../../../popup/business-interruption-risk-calculator/business-interruption-risk-calculator.component';
+import { CommentComponent } from '../../../popup/comment/comment.component';
+import { ConstructionRiskFactorCalculatorPopupComponent } from '../../../popup/construction-risk-factor-calculator-popup/construction-risk-factor-calculator-popup.component';
+import { HumanElementRiskFactorCalculatorComponent } from '../../../popup/human-element-risk-factor-calculator/human-element-risk-factor-calculator.component';
+import { ReToolCalculationService } from '../../../service/re-tool-calculation-service';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { ReToolService } from '../../../service/re-tool.service';
+import { Utility } from '../../../utility/mapper-util';
+
+export const MY_FORMATS = {
+  parse: {
+    dateInput: 'DD-MMM-yyyy',
+  },
+  display: {
+    dateInput: 'DD-MMM-yyyy',
+    monthYearLabel: 'MMM YYYY',
+    dateA11yLabel: 'LL',
+    monthYearA11yLabel: 'MMMM YYYY',
+  },
+};
+
+@Component({
+  selector: 're-tool-general-property',
+  templateUrl: './general-property.component.html',
+  styleUrl: './general-property.component.css',
+  providers: [
+    provideMomentDateAdapter(MY_FORMATS)
+  ],
+})
+export class GeneralPropertyComponent {
+  generalPropertyForm: FormGroup;
+  generalPropertyDataSource: MatTableDataSource<AbstractControl>;
+  generalPropertyDisplayedColumns: string[] = [];
+  generalPropertyData: GeneralProperty[] = [];
+  subscription: Subscription | undefined = new Subscription();
+  rowValuesMap: Map<number, any> = new Map();
+  registeredAllSubscriptions: boolean = false;
+  generalPropertyDropdownList: string[] = ReToolConstants.generalPropertyDropdownList;
+  confidenceIndexList: string[] = ReToolConstants.confidenceIndexList;
+  isConfidenceIndexSelect: boolean = false;
+  inputValue: string = '';
+  today = new Date();
+  private previousFormStatus: FormControlStatus = ReToolConstants.valid;
+  private humanElementRiskFactors: MasterDataModel[] = [];
+  weights: GeneralPropertyWeightResponse[] | null = null;
+  private businessInterruptionRiskFactors: MasterDataModel[] = [];
+  private businessInterruptionMakeups: MasterDataModel[] = [];
+  private businessInterruptionRiskDisasters: MasterDataModel[] = [];
+  private redistributionWeights: RedistributionWeight[] = [];
+  data: PopupRequest;
+  isVisibleRiskFactorPopups: boolean = false;
+  PropertyLocationId: number;
+  notApplicable: string = ReToolConstants.NA;
+  invalidMessageForPDIndexUpdate?: any = null;
+
+  constructor(private reToolService: ReToolService, private fb: FormBuilder, private reToolTabService: ReToolTabService,
+    private dialog: MatDialog, private calculationService: ReToolCalculationService, private commonService: CommonService) { }
+
+  ngOnInit(): void {
+    this.getHumanElementRisks();
+    this.getBusinessInterruptionRisks();
+    this.initializeForm();
+    this.reToolTabService.emit('onFormComponentInit', { encodedTabIndex: SubTabEncodedEnum.GeneralProperty });
+  }
+
+  initializeForm() {
+    const onInitializeGeneralPropertyData = this.reToolTabService.on('onInitializeGeneralPropertyData').subscribe({
+      next: (event: FormDataSource) => {
+        if (event.data) {
+          this.getGeneralPropertyWeight(event?.data);
+          this.generalPropertyDisplayedColumns = event?.columns;
+          this.generalPropertyData = event?.data;
+          this.generalPropertyData = this.reToolTabService
+            .mergePropertyValueData<GeneralProperty>(event?.data);
+          this.generalPropertyForm = this.fb.group({
+            rows: this.fb.array([])
+          });
+          this.initializeDataSource();
+          this.generalPropertyDataSource = new MatTableDataSource(this.tableRowsControls);
+        }
+      },
+      error: (error) => {
+        throw new error
+      }
+    });
+    this.subscription?.add(onInitializeGeneralPropertyData);
+
+    this.subscription?.add(
+      this.reToolTabService.on('onProcessingSave').subscribe((event) => {
+        this.generalPropertyForm.markAllAsTouched();
+        this.generalPropertyForm.markAsPristine();
+        this.generalPropertyForm.updateValueAndValidity();
+        this.setValidatorBasedOnConfidenceIndexSelected();
+        this.reToolTabService.formStatus = this.generalPropertyForm.status;
+
+        const hasFormError = this.generalPropertyForm.status === ReToolConstants.invalid;
+
+        if (this.isValidPDIndexProperties(this.getGeneralPropertyFormData)) {
+          this.reToolTabService.showErrorMessage(ReToolConstants.requiredPDIndexAdjustmentComment, '');
+        }
+        else if (this.invalidMessageForPDIndexUpdate !== null) {
+          this.reToolTabService.showErrorMessage(this.invalidMessageForPDIndexUpdate, '');
+        }
+        else if (hasFormError) {
+          this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+        }
+        else {
+          this.invalidMessageForPDIndexUpdate = null;
+          this.reToolTabService.emit('onSaveFormData', { formData: this.getGeneralPropertyFormData, subTabIndex: 2, tabInfo: event?.tabInfo, isTabChange: event?.isTabChange });
+        }
+      }));
+
+    this.subscription?.add(
+      this.generalPropertyForm?.statusChanges.subscribe((status) => {
+        if (status !== this.previousFormStatus) {
+          this.previousFormStatus = this.generalPropertyForm.status;
+          this.reToolTabService.formStatus = this.generalPropertyForm.status;
+        }
+      })
+    );
+  }
+
+  initializeDataSource() {
+    const rows = this.getFormArray();
+    rows.clear();
+    this.generalPropertyData?.forEach((data, index) => {
+      const row = this.createRow(data);
+      rows.push(row);
+      this.enablePDIndexAdjustedBy(row);
+      this.getPropertyDamageIndexDisplayValue(row);
+      this.setPreviousPropertyDamageIndexValue(row);
+      this.reToolTabService.actionStateChange(row);
+      this.calculateTotalPd(row);
+    });
+    this.disablePDIndexAdjustByBasedOnPDIndexValue();
+  }
+
+  createRow(data: GeneralProperty): FormGroup {
+    return this.fb.group({
+      ULId: new FormControl(data.ULId || ''),
+      PropertyLocationId: new FormControl(data.PropertyLocationId || null),
+      LocationName: new FormControl({ value: data.LocationName || '', disabled: true }),
+      Country: new FormControl({ value: data.Country || ReToolConstants.blank, disabled: true }),
+      Address: new FormControl({ value: data.Address || '', disabled: true }),
+      City: new FormControl(data.City),
+      StateProvince: new FormControl(data.StateProvince),
+      StreetAddressToolTip: new FormControl(data.StreetAddressToolTip),
+      NormalLossExpectancy: new FormControl({ value: Utility.commaSepratedValueForDisabledInput(data.NormalLossExpectancy) || '0.0', disabled: true }),
+      ProbableMaximumLoss: new FormControl({ value: Utility.commaSepratedValueForDisabledInput(data.ProbableMaximumLoss) || '0.0', disabled: true }),
+      MaximumForeseeableLoss: new FormControl({ value: Utility.commaSepratedValueForDisabledInput(data.MaximumForeseeableLoss) || '0.0', disabled: true }),
+      HumanElementCalculated: new FormControl(this.setCalculatedValue(data.HumanElementCalculated)),
+      HumanElementUpdated: new FormControl(this.setUpdatedValueForNA(data.HumanElementUpdated)),
+      HumanElementUpdatedComment: new FormControl(data.HumanElementUpdatedComment),
+      HumanElementDisplayValue: new FormControl(this.getHumanElementDisplayValue(data.HumanElementCalculated, data.HumanElementUpdated) || '0.0'),
+      ConstructionCalculated: new FormControl(this.setCalculatedValue(data.ConstructionCalculated)),
+      ConstructionDisplayValue: new FormControl(this.getConstructionDisplayValue(data.ConstructionCalculated, data.ConstructionUpdated) || '0.0'),
+      ConstructionUpdated: new FormControl(this.setUpdatedValueForNA(data.ConstructionUpdated)),
+      ConstructionUpdatedComment: new FormControl(data.ConstructionUpdatedComment),
+      ConstructionHazards: new FormControl(this.setNaValueForGPRiskfactorDropDown(data.ConstructionHazards) || '0'),
+      DetectionSecurity: new FormControl(this.setNaValueForGPRiskfactorDropDown(data.DetectionSecurity) || '0'),
+      AutomaticSprinklers: new FormControl(this.setNaValueForGPRiskfactorDropDown(data.AutomaticSprinklers) || '0'),
+      FireWaterSupply: new FormControl(this.setNaValueForGPRiskfactorDropDown(data.FireWaterSupply) || '0'),
+      FireManualResponse: new FormControl(this.setNaValueForGPRiskfactorDropDown(data.FireManualResponse) || '0'),
+      SpecialHazards: new FormControl(this.setNaValueForGPRiskfactorDropDown(data.SpecialHazards) || '0'),
+      EquipmentHazards: new FormControl(this.setNaValueForGPRiskfactorDropDown(data.EquipmentHazards) || '0'),
+      ExternalExposures: new FormControl(this.setNaValueForGPRiskfactorDropDown(data.ExternalExposures) || '0'),
+      BusinessInterruptionCalculated: new FormControl(this.setCalculatedValue(data.BusinessInterruptionCalculated)),
+      BusinessInterruptionUpdated: new FormControl(this.setUpdatedValueForNA(data.BusinessInterruptionUpdated)),
+      BusinessInterruptionUpdatedComment: new FormControl(data.BusinessInterruptionUpdatedComment),
+      BusinessInterruptionDisplayValue: new FormControl(this.getBusinessInterruptionDisplayValue(data.BusinessInterruptionCalculated, data.BusinessInterruptionUpdated) || '0.0'),
+      PropertyDamageIndexCalculated: new FormControl({ value: Utility.commaSepratedValueForDisabledInput(data.PropertyDamageIndexCalculated) || '0.0', disabled: true }),
+      PropertyDamageIndexUpdated: new FormControl({ value: Utility.commaSepratedValueForDisabledInput(data.PropertyDamageIndexUpdated) || '0.0', disabled: true }),
+      PropertyDamageIndexAdjusted: new FormControl({ value: this.setPDIndexAdjustDecimalValue(data.PropertyDamageIndexAdjusted) || '', disabled: true }),
+      PropertyDamageIndexPrevious: new FormControl(data.PropertyDamageIndexPrevious),
+      PropertyDamageIndexAdjustedComment: new FormControl(data.PropertyDamageIndexAdjustedComment),
+      BusinessInterruptionIndexCalculated: new FormControl({ value: data.BusinessInterruptionIndexCalculated || '0.0', disabled: true }),
+      LocationQualityIndexCalculated: new FormControl({ value: data.LocationQualityIndexCalculated || '0.0', disabled: true }),
+      ConfidenceIndex: new FormControl(data.ConfidenceIndex || '0'),
+      LossPreventionSource: new FormControl({ value: data.LossPreventionSource || '', disabled: false }, []),
+      LossPreventionDate: new FormControl({ value: this.setLossPreventionDate(data.LossPreventionDate) || null, disabled: false }, []),
+      LossPreventionComments: new FormControl(data.LossPreventionComments || ''),
+      Action: new FormControl(data.Action || ActionEnum.IsSaved),
+      VerCol: data.VerCol,
+      RiskFactor: new FormControl(data.RiskFactor),
+      OccupancyGroupCode: new FormControl(data.OccupancyGroupCode || 0),
+      OccupancyTypeCode: new FormControl(data.OccupancyTypeCode || 0),
+      ConstructionHazardsComment: new FormControl(data.ConstructionHazardsComment || ''),
+      DetectionSecurityComment: new FormControl(data.DetectionSecurityComment || ''),
+      AutomaticSprinklersComment: new FormControl(data.AutomaticSprinklersComment || ''),
+      FireWaterSupplyComment: new FormControl(data.FireWaterSupplyComment || ''),
+      FireManualResponseComment: new FormControl(data.FireManualResponseComment || ''),
+      SpecialHazardsComment: new FormControl(data.SpecialHazardsComment || ''),
+      EquipmentHazardsComment: new FormControl(data.EquipmentHazardsComment || ''),
+      ExternalExposuresComment: new FormControl(data.ExternalExposuresComment || ''),
+      BuildingValue: new FormControl(data.BuildingValue || '0.0'),
+      EquipmentValue: new FormControl(data.EquipmentValue || '0.0'),
+      InventoryValue: new FormControl(data.InventoryValue || '0.0'),
+      OtherValue: new FormControl(data.OtherValue || '0.0'),
+      TotalPD: new FormControl(data.TotalPD || '0.0'),
+      PayRollValue: new FormControl(data.PayRollValue || '0.0'),
+      NormalLossDeficiencyDriven: new FormControl(data.NormalLossDeficiencyDriven || false),
+      BusinessInterruptionValue: new FormControl(data.BusinessInterruptionValue || '0.0'),
+      BusinessInterruptionOtherValue: new FormControl(data.BusinessInterruptionOtherValue || '0.0'),
+      IndemnityPeriod: new FormControl(data.IndemnityPeriod || 0),
+      PDIndexIndexUpdatedValidationControl: new FormControl(data.PropertyDamageIndexUpdated || '0.0', [Validators.max(10), Validators.min(0)]),
+    });
+  }
+
+  get tableRowsControls() {
+    return this.getFormArray().controls;
+  }
+
+  generateFormElementIdAttribute(rowIndex: number, dataId: number, columnName: string, popUp?: string): string {
+    return this.reToolService.generateFormElementIdAttribute(rowIndex, dataId, columnName);
+  }
+
+  onCellValueChange(event: Event, column: FormControl) {
+    const cellElement = event.target as HTMLElement;
+    const response: GridRowRecord = this.getGidRowRecordDetail(cellElement?.id);
+    response.value = column.value;
+    const row = this.getFormArray().at(response.rowIndex);
+    row.patchValue({
+      [response.columnName]: response.value,
+      ['Action']: ActionEnum.IsModified
+    });
+  }
+
+  openPopupOnCellClick(event: MouseEvent, element: any, column: string) {
+    const cellElement = event.target as HTMLElement;
+    const response: GridRowRecord = this.getGidRowRecordDetail(cellElement?.id);
+    response.value = element.value;
+    this.openDialog(response, element, column);
+  }
+
+  private openDialog(request: GridRowRecord, element?: any, popUpTitle?: string) {
+
+    switch (request.columnName) {
+      case ReToolConstants.humanElementDisplayValue:
+        if (request.popup != null && request.popup != '') {
+
+          const matDialogConfig = new MatDialogConfig();
+          const humanElementRiskFactor: HumanElementRiskFactor
+            = this.getDeserializeRiskFactor(request.value?.RiskFactor)?.humanElementRisk;
+
+          const popupRequest: PopupRequest = {
+            title: 'Property/Human Element Risk Factor Calculator',
+            gridRecordDetail: request,
+            data: {
+              humanElementRiskFactors: this.humanElementRiskFactors,
+              humanElementCalculated: request.value.HumanElementCalculated,
+              humanElementUpdated: request.value.HumanElementUpdated,
+              humanElementUpdatedComment: request.value.HumanElementUpdatedComment,
+              humanElementRisk: humanElementRiskFactor,
+            }
+          };
+
+          matDialogConfig.data = popupRequest;
+
+          //request.popupTitle = AppConstants[request.columnName as keyof typeof AppConstants] as string;
+          const dialogRef = this.dialog.open(HumanElementRiskFactorCalculatorComponent, matDialogConfig);
+          dialogRef.afterClosed().subscribe((result: PopupResponse) => {
+            if (result.action === 1)
+              this.updatePatchRowFromHEPopup(result);
+          });
+        }
+        else {
+          const matDialogConfig = new MatDialogConfig();
+          matDialogConfig.data = request;
+          const dialogRef = this.dialog.open(ConstructionRiskFactorCalculatorPopupComponent, matDialogConfig);
+          dialogRef.afterClosed().subscribe(result => {
+            this.updatePatchRowFromHEPopup(result);
+          });
+        }
+        break;
+      case ReToolConstants.businessInterruptionDisplayValue:
+
+        if (request.popup != null && request.popup != '') {
+
+          const matDialogConfig = new MatDialogConfig();
+
+          const businessInterruptionFactor: BusinessInterruptionRiskFactor
+            = this.getBusinessInterruptionDeserializeRiskFactor(request.value?.RiskFactor)?.businessInterruptionRisk;
+          const popupRequest: PopupRequest = {
+            title: ReToolConstants.businessInterruptionRiskTitle,
+            gridRecordDetail: request,
+            data: {
+              businessInterruptionRiskFactors: this.businessInterruptionRiskFactors,
+              businessInterruptionMakeups: this.businessInterruptionMakeups,
+              businessInterruptionRiskDisasters: this.businessInterruptionRiskDisasters,
+              businessInterruptionCalculated: request.value.BusinessInterruptionCalculated,
+              businessInterruptionUpdated: request.value.BusinessInterruptionUpdated,
+              businessInterruptionUpdatedComment: request.value.BusinessInterruptionUpdatedComment,
+              businessInterruptionRisk: businessInterruptionFactor,
+            }
+          };
+          matDialogConfig.data = popupRequest;
+          const dialogRef = this.dialog.open(BusinessInterruptionRiskCalculatorComponent, matDialogConfig);
+          dialogRef.afterClosed().subscribe((result: PopupResponse) => {
+            if (result.action === 1)
+              this.updatePatchRowFromBIPopup(result);
+          });
+        }
+        else {
+          const matDialogConfig = new MatDialogConfig();
+          matDialogConfig.data = request;
+          const dialogRef = this.dialog.open(ConstructionRiskFactorCalculatorPopupComponent, matDialogConfig);
+          dialogRef.afterClosed().subscribe(result => {
+            this.updatePatchRowFromBIPopup(result);
+          });
+        }
+        break;
+      case ReToolConstants.ConstructionHazardsComment:
+      case ReToolConstants.DetectionSecurityComment:
+      case ReToolConstants.AutomaticSprinklersComment:
+      case ReToolConstants.FireWaterSupplyComment:
+      case ReToolConstants.FireManualResponseComment:
+      case ReToolConstants.SpecialHazardsComment:
+      case ReToolConstants.EquipmentHazardsComment:
+      case ReToolConstants.ExternalExposuresComment:
+      case ReToolConstants.propertyDamageIndexAdjustedComment:
+        {
+          this.PropertyLocationId = request.value.PropertyLocationId;
+          let commentDetail = this.getSelectedRiskFactorCommentDetails(request);
+          const dialogConfig = new MatDialogConfig();
+          const locationName = element?.get('LocationName')?.value;
+          const state = element?.get('StateProvince')?.value;
+          const country = element?.get('Country')?.value;
+
+          const popupRequest: PopupRequest = {
+            title: '',
+            gridRecordDetail: request,
+            data: {
+              Location: locationName,
+              City: request.value.City,
+              State: state,
+              Country: country,
+              Title: commentDetail?.caption,
+              Description: commentDetail?.commentText,
+              PropertyLocationId: this.PropertyLocationId,
+            }
+          };
+          dialogConfig.data = popupRequest;
+          const dialogRef = this.dialog.open(CommentComponent, dialogConfig);
+
+          dialogRef.afterClosed().subscribe((result: PopupResponse) => {
+            const row = this.getFormGroup(result?.gridRecordDetail?.rowIndex);
+            var updatedCommentText = result?.data?.Description;
+            //Execute after click on save button from comment popup
+            if (result.action === 1) {
+              this.updatePatchRowFromCommentPopup(row, result, updatedCommentText);
+            }
+          });
+          break;
+        }
+      case ReToolConstants.constructionDisplayValue:
+
+        if (request.popup != null && request.popup != '') {
+
+          const matDialogConfig = new MatDialogConfig();
+
+          const constructionFactor: ConstructionRiskFactor
+            = this.getConstructionDeserializeRiskFactor(request.value?.RiskFactor)?.constructionRisk;
+          const popupRequest: PopupRequest = {
+            title: ReToolConstants.constructionRiskTitle,
+            gridRecordDetail: request,
+            data: {
+              constructionCalculated: request.value.ConstructionCalculated,
+              constructionUpdated: request.value.ConstructionUpdated,
+              constructionUpdatedComment: request.value.ConstructionUpdatedComment,
+              constructionRisk: constructionFactor,
+            }
+          };
+          matDialogConfig.data = popupRequest;
+          const dialogRef = this.dialog.open(ConstructionRiskFactorCalculatorPopupComponent, matDialogConfig);
+          dialogRef.afterClosed().subscribe((result: PopupResponse) => {
+            if (result.action === 1)
+              this.updatePatchRowFromConstructionPopup(result);
+          });
+        }
+        else {
+          const matDialogConfig = new MatDialogConfig();
+          matDialogConfig.data = request;
+          const dialogRef = this.dialog.open(ConstructionRiskFactorCalculatorPopupComponent, matDialogConfig);
+          dialogRef.afterClosed().subscribe(result => {
+            this.updatePatchRowFromConstructionPopup(result);
+          });
+        }
+        break;
+    }
+  }
+
+  updateDropDownSelection(index: number, dropDrownKey: string, value: number) {
+    const row = this.getFormArray().at(index);
+    if (row) {
+      (row as any)[dropDrownKey] = value;
+      row.patchValue({ Action: ActionEnum.IsModified });
+    }
+
+    this.calculatePdIndexValue(row, dropDrownKey, value);
+  }
+
+  updateConfidenceIndexSelection(index: number, dropDrownKey: string, data: number) {
+    const row = this.getFormArray().at(index);
+    if (row) {
+      (row as any)[dropDrownKey] = data;
+      row.patchValue({ Action: ActionEnum.IsModified });
+    }
+  }
+
+  handleBlur(event: any, index: number) {
+    const input = (event.target as HTMLInputElement).value;
+    const decimalValue = parseFloat(input);
+
+    if (input === '' || isNaN(decimalValue)) {
+      event.target.value = this.inputValue;
+    } else if (decimalValue < -2.0 || decimalValue > 2.0) {
+      event.target.value = '';
+    }
+    else if (!isNaN(decimalValue)) {
+      event.target.value = parseFloat(input).toFixed(1);
+    }
+    const row = this.getFormGroup(index);
+    let totalPDIndex = '0.0';
+    const propertyDamageIndexCalculated = parseFloat(row.get('PropertyDamageIndexCalculated')?.value);
+    const propertyDamageIndexAdjusted = parseFloat(row.get('PropertyDamageIndexAdjusted')?.value);
+    const propertyDamageIndexUpdated = parseFloat(row.get('PropertyDamageIndexUpdated')?.value);
+
+    if (propertyDamageIndexUpdated === 0) {
+      totalPDIndex = ((propertyDamageIndexCalculated + propertyDamageIndexAdjusted)).toFixed(1);
+      row.get('PropertyDamageIndexPrevious').setValue(propertyDamageIndexCalculated.toFixed(1));
+    }
+    else if (propertyDamageIndexAdjusted != 0 && !isNaN(propertyDamageIndexAdjusted)) {
+      totalPDIndex = ((propertyDamageIndexCalculated + propertyDamageIndexAdjusted)).toFixed(1);
+      row.get('PropertyDamageIndexPrevious').setValue(propertyDamageIndexCalculated.toFixed(1));
+    }
+    else if (propertyDamageIndexAdjusted === 0 && !isNaN(propertyDamageIndexAdjusted)) {
+      totalPDIndex = ((propertyDamageIndexCalculated + propertyDamageIndexAdjusted)).toFixed(1);
+      row.get('PropertyDamageIndexPrevious').setValue(propertyDamageIndexCalculated.toFixed(1));
+    }
+
+    if (isNaN(decimalValue)) {
+      row.get('PropertyDamageIndexUpdated').setValue(propertyDamageIndexCalculated.toFixed(1));
+    }
+    else {
+      row.get('PropertyDamageIndexUpdated').setValue(totalPDIndex);
+    }
+
+    this.setValidatorForPdIndexValue(row, Number(totalPDIndex));
+  }
+
+  isValidRating(rating: string): boolean {
+    return rating !== ReToolConstants.NA && rating !== null;
+  }
+
+  //Get the selected data in popup on page load
+  getSelectedRiskFactorCommentDetails(response: GridRowRecord): { commentText?: string, caption: string } {
+    const row = this.getFormGroup(response?.rowIndex);
+    let comment = row.get(response.columnName).value;
+    let caption;
+    switch (response.columnName) {
+      case ReToolConstants.ConstructionHazardsComment:
+        caption = ReToolConstants.ConstructionHazardsCommentCaption;
+        break;
+      case ReToolConstants.DetectionSecurityComment:
+        caption = ReToolConstants.DetectionSecurityCommentCaption;
+        break;
+      case ReToolConstants.AutomaticSprinklersComment:
+        caption = ReToolConstants.AutomaticSprinklersCommentCaption;
+        break;
+      case ReToolConstants.FireWaterSupplyComment:
+        caption = ReToolConstants.FireWaterSupplyCommentCaption;
+        break;
+      case ReToolConstants.FireManualResponseComment:
+        caption = ReToolConstants.FireManualResponseCommentCaption;
+        break;
+      case ReToolConstants.SpecialHazardsComment:
+        caption = ReToolConstants.SpecialHazardsCommentCaption;
+        break;
+      case ReToolConstants.EquipmentHazardsComment:
+        caption = ReToolConstants.EquipmentHazardsCommentCaption;
+        break;
+      case ReToolConstants.ExternalExposuresComment:
+        caption = ReToolConstants.ExternalExposuresCommentCaption;
+        break;
+      case ReToolConstants.propertyDamageIndexAdjustedComment:
+        caption = ReToolConstants.pdIndexAdjustedByCommentCaption;
+        break;
+    }
+    return { commentText: comment, caption: caption };
+  }
+
+  //Save the changes data in comment popup
+  updatePatchRowFromCommentPopup(row: any, result: PopupResponse, description: string) {
+    var columnName = result?.gridRecordDetail?.columnName;
+    switch (columnName) {
+      case ReToolConstants.ConstructionHazardsComment:
+        row.controls.ConstructionHazardsComment.value = description;
+        row.controls.Action.value = ActionEnum.IsModified;
+        break;
+      case ReToolConstants.DetectionSecurityComment:
+        row.controls.DetectionSecurityComment.value = description;
+        row.controls.Action.value = ActionEnum.IsModified;
+        break;
+      case ReToolConstants.AutomaticSprinklersComment:
+        row.controls.AutomaticSprinklersComment.value = description;
+        row.controls.Action.value = ActionEnum.IsModified;
+        break;
+      case ReToolConstants.FireWaterSupplyComment:
+        row.controls.FireWaterSupplyComment.value = description;
+        row.controls.Action.value = ActionEnum.IsModified;
+        break;
+      case ReToolConstants.FireManualResponseComment:
+        row.controls.FireManualResponseComment.value = description;
+        row.controls.Action.value = ActionEnum.IsModified;
+        break;
+      case ReToolConstants.SpecialHazardsComment:
+        row.controls.SpecialHazardsComment.value = description;
+        row.controls.Action.value = ActionEnum.IsModified;
+        break;
+      case ReToolConstants.EquipmentHazardsComment:
+        row.controls.EquipmentHazardsComment.value = description;
+        row.controls.Action.value = ActionEnum.IsModified;
+        break;
+      case ReToolConstants.ExternalExposuresComment:
+        row.controls.ExternalExposuresComment.value = description;
+        row.controls.Action.value = ActionEnum.IsModified;
+        break;
+      case ReToolConstants.propertyDamageIndexAdjustedComment:
+        row.controls.PropertyDamageIndexAdjustedComment.value = description;
+        row.controls.Action.value = ActionEnum.IsModified;
+        break;
+    }
+  }
+
+  onSubmit() {
+    this.generalPropertyForm.markAllAsTouched();
+    this.reToolTabService.formStatus = this.generalPropertyForm.status;
+    this.setValidatorBasedOnConfidenceIndexSelected();
+
+    if (this.isValidPDIndexProperties(this.getGeneralPropertyFormData)) {
+      this.reToolTabService.showErrorMessage(ReToolConstants.requiredPDIndexAdjustmentComment, '');
+    }
+    else if (this.invalidMessageForPDIndexUpdate !== null) {
+      this.reToolTabService.showErrorMessage(this.invalidMessageForPDIndexUpdate, '');
+    }
+    else if (this.generalPropertyForm.status == ReToolConstants.valid) {
+      this.invalidMessageForPDIndexUpdate = null;
+      this.reToolTabService.emit('onSaveFormData', { formData: this.getGeneralPropertyFormData, subTabIndex: 2 });
+    }
+
+    else {
+      this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+    }
+  }
+
+  private setValidatorBasedOnConfidenceIndexSelected(): void {
+    const rows = this.getFormArray();
+    rows.controls?.forEach((control) => {
+      const lossPreventionSource = control?.get('LossPreventionSource');
+      const lossPreventionDate = control?.get('LossPreventionDate');
+      const confidenceIndexValue = control?.get('ConfidenceIndex')?.value;
+      let lossPreventionDateValue = control?.get('LossPreventionDate')?.value;
+      const propertyDamageIndexAdjusted = control?.get('PropertyDamageIndexAdjusted')?.value;
+      const propertyDamageIndexAdjustedComment = control?.get('PropertyDamageIndexAdjustedComment')?.value;
+
+      if (propertyDamageIndexAdjusted === '' && (propertyDamageIndexAdjustedComment !== null || propertyDamageIndexAdjustedComment !== '')) {
+        control?.get('PropertyDamageIndexAdjustedComment')?.setValue(null);
+      }
+
+      if (confidenceIndexValue > 0) {
+        lossPreventionSource?.setValidators([Validators.required]);
+        lossPreventionDate?.setValidators([Validators.required]);
+        this.isConfidenceIndexSelect = true
+      } else {
+        this.isConfidenceIndexSelect = false;
+        lossPreventionSource?.setValidators([]);
+        lossPreventionDate?.setValidators([]);
+
+        if (lossPreventionDateValue != null) {
+          lossPreventionDateValue = this.commonService.getDateByTimeZone(new Date(lossPreventionDateValue), new Date(lossPreventionDateValue).getTimezoneOffset())
+          control?.get('LossPreventionDate')?.setValue(lossPreventionDateValue);
+        }
+      }
+      lossPreventionSource?.updateValueAndValidity();
+      lossPreventionDate?.updateValueAndValidity();
+    });
+  }
+
+  private getGidRowRecordDetail(input: string): GridRowRecord {
+    const [rowPart, idPart, column, popup] = input.split('_');
+    const record: GridRowRecord = {
+      rowIndex: parseInt(rowPart.split('-')[1]),
+      columnName: column,
+      rowPKId: parseInt(idPart.split('-')[1]),
+      value: '',
+      popup: popup
+    };
+    return record;
+  }
+
+  private get getGeneralPropertyFormData(): GeneralProperty[] {
+    return this.getFormArray()?.getRawValue() as GeneralProperty[];
+  }
+
+  private getFormArray(): FormArray {
+    return (this.generalPropertyForm.get('rows') as FormArray);
+  }
+
+  private getFormGroup(rowIndex: number): FormGroup {
+    return (this.getFormArray()
+      .at(rowIndex) as FormGroup);
+  }
+
+  private updatePatchRowFromHEPopup(response: PopupResponse) {
+    const row = this.getFormGroup(response?.gridRecordDetail?.rowIndex);
+    const data = response.data;
+
+    let riskFactor = row.get('RiskFactor')?.value;
+
+    if (!riskFactor && !Utility.isRiskFactor(JSON.parse(riskFactor)))
+      riskFactor = Utility.getRiskFactorDefaultValue();
+    else
+      riskFactor = JSON.parse(riskFactor);
+
+    riskFactor.humanElementRisk = data.humanElementRisk;
+
+    const humanElementDisplayValue = this.getHumanElementDisplayValue(data.humanElementCalculated, data.humanElementUpdated);
+    row.patchValue({
+      ['HumanElementDisplayValue']: humanElementDisplayValue,
+      ['HumanElementCalculated']: response.data.humanElementCalculated,
+      ['HumanElementUpdated']: response.data.humanElementUpdated,
+      ['HumanElementUpdatedComment']: response.data.humanElementUpdatedComment,
+      ['RiskFactor']: this.getSerializeRiskFactorFactors(riskFactor),
+      ['Action']: ActionEnum.IsModified
+    });
+
+    this.calculatePdIndexValue(row, ReToolConstants.humanElementColumnField, Number(humanElementDisplayValue));
+  }
+
+  private updatePatchRowFromBIPopup(response: PopupResponse) {
+    const row = this.getFormGroup(response?.gridRecordDetail?.rowIndex);
+    const data = response.data;
+
+    let riskFactor = row.get('RiskFactor')?.value;
+
+    if (!riskFactor && !Utility.isBusinessInterruptionRiskFactor(JSON.parse(riskFactor)))
+      riskFactor = Utility.getBusinessInterruptionRiskFactorDefaultValue();
+    else
+      riskFactor = JSON.parse(riskFactor);
+
+    riskFactor.businessInterruptionRisk = data.businessInterruptionRisk;
+
+    row.patchValue({
+      ['BusinessInterruptionDisplayValue']: this.getBusinessInterruptionDisplayValue(data.businessInterruptionCalculated, data.businessInterruptionUpdated),
+      ['BusinessInterruptionCalculated']: response.data.businessInterruptionCalculated,
+      ['BusinessInterruptionUpdated']: response.data.businessInterruptionUpdated,
+      ['BusinessInterruptionUpdatedComment']: response.data.businessInterruptionUpdatedComment,
+      ['RiskFactor']: this.getBusinessInterruptionSerializeRiskFactors(riskFactor),
+      ['Action']: ActionEnum.IsModified
+    });
+  }
+
+  private getHumanElementRisks(): void {
+    const getHumanElementRisks = this.reToolService.getPropertyMaster(PropertyMasterDataTypeEnum.HumanElementRiskFactor).subscribe({
+      next: (response) => {
+        this.humanElementRiskFactors = response.humanElementRiskFactors;
+      },
+      error: (error) => {
+        throw new error;
+      }
+    });
+    this.subscription?.add(getHumanElementRisks);
+  }
+
+  private getBusinessInterruptionRisks(): void {
+    const getBusinessInterruptionRisks = this.reToolService.getPropertyMaster(PropertyMasterDataTypeEnum.BIRiskFactor).subscribe({
+      next: (response) => {
+        this.businessInterruptionRiskFactors = response.businessInterruptionRiskFactors;
+        this.businessInterruptionMakeups = response.businessInterruptionMakeups;
+        this.businessInterruptionRiskDisasters = response.businessInterruptionRiskDisasters;
+      },
+      error: (error) => {
+        throw new error;
+      }
+    });
+    this.subscription?.add(getBusinessInterruptionRisks);
+  }
+
+  private getHumanElementDisplayValue(humanElementCalculated: any, humanElementUpdated: any) {
+    if (humanElementUpdated != null && !isNaN(humanElementUpdated) && Number(humanElementUpdated) > 0) {
+      return parseFloat(humanElementUpdated.toString()).toFixed(1);
+    }
+    else if (humanElementUpdated === ReToolConstants.NA) return ReToolConstants.NA;
+    else if (humanElementUpdated === -1.0) return ReToolConstants.NA;
+    else if (humanElementCalculated != null && !isNaN(humanElementCalculated))
+      return parseFloat(humanElementCalculated.toString()).toFixed(1);
+    else
+      return '0.0';
+  }
+
+  private getBusinessInterruptionDisplayValue(businessInterruptionCalculated: any, businessInterruptionUpdated: any) {
+
+    if (businessInterruptionUpdated != null && !isNaN(businessInterruptionUpdated) && Number(businessInterruptionUpdated) > 0) {
+      return parseFloat(businessInterruptionUpdated.toString()).toFixed(1);
+    }
+    else if (businessInterruptionUpdated === ReToolConstants.NA) return ReToolConstants.NA;
+    else if (businessInterruptionUpdated === -1.0) return ReToolConstants.NA;
+    else if (businessInterruptionCalculated != null && !isNaN(businessInterruptionCalculated))
+      return parseFloat(businessInterruptionCalculated.toString()).toFixed(1);
+    else
+      return '0.0';
+  }
+
+  private getDeserializeRiskFactor(value: string): RiskFactor {
+    if (value) {
+      const parseValue = JSON.parse(value) as RiskFactor;
+      if (parseValue && parseValue.humanElementRisk)
+        return parseValue;
+      else
+        return Utility.getRiskFactorDefaultValue();
+    }
+
+    return Utility.getRiskFactorDefaultValue();
+  }
+
+  private getSerializeRiskFactorFactors(riskFactors: any): any {
+    if (Utility.isRiskFactor(riskFactors)) {
+      return JSON.stringify(riskFactors);
+    }
+
+    return null;
+  }
+
+  private getBusinessInterruptionDeserializeRiskFactor(value: string): RiskFactor {
+    if (value) {
+      const parseValue = JSON.parse(value) as RiskFactor;
+      if (parseValue && parseValue.businessInterruptionRisk)
+        return parseValue;
+      else
+        return Utility.getBusinessInterruptionRiskFactorDefaultValue();
+    }
+    return Utility.getBusinessInterruptionRiskFactorDefaultValue();
+  }
+
+  private getBusinessInterruptionSerializeRiskFactors(riskFactors: any): any {
+    if (Utility.isBusinessInterruptionRiskFactor(riskFactors)) {
+      return JSON.stringify(riskFactors);
+    }
+    return null;
+  }
+
+  onCellValueChangeForDate(event: MatDatepickerInputEvent<Date>, rowIndex: number) {
+    const manualEnteredDate = this.commonService.getDateByTimeZone(new Date(event.value), new Date(event.value).getTimezoneOffset());
+
+    if (manualEnteredDate > new Date()) {
+      this.reToolTabService.showErrorMessage(ReToolConstants.futureDatePrevantionMessage, '');
+    }
+    const row = this.getFormArray().at(rowIndex);
+    row.patchValue({
+      ['Action']: ActionEnum.IsModified
+    });
+  }
+
+  private getWeightDistributionCode(row: AbstractControl<any, any>) {
+    if (row.value) {
+      const occupancyTypeCode = Number(row.get('OccupancyTypeCode')?.value);
+      if (Utility.isValidOccupancyTypeCode(occupancyTypeCode)) {
+        return occupancyTypeCode;
+      }
+      else
+        return Number(row.get('OccupancyGroupCode')?.value);
+    }
+    else {
+      return null;
+    }
+
+  }
+
+  private buildRedistributedWeightData(gpData: GeneralProperty[]): void {
+    if (this.weights && this.weights.length > 0) {
+      this.weights.forEach((data: GeneralPropertyWeightResponse, index) => {
+        const gpRow = gpData.find((gp) => (!!gp.OccupancyGroupCode && gp.OccupancyGroupCode === data.occupancyGroupId || gp.OccupancyTypeCode === data.typeCode))
+        const generalPropertyWeights: RedistributionWeight = {
+          groupCode: data.groupCode,
+          occupancyGroupId: data.occupancyGroupId,
+          groupTypeCode: data.typeCode,
+          inputWeights: {
+            humanElement: data.humanElement.toString(),
+            construction: data.construction.toString(),
+            constructionHazards: data.constructionHazards.toString(),
+            detectionSecurity: data.detectionSecurity.toString(),
+            automaticSprinklers: data.automaticSprinklers.toString(),
+            fireWaterSupply: data.fireWaterSupply.toString(),
+            fireManualResponse: data.fireManualResponse.toString(),
+            specialHazards: data.specialHazards.toString(),
+            equipmentHazards: data.equipmentHazards.toString(),
+            externalExposures: data.externalExposures.toString()
+          },
+          inputRatings: {
+            humanElement: parseFloat(this.getHumanElementDisplayValue(gpRow.HumanElementCalculated, gpRow.HumanElementUpdated).toString()) || 0,
+            construction: parseFloat(this.getConstructionDisplayValue(gpRow.ConstructionCalculated, gpRow.ConstructionUpdated).toString()) || 0,
+            constructionHazards: gpRow.ConstructionHazards?.toString() || 0,
+            detectionSecurity: gpRow.DetectionSecurity?.toString() || 0,
+            automaticSprinklers: gpRow.AutomaticSprinklers?.toString() || 0,
+            fireWaterSupply: gpRow.FireWaterSupply?.toString() || 0,
+            fireManualResponse: gpRow.FireManualResponse?.toString() || 0,
+            specialHazards: gpRow.SpecialHazards?.toString() || 0,
+            equipmentHazards: gpRow.EquipmentHazards?.toString() || 0,
+            externalExposures: gpRow.ExternalExposures?.toString() || 0
+          },
+          redistributedWeights: {} as any
+        };
+        this.redistributionWeights.push(generalPropertyWeights);
+      });
+    }
+  }
+
+  private getGeneralPropertyWeight(gpData: GeneralProperty[]): void {
+    let occupancyCodes = gpData.map(data => {
+      if (Utility.isValidOccupancyTypeCode(data.OccupancyTypeCode)) {
+        return data.OccupancyTypeCode;
+      }
+      else
+        return data.OccupancyGroupCode;
+    });
+
+    const generalPropertyWeights = this.reToolService.getGeneralPropertyWeight(occupancyCodes).subscribe({
+      next: (response: GeneralPropertyWeightResponse[] | null) => {
+        if (response !== null && response.length > 0) {
+          // store the entire object into weights
+          this.weights = response;
+          this.buildRedistributedWeightData(gpData);
+          this.calculationService
+            .setRedistributionWeights(this.redistributionWeights)
+            .calculate();
+        }
+      },
+      error: (error) => { }
+    });
+    this.subscription?.add(generalPropertyWeights);
+  }
+
+  private enablePDIndexAdjustedBy(row: FormGroup<any>) {
+    const reportedPropertyTotalPDValue = row.get('PropertyDamageIndexCalculated')?.valueChanges.subscribe(({
+      next: (res) => {
+        if (res !== undefined && res !== null && res != '0.0') {
+          this.setPropertyDamageIndexDisplayValue(row);
+          row.controls['PropertyDamageIndexAdjusted'].enable();
+        }
+        else {
+          row.controls['PropertyDamageIndexAdjusted'].setValue('');
+          row.controls['PropertyDamageIndexCalculated'].setValue('0.0');
+          this.setPropertyDamageIndexDisplayValue(row);
+          row.controls['PropertyDamageIndexAdjusted'].disable();
+        }
+      },
+      error: (error) => {
+        throw new error;
+      },
+    }));
+    this.subscription?.add(reportedPropertyTotalPDValue);
+  }
+
+  private getPropertyDamageIndexDisplayValue(row: FormGroup<any>) {
+    const propertyDamageIndexCalculatedValue = row.get('PropertyDamageIndexCalculated').value;
+    const propertyDamageIndexAdjustedValue = row.get('PropertyDamageIndexAdjusted').value;
+
+    if (propertyDamageIndexAdjustedValue === '') {
+      row.get('PropertyDamageIndexUpdated').setValue(propertyDamageIndexCalculatedValue);
+    }
+  }
+
+  private setPreviousPropertyDamageIndexValue(row: FormGroup<any>) {
+
+    row.get('PropertyDamageIndexUpdated')?.valueChanges
+      .pipe(startWith(null), pairwise())
+      .subscribe(([prev, next]: [any, any]) => {
+
+        if (JSON.parse(prev) != null)
+          row.get('PropertyDamageIndexPrevious').setValue(prev);
+      });
+  }
+
+  private disablePDIndexAdjustByBasedOnPDIndexValue(): void {
+    const rows = this.getFormArray();
+    rows.controls?.forEach((control) => {
+      const propertyDamageIndexAdjusted = control?.get('PropertyDamageIndexAdjusted');
+
+      const propertyDamageIndexCalculated = parseFloat(control?.get('PropertyDamageIndexCalculated')?.value);
+      if (propertyDamageIndexCalculated === 0) {
+        propertyDamageIndexAdjusted?.disable();
+      } else {
+        propertyDamageIndexAdjusted?.enable();
+      }
+    });
+  }
+
+  private setPropertyDamageIndexDisplayValue(row: FormGroup<any>) {
+    let totalPDIndex = '0.0';
+    const propertyDamageIndexCalculated = parseFloat(row.get('PropertyDamageIndexCalculated')?.value);
+    const propertyDamageIndexAdjusted = parseFloat(row.get('PropertyDamageIndexAdjusted')?.value);
+    const propertyDamageIndexUpdated = parseFloat(row.get('PropertyDamageIndexUpdated')?.value);
+    const pdIndexUpdatedControl = row.get('PropertyDamageIndexUpdated');
+
+    if (propertyDamageIndexUpdated != 0 && !isNaN(propertyDamageIndexAdjusted)) {
+      totalPDIndex = ((propertyDamageIndexCalculated + propertyDamageIndexAdjusted)).toFixed(1);
+      pdIndexUpdatedControl?.setValue(totalPDIndex);
+      this.setValidatorForPdIndexValue(row, Number(totalPDIndex));
+    } else {
+      row.get('PropertyDamageIndexUpdated').setValue(propertyDamageIndexCalculated.toFixed(1));
+      this.setValidatorForPdIndexValue(row, Number(totalPDIndex));
+    }
+  }
+
+  private getConstructionDeserializeRiskFactor(value: string): RiskFactor {
+    if (value) {
+      const parseValue = JSON.parse(value) as RiskFactor;
+      if (parseValue && parseValue.constructionRisk)
+        return parseValue;
+      else
+        return Utility.getConstructionRiskFactorDefaultValue();
+    }
+    return Utility.getConstructionRiskFactorDefaultValue();
+  }
+
+  private updatePatchRowFromConstructionPopup(response: PopupResponse) {
+    const row = this.getFormGroup(response?.gridRecordDetail?.rowIndex);
+    const data = response.data;
+
+    let riskFactor = row.get('RiskFactor')?.value;
+
+    if (!riskFactor && !Utility.isConstructionRiskFactor(JSON.parse(riskFactor)))
+      riskFactor = Utility.getConstructionRiskFactorDefaultValue();
+    else
+      riskFactor = JSON.parse(riskFactor);
+
+    riskFactor.constructionRisk = data.constructionRisk;
+
+    const constructionDisplayValue = this.getConstructionDisplayValue(data.constructionCalculated, data.constructionUpdated);
+    row.patchValue({
+      ['ConstructionDisplayValue']: constructionDisplayValue,
+      ['ConstructionCalculated']: response.data.constructionCalculated,
+      ['ConstructionUpdated']: response.data.constructionUpdated,
+      ['ConstructionUpdatedComment']: response.data.constructionUpdatedComment,
+      ['RiskFactor']: this.getConstructionSerializeRiskFactors(riskFactor),
+      ['Action']: ActionEnum.IsModified
+    });
+
+    this.calculatePdIndexValue(row, ReToolConstants.constructionColumnField, Number(constructionDisplayValue));
+  }
+
+  private getConstructionSerializeRiskFactors(riskFactors: any): any {
+    if (Utility.isConstructionRiskFactor(riskFactors)) {
+      return JSON.stringify(riskFactors);
+    }
+    return null;
+  }
+
+  private getConstructionDisplayValue(constructionCalculated: any, constructionUpdated: any) {
+    if (constructionUpdated != null && !isNaN(constructionUpdated) && Number(constructionUpdated) > 0) {
+      return parseFloat(constructionUpdated.toString()).toFixed(1);
+    }
+    else if (constructionUpdated === ReToolConstants.NA) return ReToolConstants.NA;
+    else if (constructionUpdated === -1.0) return ReToolConstants.NA;
+    else if (constructionCalculated != null && constructionCalculated != "" && !isNaN(constructionCalculated))
+      return parseFloat(constructionCalculated.toString()).toFixed(1);
+    else
+      return '0.0';
+  }
+
+  private calculatePdIndexValue(row: AbstractControl<any, any>, elementKey: string, value: number) {
+    const riskFactorElementEnumValue = RiskFactorElementEnum[elementKey as keyof typeof RiskFactorElementEnum];
+    const groupCode = this.getWeightDistributionCode(row);
+
+    if (groupCode) {
+      const pdIndexValue = this.calculationService
+        .setPropertyData<GeneralProperty>(row.getRawValue() as GeneralProperty)
+        .setGroupOrTypeCode(groupCode)
+        .setElement(riskFactorElementEnumValue)
+        .updateWeightDistribution(value)
+        .getPDIndexValue();
+
+      if (pdIndexValue !== -1) {
+        row.get('PropertyDamageIndexCalculated').setValue(pdIndexValue.toFixed(1));
+      }
+    }
+  }
+
+  private calculateTotalPd(row: FormGroup<any>) {
+    const buildingValue = parseFloat(Utility.removeComma(row.get('BuildingValue')?.value)) || 0.0;
+    const equipmentValue = parseFloat(Utility.removeComma(row.get('EquipmentValue')?.value)) || 0.0;
+    const inventoryValue = parseFloat(Utility.removeComma(row.get('InventoryValue')?.value)) || 0.0;
+    const otherValue = parseFloat(Utility.removeComma(row.get('OtherValue')?.value)) || 0.0;
+    const totalPD = buildingValue + equipmentValue + inventoryValue + otherValue;
+    row.get('TotalPD').setValue(totalPD, { emitEvent: false });
+  }
+
+  private setValidatorForPdIndexValue(row: FormGroup<any>, totalPdIndex: number): void {
+    const pdIndexIndexUpdatedValidationControl = row.get('PDIndexIndexUpdatedValidationControl');
+    const propertyDamageIndexUpdatedControl = row.get('PropertyDamageIndexPrevious');
+    if (Number(totalPdIndex) > 10) {
+      pdIndexIndexUpdatedValidationControl?.setErrors({ max: true });
+      this.reToolTabService.showErrorMessage(ReToolConstants.pdIndexUpdateValueRangeValidation, "");
+    }
+    else if (Number(totalPdIndex) < 0) {
+      pdIndexIndexUpdatedValidationControl?.setErrors({ min: true });
+      this.reToolTabService.showErrorMessage(ReToolConstants.pdIndexNegativeUpdateValueRangeValidation, "");
+    }
+    else {
+      pdIndexIndexUpdatedValidationControl?.setErrors(null);
+    }
+
+    propertyDamageIndexUpdatedControl?.updateValueAndValidity();
+  }
+
+  private setLossPreventionDate(lossPreventionDate: any) {
+    if (lossPreventionDate != null) {
+      return this.commonService.getDateByTimeZone(new Date(lossPreventionDate), new Date(lossPreventionDate).getTimezoneOffset());
+    }
+    else
+      return null;
+  }
+
+  private setUpdatedValueForNA(updatedValue: any) {
+    if (updatedValue != null && !isNaN(updatedValue) && Number(updatedValue) > 0) {
+      return parseFloat(updatedValue.toString()).toFixed(1);
+    }
+    else if (updatedValue === ReToolConstants.NA) return ReToolConstants.NA;
+    else if (updatedValue === -1.0) return ReToolConstants.NA;
+    else
+      return '0.0';
+  }
+
+  private setCalculatedValue(CalculatedValue: any) {
+    if (CalculatedValue != null && !isNaN(CalculatedValue))
+      return parseFloat(CalculatedValue.toString()).toFixed(1);
+    else
+      return '0.0';
+  }
+
+  private setNaValueForGPRiskfactorDropDown(riskFactorValue: any) {
+    return riskFactorValue === ReToolConstants.riskFactorNaValue ? ReToolConstants.NA : riskFactorValue;
+  }
+
+  private isValidPDIndexProperties(generalPropertyFormData: GeneralProperty[]): boolean {
+    const filteredGeneralPropertyData = generalPropertyFormData
+      .filter(property =>
+        [ActionEnum.IsNewRecord, ActionEnum.IsDeleted, ActionEnum.IsModified].includes(property.Action)
+      );
+    return filteredGeneralPropertyData.some(item => {
+      const propertyDamageIndexAdjusted = item.PropertyDamageIndexAdjusted?.toString();
+      const propertyDamageIndexUpdated = item.PropertyDamageIndexUpdated;
+
+      if (propertyDamageIndexUpdated > 10) {
+        this.invalidMessageForPDIndexUpdate = ReToolConstants.pdIndexUpdateValueRangeValidation;
+
+      } else if (propertyDamageIndexUpdated < 0) {
+        this.invalidMessageForPDIndexUpdate = ReToolConstants.pdIndexNegativeUpdateValueRangeValidation;
+      }
+      else {
+        this.invalidMessageForPDIndexUpdate = null;
+      }
+      return propertyDamageIndexAdjusted && (item.PropertyDamageIndexAdjustedComment === null || item.PropertyDamageIndexAdjustedComment === '');
+    });
+  }
+
+  private setPDIndexAdjustDecimalValue(productDamageValue: any) {
+    if (productDamageValue
+      && productDamageValue >= -2
+      && productDamageValue <= 2
+      && productDamageValue !== 0)
+      return parseFloat(productDamageValue?.toString()).toFixed(1);
+    else
+      return '';
+  }
+
+  ngOnDestroy() {
+    if (this.subscription) {
+      this.subscription?.unsubscribe();
+    }
+  }
+}
+-----------------------------------------------------------------------------------------
+import { ActionEnum } from "./action-enum"
+import { BaseTabModel } from "./base-tab-model";
+import { LocationModel } from "./location";
+
+export class GeneralProperty implements BaseTabModel {
+    ULId: string = '';
+    PropertyLocationId?: number = 0;
+    Address: string = '';
+    City: string = '';
+    Country: string = '';
+    LocationName: string = '';
+    StateProvince: string = '';
+    NormalLossExpectancy?: number = 0;
+    ProbableMaximumLoss?: number = 0;
+    MaximumForeseeableLoss?: number = 0;
+    HumanElementCalculated?: number = null;
+    HumanElementUpdated?: number = null;
+    HumanElementUpdatedComment?: string = null;
+    HumanElementDisplayValue?: number = 0.0;
+    ConstructionCalculated?:number = null;
+    ConstructionUpdated?: number = null;
+    ConstructionUpdatedComment?: string = null;
+    ConstructionDisplayValue?: number = 0.0;
+    ConstructionHazards: string = '';
+    DetectionSecurity: string = '';
+    AutomaticSprinklers?: number = null;
+    FireWaterSupply: string = '';
+    FireManualResponse: string = '';
+    SpecialHazards: string = '';
+    EquipmentHazards: string = '';
+    ExternalExposures: string = '';
+    BusinessInterruptionCalculated?: number = 0.0;
+    BusinessInterruptionUpdated?: number = 0.0;
+    BusinessInterruptionUpdatedComment?: string = null;
+    BusinessInterruptionDisplayValue?: number = 0.0;
+    PropertyDamageIndexCalculated?: number = 0.0;
+    PropertyDamageIndexUpdated?: number = 0.0;
+    PropertyDamageIndexAdjusted?: number = 0.0;
+    PropertyDamageIndexPrevious?: number = 0.0;
+    PropertyDamageIndexAdjustedComment?: string = null;
+    BusinessInterruptionIndexCalculated?: number = 0.0;
+    LocationQualityIndexCalculated?: number = 0.0;
+    ConfidenceIndex: string = '';
+    LossPreventionSource: string = '';
+    LossPreventionDate?: Date;
+    LossPreventionComments: string = '';
+    RiskFactor?: any = null;
+    Action: ActionEnum = ActionEnum.IsNewRecord;
+    VerCol: string;
+    OccupancyGroupCode: number = 0;
+    OccupancyTypeCode: number = 0;
+    RedistributedWeights?: number[] = [] ;
+    ConstructionHazardsComment?: string = '';
+    DetectionSecurityComment?:string = "";
+    AutomaticSprinklersComment?:string ="";
+    FireWaterSupplyComment?:string = "";
+    FireManualResponseComment?:string = "";
+    SpecialHazardsComment?:string = "";
+    EquipmentHazardsComment?:string = "";
+    ExternalExposuresComment?:string = "";
+    BuildingValue: number = 0.0;
+    EquipmentValue: number = 0.0;
+    InventoryValue: number = 0.0;
+    OtherValue: number = 0.0;
+    TotalPD?: number = 0.0;
+    BusinessInterruptionValue: number = 0.0;
+    BusinessInterruptionOtherValue: number = 0.0;
+    PayRollValue: number = 0.0;
+    NormalLossDeficiencyDriven: boolean = false;
+    IndemnityPeriod: number = 0.0;
+    StreetAddressToolTip?: any = [];
+}
+
+
+export class ReToolConstants {
+    public static readonly decimalPoint = '.';
+    public static readonly blank = '';
+    public static readonly comma = ',';
+    public static readonly attribute = 'formControlName';
+    public static readonly indemnityPeriodFormControlName = 'IndemnityPeriod';
+    public static readonly text = 'text';
+    public static readonly propertyMasterType = 'propertyMasterType';
+    public static readonly currency = 'currency';
+    public static readonly currencyType = 'currencyType';
+    public static readonly unit = 'unit';
+    public static readonly unitType = 'unitType';
+    public static readonly keywordDescription = "description";
+    public static readonly geoLocationCityNameMappingKey = "locality";
+    public static readonly geoLocationStateNameMappinKey = "administrative_area_level_1";
+    public static readonly geoLocationCountryNameMappinKey = "country";
+    public static readonly locationAddressPlaceholder = "Location";
+
+    public static readonly onlyNumberREGEX: RegExp = new RegExp(/[^.0-9]/g);
+    public static readonly numberCommaSepratedREGEX: RegExp = new RegExp(/\B(?=(\d{3})+(?!\d))/g);
+
+    public static readonly valid = 'VALID';
+    public static readonly invalid = 'INVALID';
+    public static readonly requiredCurrencyAndUnitFieldsValidationMessage = "The Currency and unit fields must be selected."
+    public static readonly requiredFieldsValidationMessage = "Please fill the required fields."
+    public static readonly duplicateLocationValidationMessage = "Please enter unique location/address."
+    public static readonly noChangeMessage = "No changes found for saving."
+    public static readonly successMessage = "Data saved successfully."
+
+    public static readonly hazardControl = 'Hazard';
+    public static readonly isHighlighted = 'isHighlighted';
+    public static readonly equipmentBreakdownControl = 'EquipmentBreakdown';
+    public static readonly equipmentBreakdownControlHazardReview = 'EquipmentBreakdownHazardReview';
+    public static readonly groupBuildingArea = "GroupBuildingArea";
+    public static readonly equipmentValue = "EquipmentValue";
+    public static readonly otherValue = "OtherValue";
+    public static readonly annualBusinessInterruptionValue = "AnnualBusinessInterruptionValue";
+    public static readonly payRollValue = "PayRollValue";
+    public static readonly buildingValue = "BuildingValue";
+    public static readonly inventoryValue = "InventoryValue";
+    public static readonly totalPD = "TotalPD";
+    public static readonly indemnityPeriodMonth = "IndemnityPeriodMonth";
+    public static readonly payRollDayValue = "PayRollDayValue";
+    public static readonly autoSaveErrorMessage = 'Data could not be saved. Please click on Save button';
+    public static readonly startSubTabIndex = 0;
+    public static readonly tail = "...";
+    public static readonly textContent = 'textContent';
+    public static readonly readLessButton = 'Read Less';
+    public static readonly readMoreButton = 'Read More';
+    public static readonly cursor = 'cursor';
+    public static readonly pointer = 'pointer';
+    public static readonly display = 'display';
+    public static readonly block = 'block';
+    public static readonly color = 'color';
+    public static readonly colorHexaCode = '#16478d';
+    public static readonly fontWeight = 'font-weight';
+    public static readonly fontWeightSize = '500';
+    public static readonly textAlign = 'text-align';
+    public static readonly textPosition = 'right';
+    public static readonly click = 'click';
+    public static readonly focus = 'focus';
+    public static readonly input = 'input';
+    public static readonly keydown = 'keydown';
+    public static readonly blur = 'blur';
+    public static readonly anchorTag = 'a';
+    public static readonly showHideText = 'showHideText';
+    public static readonly percentage = '%';
+    public static readonly automaticSprinklersPercentage = 'AutomaticSprinklersPercentage';
+    public static readonly automaticSprinklersNeededPercentage = 'AutomaticSprinklersNeededPercentage';
+    public static readonly generalPropertyDropdownList: string[] = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', '0', 'NA'];
+    public static readonly confidenceIndexList: string[] = ['1', '2', '3', '4', '5'];
+    public static readonly propertyLocationId = 'PropertyLocationId';
+    public static readonly humanElementCommentValidationMessage = 'Please provide comments';
+    public static readonly valueTrue = 'true';
+    public static readonly valueFalse = 'false';
+    public static readonly noProgramSevereDeficiency = "No program or severe deficiencies";
+    public static readonly humanElementRisk = "humanElementRisk";
+    public static readonly hotWorkManagement = "hotWorkManagement";
+    public static readonly otherIgnitionSourceControl = "otherIgnitionSourceControl";
+    public static readonly contractorManagement = "contractorManagement";
+    public static readonly maintenance = "maintenance";
+    public static readonly housekeeping = "housekeeping";
+    public static readonly employeeTraining = "employeeTraining";
+    public static readonly managementOfchange = "managementOfchange";
+    public static readonly imapairmentManagement = "imapairmentManagement";
+    public static readonly preIncidentPlanEmergencyResponse = "preIncidentPlanEmergencyResponse";
+    public static readonly supervisionMaintenanceOfFireProtEquip = "supervisionMaintenanceOfFireProtEquip";
+    public static readonly fireProtectionWaterSuppliesAndOther = 'fireProtectionWaterSuppliesAndOther';
+    public static readonly humanElementCalculated = 'HumanElementCalculated';
+    public static readonly humanElementUpdated = 'HumanElementUpdated';
+    public static readonly humanElementUpdatedComment = 'HumanElementUpdatedComment';
+    public static readonly commentValidationMessage = 'Please provide comments';
+    public static readonly businessInterruptionRiskTitle = 'Property/ Business Interruption Risk Factor Calculator';
+    public static readonly businessInterruptionDisplayValue = 'BusinessInterruptionDisplayValue';
+    public static readonly humanElementDisplayValue = 'HumanElementDisplayValue';
+    public static readonly businessInterruptionCalculated = 'BusinessInterruptionCalculated';
+    public static readonly constructionDisplayValue = 'ConstructionDisplayValue';
+    public static readonly businessInterruptionUpdated = 'BusinessInterruptionUpdated';
+    public static readonly businessInterruptionUpdatedComment = 'BusinessInterruptionUpdatedComment';
+    public static readonly sesonality = 'sesonality';
+    public static readonly contingentBI = 'contingentBI';
+    public static readonly interdependentBI = 'interdependentBI';
+    public static readonly uniqueEquipmentBottlenecks = 'uniqueEquipmentBottlenecks';
+    public static readonly makeup = 'makeup';
+    public static readonly disasterRecoveryPlan = 'disasterRecoveryPlan';
+    public static readonly highRiskAndHighImpact = 'High Risk/ High Impact';
+    public static readonly limitedMakeupCapacity = 'Limited make-up capacity';
+    public static readonly noPlanPlaceSevereDeficiencies = 'No plans in place, or severe deficiencies';
+    public static readonly NA = 'NA';
+    public static readonly businessInterruptionRisk = 'businessInterruptionRisk';
+    public static readonly ConstructionHazardsComment: string = 'ConstructionHazardsComment';
+    public static readonly DetectionSecurityComment: string = 'DetectionSecurityComment';
+    public static readonly AutomaticSprinklersComment: string = 'AutomaticSprinklersComment';
+    public static readonly FireWaterSupplyComment: string = 'FireWaterSupplyComment';
+    public static readonly FireManualResponseComment: string = 'FireManualResponseComment';
+    public static readonly SpecialHazardsComment: string = 'SpecialHazardsComment';
+    public static readonly EquipmentHazardsComment: string = 'EquipmentHazardsComment';
+    public static readonly ExternalExposuresComment: string = 'ExternalExposuresComment';
+    public static readonly ConstructionHazardsCommentCaption: string = 'Construction Hazards';
+    public static readonly DetectionSecurityCommentCaption: string = 'Detection/ Alarms/ Security';
+    public static readonly AutomaticSprinklersCommentCaption: string = 'Automatic Sprinklers';
+    public static readonly FireWaterSupplyCommentCaption: string = 'Fire Water Supply';
+    public static readonly FireManualResponseCommentCaption: string = 'Fire Department / Manual Response';
+    public static readonly SpecialHazardsCommentCaption: string = 'Special Hazards';
+    public static readonly EquipmentHazardsCommentCaption: string = 'Equipment Hazards';
+    public static readonly ExternalExposuresCommentCaption: string = 'External Exposures';
+    public static readonly futureDatePrevantionMessage = 'Future date is not allowed.';
+    public static readonly nine: number = 9;
+    public static readonly AreaFtMSquareValue: string = '1';
+    public static readonly AreaPercentageValue: string = '2';
+    public static readonly removeSpecialCharacter: RegExp = new RegExp(/[^\w\s]/gi);
+    public static readonly TotalPlantArea = "TotalPlantArea";
+    public static readonly constructionRisk = 'constructionRisk';
+    public static readonly area = 'area';
+    public static readonly constructionArea = 'Area';
+    public static readonly constructionEIFS = 'EIFSConstruction';
+    public static readonly reinforcedConcrete = 'reinforcedConcrete';
+    public static readonly concreteonProtectedSteel = 'concreteonProtectedSteel';
+    public static readonly plankUnprotectedSteel = 'plankUnprotectedSteel';
+    public static readonly noncombustibleSteel = 'noncombustibleSteel';
+    public static readonly lightNoncombustible = 'lightNoncombustible';
+    public static readonly combustible = 'combustible';
+    public static readonly plankTimber = 'plankTimber';
+    public static readonly woodDeckEquivalent = 'woodDeckEquivalent';
+    public static readonly nonFMApprovedMetalPanel = 'nonFMApprovedMetalPanel';
+    public static readonly boardsonJoistsEquivalent = 'boardsonJoistsEquivalent';
+    public static readonly fabric = 'fabric';
+    public static readonly totalPlantArea = 'totalPlantArea';
+    public static readonly eIFSConstruction = 'eIFSConstruction';
+    public static readonly constructionRiskTitle = 'Property/ Construction Risk Factor Calculator';
+    public static readonly constructionCalculated = 'ConstructionCalculated';
+    public static readonly constructionUpdated = 'ConstructionUpdated';
+    public static readonly constructionUpdatedComment = 'ConstructionUpdatedComment';
+    public static readonly boolean = 'boolean';
+    public static readonly coverOccupancyValues = 'coverOccupancyValues';
+    public static readonly occupancyGroupTIV = 'occupancyGroupTIV';
+    public static readonly occupancyTypeTIV = 'occupancyTypeTIV';
+    public static readonly occupancyCodeTIV = 'occupancyCodeTIV';
+    public static readonly hazardTIV = 'hazardTIV';
+    public static readonly deviationTIV = 'deviationTIV';
+    public static readonly equipmentBreakdownTIV = 'equipmentBreakdownTIV';
+    public static readonly isHazardTIVUpdated = 'isHazardTIVUpdated';
+    public static readonly isEquipmentBreakdownTIVUpdated = 'isEquipmentBreakdownTIVUpdated';
+    public static readonly occupancyHighestHazardReview = 'occupancyHighestHazardReview';
+    public static readonly deviationHighestHazardReview = 'deviationHighestHazardReview';
+    public static readonly equipmentBreakdownHazardReview = 'equipmentBreakdownHazardReview';
+    public static readonly isHazardReviewUpdated = 'isHazardReviewUpdated';
+    public static readonly isEBRHazardReviewUpdated = 'isEBRHazardReviewUpdated';
+    public static readonly HazardTIV = 'HazardTIV';
+    public static readonly OccupancyHighestHazardReview = 'OccupancyHighestHazardReview';
+    public static readonly isHighlightedForTIV = 'isHighlightedTIV';
+    public static readonly EquipmentBreakdownTIV = 'EquipmentBreakdownTIV';
+    public static readonly IsHighestHazardReviewUpdated = 'IsHighestHazardReviewUpdated';
+    public static readonly IsHazardTIVUpdated = 'IsHazardTIVUpdated';
+    public static readonly IsEquipmentBreakdownUpdatedTIV = 'IsEquipmentBreakdownUpdatedTIV';
+    public static readonly IsEBRHighestHazardReviewUpdated = 'IsEBRHighestHazardReviewUpdated';
+    public static readonly EquipmentBreakdownHazardReview = 'EquipmentBreakdownHazardReview';
+    public static readonly Review36Months = '36 months';
+    public static readonly Review24Months = '24 months';
+    public static readonly Review12Months = '12 months';
+    public static readonly TIV20Review = '20%';
+    public static readonly TIV30Review = '30%';
+    public static readonly TIV40Review = '40%';
+    public static readonly TIV50Review = '50%';
+    public static readonly plantAreaExceedBy100Message: string = 'Total plant area must be less than or equal to 100%';
+    public static readonly humanElementColumnField = 'HumanElement';
+    public static readonly constructionColumnField = 'Construction';
+    public static readonly areaFtMtSquare = 'Area(ft² or m²)';
+    public static readonly areaPercentage = 'Area(%)';
+    public static readonly areaFtMtSquarePercentage = 'Area(ft² or m² / %)';
+    public static readonly SupplyChainConfidenceAvg: number = 4;
+    public static readonly nullableValue: any = null;
+    public static readonly pdIndexUpdateValueRangeValidation = 'PD Index should not be greater than 10.';
+    public static readonly reviewedPercentageBuilding = 'ReviewedPercentageBuilding'
+    public static readonly reviewedPercentageContents = 'ReviewedPercentageContents'
+    public static readonly reviewedPercentageTotalPD = 'ReviewedPercentageTotalPD'
+    public static readonly reviewedPercentageTotalBI = 'ReviewedPercentageTotalBI'
+    public static readonly reviewedPercentageTIV = 'ReviewedPercentageTIV';
+    public static readonly fileUploadValidationMessage = 'Please Upload the Excel File.';
+    public static readonly requiredColumnsValuesMissingMessage = 'Required column values are missing.';
+    public static readonly multiple = 'Multiple';
+    public static readonly locationName = 'Location Name';
+    public static readonly streetAddress = 'Street Address';
+    public static readonly state = 'State / Province';
+    public static readonly country = 'Country';
+    public static readonly fileExtensionXLSX = 'xlsx';
+    public static readonly fileExtensionXLS = 'xls';
+    public static readonly pdIndexNegativeUpdateValueRangeValidation = 'PD Index should not be less than 0.';
+
+    public static readonly uLIdREGEX: RegExp = new RegExp(/^\d{3}-\d{5}$/);
+    public static readonly uAIdREGEX: RegExp = new RegExp(/^\d{3}-\d{8}$/);
+    public static readonly key: {enter: string, tab: string} = {
+        enter: 'Enter',
+        tab: 'Tab'
+    }
+    public static readonly countryName = "CountryName";
+    public static readonly address = "StreetAddress";
+    public static readonly locationKeyULID = 'ULID';
+    public static readonly locationKeyLocationName = 'LocationName';
+    public static readonly locationKeyCountry = 'Country';
+    public static readonly locationAddressField = 'Address';
+    public static readonly locationCityField = 'City';
+    public static readonly locationStateField = 'State';
+    public static readonly locationStreetAddressToolTip = 'StreetAddressToolTip';
+    public static readonly keywordCountrySearch = "countryName";
+    public static readonly countryPlaceholder = "Country";
+    public static readonly object = "object";
+    public static readonly riskFactorNaValue = 11;
+    public static readonly propertyDamageIndexAdjustedComment: string = 'PropertyDamageIndexAdjustedComment';
+    public static readonly pdIndexAdjustedByCommentCaption: string = 'PD Index Adjusted By';
+    public static readonly requiredPDIndexAdjustmentComment = "Add a comment for PD Index Adjustment"
+}
+-------------------------------------------------------------------
+export class MasterDataModel {
+  text: string;
+  value: string;
+  category: string;
+  defaultValue: string;
+  dependentValue: any;
+  disabled: boolean = false;
+  fullText:string;
+}
+-----------------------------------------------------
+export interface GeneralPropertyWeightResponse {
+    generalPropertyGroupCodeWeightId: number;
+    occupancyGroupId: number;
+    groupCode: number;
+    typeCode: number;
+    humanElement: number;
+    construction: number;
+    constructionHazards: number;
+    detectionSecurity: number;
+    automaticSprinklers: number;
+    fireWaterSupply: number;
+    fireManualResponse: number;
+    specialHazards: number;
+    equipmentHazards: number;
+    externalExposures: number;
+    totalPropertyDamage: number;
+    totalBusinessInterruption: number;
+    statusId: number;
+}
+---------------------------------------------------------------
+export interface RedistributionWeight {
+    groupCode: number;
+    occupancyGroupId: number;
+    groupTypeCode: number;
+    inputWeights: RedistributionWeightElement;
+    inputRatings: RedistributionWeightElement;
+    redistributedWeights:RedistributionWeightElement
+}
+----------------------------------------------------------------
+export interface RedistributionWeightElement{
+    humanElement?: string | number;
+    construction?: string | number;
+    constructionHazards?: string | number;
+    detectionSecurity?: string | number;
+    automaticSprinklers?: string | number;
+    fireWaterSupply?: string | number;
+    fireManualResponse?: string | number;
+    specialHazards?: string | number;
+    equipmentHazards?: string | number;
+    externalExposures?: string | number;
+}
+-----------------------------------------------------------------------------------------------------
+import { GridRowRecord } from "./grid-row-record";
+
+export interface PopupRequest {
+    title: string;
+    data:any;
+    gridRecordDetail:GridRowRecord;
+}
+
+---------------------------------------------------------------------------------------------------------
+export interface GridRowRecord {
+    rowIndex:number;
+    columnIndex?:number;
+    columnName:string;
+    rowPKId:number,
+    value:any,
+    popup?:string
+}
+-------------------------------------------------------------------------------------------
+import { BusinessInterruptionRiskFactor } from "./business-interruption-risk-factor";
+import { ConstructionRiskFactor } from "./construction-risk-factor";
+import { HumanElementRiskFactor } from "./human-element-risk-factor";
+
+export interface RiskFactor {
+   humanElementRisk: HumanElementRiskFactor;
+   businessInterruptionRisk: BusinessInterruptionRiskFactor;
+   constructionRisk: ConstructionRiskFactor;
+}
+----------------------------------------------------------
+export interface HumanElementRiskFactor {
+    hotWorkManagement?: number,
+    otherIgnitionSourceControl?: number,
+    contractorManagement?: number,
+    maintenance?: number,
+    housekeeping?: number,
+    employeeTraining?: number,
+    managementOfchange?: number,
+    imapairmentManagement?: number,
+    preIncidentPlanEmergencyResponse?: number,
+    supervisionMaintenanceOfFireProtEquip?: number,
+    fireProtectionWaterSuppliesAndOther?: boolean
+}
+-------------------------------------------------------------------------
+export interface BusinessInterruptionRiskFactor {
+    sesonality?: number,
+    contingentBI?: number,
+    interdependentBI?: number,
+    uniqueEquipmentBottlenecks?: number,
+    makeup?: number,
+    disasterRecoveryPlan?: number,
+}
+-------------------------------------------------------------------
+export interface ConstructionRiskFactor {
+    area?: number,
+    reinforcedConcrete?: number,
+    concreteonProtectedSteel?: number,
+    plankUnprotectedSteel?: number,
+    noncombustibleSteel?: number,
+    lightNoncombustible?: number,
+    combustible?: number,
+    plankTimber?: number,
+    woodDeckEquivalent?: number,
+    nonFMApprovedMetalPanel?: number,
+    boardsonJoistsEquivalent?: number,
+    fabric?: number,
+    totalPlantArea?: number,
+    eIFSConstruction?: boolean,
+}
+
+---------------------------------------------------------------------------------------------------------
+import { Injectable } from '@angular/core';
+import { PropertyValue } from '../models/property-value';
+import { catchError, Observable, Subject, tap, throwError } from 'rxjs';
+import { ReToolConstants } from '../constants/re-tool.constants';
+import { environment } from '../../../../environments/environment';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { NormalLossExpectancy } from '../models/normal-loss-expectancy';
+import { ProbableMaximumLoss } from '../models/probable-maximum-loss';
+import { MaximumForeseeableLoss } from '../models/maximum-foreseeable-loss';
+import { EquipmentProbableMaximumLoss } from '../models/equipment-probable-maximum-loss';
+import { PropertyMasterDataTypeEnum } from '../models/property-master-data-type-enum';
+import { GeneralPropertyWeightResponse } from '../models/general-property-weight-response';
+import { Cover } from '../models/cover';
+import { PropertyLocationImportRequest } from '../models/property-location-import-request';
+import { LocationFilterModel } from '../../loc-address/models/location-name-address';
+
+const httpOptions = {
+  headers: new HttpHeaders({
+    'Content-Type': 'application/json'
+  })
+};
+
+@Injectable({
+  providedIn: 'root'
+})
+
+export class ReToolService {
+  public addNewLocationSubject = new Subject<void>();
+  addNewLocation$ = this.addNewLocationSubject.asObservable();
+  public currencyUnitSubject = new Subject<any>();
+  currencyUnit$ = this.currencyUnitSubject.asObservable();
+  public locationApiDataSubscribe$ = new Subject<any>();
+  public countrySearchSubject$ = new Subject<any>();
+  public humanElementRiskFactorSubject = new Subject<any>();
+  humanElementRiskFactor$ = this.humanElementRiskFactorSubject.asObservable();
+  private importDataSubject = new Subject<{ locationData: any, propertyValueData: any }>();
+  importData$ = this.importDataSubject.asObservable();
+
+  private readonly httpOptions = {
+    headers: new HttpHeaders({
+      'Content-Type': 'application/json'
+    })
+  };
+
+  constructor(private http: HttpClient) { }
+
+  getLocationProperties(reviewRequestId: number, isGeneralProperty: boolean): Observable<PropertyValue[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetAllProperty/${reviewRequestId}/${isGeneralProperty}`);
+  }
+
+  getCoverWithPropertyValues(reviewRequestId: number): Observable<Cover> {
+    return this.get<any>(`${environment.baseUrl}Property/GetPropertyAccountCover/${reviewRequestId}`);
+  }
+
+  generateFormElementIdAttribute(rowIndex: number, dataId: number, columnName: string, popUp?: string): string {
+    return `row-${rowIndex}_dataKey-${dataId}_${columnName}_${popUp}`;
+  }
+
+  getLocationByAddress(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Location/GetAddressSearch/${query}`, httpOptions);
+  }
+
+  getLocationByGeoCode(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Location/GetGeoCode/${query}`, httpOptions);
+  }
+
+  getPropertyMaster(type: PropertyMasterDataTypeEnum): Observable<any> {
+    let params = new HttpParams();
+    if (type == PropertyMasterDataTypeEnum.HumanElementRiskFactor) {
+      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
+    }
+
+    if (type == PropertyMasterDataTypeEnum.BIRiskFactor) {
+      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
+    }
+
+    if (type == PropertyMasterDataTypeEnum.Cover) {
+      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
+    }
+
+    const options = {
+      ...this.httpOptions,
+      params
+    }
+
+    if (type === PropertyMasterDataTypeEnum.CurrencyAndUnit) {
+      return this.http.get<any>(`${environment.baseUrl}Property`, options)
+        .pipe(
+          tap(data => this.currencyUnitSubject.next(data)),
+          catchError(error => {
+            return throwError(() => new Error(error.message));
+          })
+        );
+    }
+    else
+      return this.http.get<any>(`${environment.baseUrl}Property`, options);
+  };
+
+  getEnumPropertyName = (value: number): string => {
+    return PropertyMasterDataTypeEnum[value];
+  };
+
+  getOccupancyGroup(productLine: any) {
+    return this.http.get<any>(`${environment.baseUrl}Master/GetRequestCompleteMaster/?productLine=${productLine}`, httpOptions);
+  }
+
+  getOccupancyType(occupancyGroupId: any) {
+    return this.http.get<any>(`${environment.baseUrl}Master/GetOccupancyType/?occupancyGroupId=${occupancyGroupId}`, httpOptions);
+  }
+
+  // Generic POST request for submitting the data to the api
+  // could update once backend API ready
+  post<T>(url: string, body: any): Observable<T> {
+    return this.http.post<any>(url, body, this.httpOptions).pipe(catchError(this.handleError));
+  }
+
+  //Generic GET request for api calling
+  // could update once backend API ready
+  get<T>(url: string): Observable<T> {
+    return this.http.get<T>(url, this.httpOptions).pipe(
+      tap((response) => response),
+      catchError(this.handleError)
+    );
+  }
+
+  handleError(error: any): Observable<never> {
+    throw new Error(error.message);
+  }
+
+  getPropertyFireLocations(reviewRequestId: number): Observable<NormalLossExpectancy[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetPropertyFireLocations?reviewRequestId=${reviewRequestId}`);
+  }
+
+  getProbableMaximumLoss(reviewRequestId: number): Observable<ProbableMaximumLoss[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetNormalLossExpectancy?reviewRequestId=${reviewRequestId}`);
+  }
+
+  getMaximumForeseeableLoss(reviewRequestId: number): Observable<MaximumForeseeableLoss[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetNormalLossExpectancy?reviewRequestId=${reviewRequestId}`);
+  }
+
+  getPropertyEquipmentBreakdownLocations(reviewRequestId: number): Observable<EquipmentProbableMaximumLoss[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetPropertyEquipmentBreakdownLocations?reviewRequestId=${reviewRequestId}`);
+  }
+
+  getGeneralPropertyWeight(occupancyCodes: any): Observable<GeneralPropertyWeightResponse[]> {
+    return this.post<GeneralPropertyWeightResponse[]>(`${environment.baseUrl}Master/GetGeneralPropertyWeight`, occupancyCodes);
+  }
+
+  importData(data: any, propertyValueData: any) {
+    this.importDataSubject.next({ locationData: data, propertyValueData: propertyValueData });
+  }
+
+  importPropertyLocations(data: PropertyLocationImportRequest[]): any {
+    const apiURL = `${environment.baseUrl}Property/PropertyLocationImport`;
+    return this.http.post(apiURL, data);
+  }
+
+  searchLocationByName(locationFilter: LocationFilterModel) {
+    const body = JSON.stringify(locationFilter);
+    return this.http.post<any>(`${environment.baseUrl}Property/GetLocationSuggestionByName`, body, httpOptions);
+  }
+  
+  searchCountryName(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Property/GetCountrySuggestionByName/${query}`, httpOptions);
+  }
+}
+-----------------------------------------------------------------------------------------------------------------------------
+import { Injectable } from '@angular/core';
+import { FormControlStatus, FormGroup } from '@angular/forms';
+import { ToastrService } from 'ngx-toastr';
+import { BehaviorSubject, catchError, filter, map, Observable, of, Subject, Subscription, switchMap } from 'rxjs';
+import { environment } from '../../../../environments/environment';
+import { AppConstants } from '../../../shared/constants/app.constants';
+import { ReToolConstants } from '../constants/re-tool.constants';
+import { ActionEnum } from '../models/action-enum';
+import { Cover } from '../models/cover';
+import { PropertyEquipmentLocation } from '../models/property-equipment-location';
+import { PropertyFireLocation } from '../models/property-fire-location';
+import { PropertyLocation } from '../models/property-location';
+import { PropertyValue } from '../models/property-value';
+import { SavePropertyLocationRequestModel } from '../models/savePropertyRequest';
+import { ReToolService } from './re-tool.service';
+
+interface DynamicAccessiblePropertyItem {
+  ULId?: string;
+  Address: string;
+  City?: string;
+  StateProvince: string;
+  LocationAddressMapId?: number;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ReToolTabService {
+  reviewRequestId: number;
+  private dataSourceSubject$ = new Subject<{ event: string, payload: any }>();
+  public hasFormChange$ = new BehaviorSubject<boolean>(false);
+  public selectedCurrencyUnitSubject$ = new BehaviorSubject<any>(null);
+  private selectedLocAddressData = new BehaviorSubject<any>(null);
+  selectedLocAddressData$ = this.selectedLocAddressData.asObservable();
+  formStatus: FormControlStatus = ReToolConstants.valid;
+  subscription: Subscription | undefined = new Subscription();
+  propertyLocationForm: FormGroup;
+  tabIndex: number;
+  subTabIndex: number;
+  productLineId: number = 0;
+  currencyUnitValid: boolean = true;
+  allPropertyValuesDeleted: boolean = false;
+  private locAddressPopupClosedSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
+  locAddressPopupClosedSubject$ = this.locAddressPopupClosedSubject.asObservable();
+
+  propertyLocationColumns: string[] = [
+    "ULID",
+    "LocationName",
+    "StreetAddress",
+    "CityName",
+    "StateName",
+    "CountryName",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "BusinessInterruptionValue",
+    "BusinessInterruptionOtherValue",
+    "IndemnityPeriod",
+    "PayRollValue",
+    "PayRollDayValue",
+    "TotalTE",
+    "Total",
+    "Delete"
+  ];
+
+  occupancyColumns: string[] = [
+    "ULID",
+    "LocationName",
+    "StreetAddress",
+    "CountryName",
+    "OccupancyGroup",
+    "OccupancyType",
+    "OccupancyCode",
+    "Hazard",
+    "EquipmentBreakdown",
+    "GroupBuildingArea",
+    "BuildingValuePerSquareFeet",
+    "AutomaticSprinklersPercentage",
+    "AutomaticSprinklersNeededPercentage"
+  ];
+
+  generalPropertyColumns: string[] = [
+    "ULID",
+    "LocationName",
+    "StreetAddress",
+    "CountryName",
+    "NormalLossExpectancy",
+    "ProbableMaximumLoss",
+    "MaximumForeseeableLoss",
+    "HumanElementCalculated",
+    "ConstructionCalculated",
+    "ConstructionHazards",
+    "DetectionSecurity",
+    "AutomaticSprinklers",
+    "FireWaterSupply",
+    "FireManualResponse",
+    "SpecialHazards",
+    "EquipmentHazards",
+    "ExternalExposures",
+    "BusinessInterruptionCalculated",
+    "PropertyDamageIndexUpdated",
+    "PropertyDamageIndexAdjusted",
+    "BusinessInterruptionIndexCalculated",
+    "LocationQualityIndexCalculated",
+    "ConfidenceIndex",
+    "LossPreventionSource",
+    "LossPreventionDate",
+    "LossPreventionComments"
+  ];
+
+  normalLossExpectancyColumns: string[] = [
+    "ULID",
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "NormalLossCompare",
+    "NormalLossScenario",
+    "NormalLossDeficiencyDriven",
+    "NormalLossPropertyDamage",
+    "NormalLossOtherPropertyDamage",
+    "TotalPDNLE",
+    "NormalLossBusinessInterruption",
+    "NormalLossInterBusinessInterruption",
+    "NormalLossOtherTimeElement",
+    "TotalTE",
+    "NLEActual",
+    "NormalLossIndemnityPeriodBI",
+    "IPFactTotal",
+
+  ];
+
+  probableMaximumLossColumns: string[] = [
+    "ULID",
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "ProbableLossCompare",
+    "ProbableLossScenario",
+    "ProbableLossPropertyDamage",
+    "ProbableLossOtherPropertyDamage",
+    "TotalPDPML",
+    "ProbableLossBusinessInterruption",
+    "ProbableLossInterBusinessInterruption",
+    "ProbableLossOtherTimeElement",
+    "TotalTE",
+    "PML",
+    "ProbableLossIndemnityPeriodBI",
+    "IPFactTotal",
+  ];
+
+  maximumForeseeableLossColumns: string[] = [
+    "ULID",
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "MaximumLossCompare",
+    "MaximumLossScenario",
+    "MaximumLossPropertyDamage",
+    "MaximumLossOtherPropertyDamage",
+    "TotalPDMFL",
+    "MaximumLossBusinessInterruption",
+    "MaximumLossInterBusinessInterruption",
+    "MaximumLossOtherTimeElement",
+    "TotalTE",
+    "MFL",
+    "MaximumLossIndemnityPeriodBI",
+    "IPFactTotal",
+  ];
+
+  equipmentProbableMaximumLossColumns: string[] = [
+    "ULID",
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "ProbableLossCompare",
+    "ProbableLossScenario",
+    "ProbableLossPropertyDamage",
+    "ProbableLossOtherPropertyDamage",
+    "TotalPDPML",
+    "ProbableLossBusinessInterruption",
+    "ProbableLossInterBusinessInterruption",
+    "ProbableLossOtherTimeElement",
+    "TotalTE",
+    "EBPML",
+    "ProbableLossIndemnityPeriodBI",
+    "IPFactTotal"
+  ];
+
+  equipmentMaximumForeseeableLossColumns: string[] = [
+    "ULID",
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "MaximumLossCompare",
+    "MaximumLossScenario",
+    "MaximumLossPropertyDamage",
+    "MaximumLossOtherPropertyDamage",
+    "TotalPDMFL",
+    "MaximumLossBusinessInterruption",
+    "MaximumLossInterBusinessInterruption",
+    "MaximumLossOtherTimeElement",
+    "TotalTE",
+    "EBMFL",
+    "MaximumLossIndemnityPeriodBI",
+    "IPFactTotal"
+  ];
+
+  coverColumns: string[] = [
+    "ReportedBuildingValue",
+    "ReportedContentsValue",
+    "ReportedTotalPD",
+    "ReportedTotalBivalue",
+    "ReportedTIV",
+    "ReviewedBuilding",
+    "ReviewedContents",
+    "ReviewedTotalPD",
+    "ReviewedTotalBI",
+    "ReviewedTIV",
+    "ReviewedPercentageBuilding",
+    "ReviewedPercentageContents",
+    "ReviewedPercentageTotalPD",
+    "ReviewedPercentageTotalBI",
+    "ReviewedPercentageTIV",
+    "TimeElementExcluded",
+    "RecommendedReviewFrequency",
+    "RecommendedAccountPercentageTIV",
+    "OccupancyGroupTIV",
+    "OccupancyTypeTIV",
+    "OccupancyCodeTIV",
+    "HazardTIV",
+    "EquipmentBreakdownTIV",
+    "DeviationTIV",
+    "IsHazardTIVUpdated",
+    "IsEquipmentBreakdownUpdatedTIV",
+    "OccupancyGroupHighestHazardReview",
+    "OccupancyTypeHighestHazardReview",
+    "OccupancyCodeHighestHazardReview",
+    "OccupancyHighestHazardReview",
+    "EquipmentBreakdownHazardReview",
+    "DeviationHighestHazardReview",
+    "IsHighestHazardReviewUpdated",
+    "IsEBRHighestHazardReviewUpdated",
+    "IsHazardUpdated",
+    "IsEquipmentBreakdownUpdated",
+    "Interdependency",
+    "ContingentTimeElement",
+    "QualityOfSupplyChainInfo",
+    "SCRiskMgmt",
+    "SupplyChainConfidence"
+  ];
+
+  constructor(private reToolService: ReToolService, private toastr: ToastrService) { }
+
+  emit(event: string, ds: any) {
+    this.dataSourceSubject$.next({ event: event, payload: ds });
+  }
+
+  on(event: string): Observable<any> {
+    return this.dataSourceSubject$.asObservable().pipe(
+      filter(e => e.event === event),
+      map(e => e.payload)
+    );
+  }
+
+  setUpPropertyValuesData(isGeneralProperty: boolean = false): Observable<any> {
+    return this.reToolService.getLocationProperties(this.reviewRequestId, isGeneralProperty);
+  }
+
+  setUpCoverWithPropertyValuesData(): Observable<any> {
+    return this.reToolService.getCoverWithPropertyValues(this.reviewRequestId);
+  }
+
+  setUpPropertyValueWithDefaultData(): Observable<any> {
+    return of([new PropertyValue(), new PropertyValue()]);
+  }
+
+  setUpPropertyFireLocationData(): Observable<any> {
+    return this.reToolService.getPropertyFireLocations(this.reviewRequestId);
+  }
+
+  setUpProbableMaximumLossData(): Observable<any> {
+    return this.reToolService.getProbableMaximumLoss(this.reviewRequestId);
+  }
+
+  setUpMaximumForeseeableLossData(): Observable<any> {
+    return this.reToolService.getMaximumForeseeableLoss(this.reviewRequestId);
+  }
+
+  setUpPropertyEquipmentLocationData(): Observable<any> {
+    return this.reToolService.getPropertyEquipmentBreakdownLocations(this.reviewRequestId);
+  }
+
+  // The purpose of this logic is to maintain a parent and sub tab association
+  // which can be used individually as a single value to determine tab relationships
+  encodeTabIndex(parentTabIndex: number, subTabIndex: number): number {
+    if (parentTabIndex === 0) return 1;
+    return ((parentTabIndex << 3) | subTabIndex);
+  }
+
+  // This is to fetch parent and sub tab indexes out of association value
+  // it could be removed if not needed in future
+  decodeTabIndex(encodedTabIndexValue: number): { parentTabIndex: number, subtabIndex: number } {
+    const parentIndex = (encodedTabIndexValue >> 3) & 7;//shift right by 3 bits and mask with 7 (0111)
+    const subIndex = encodedTabIndexValue & 7;
+    return { parentTabIndex: parentIndex, subtabIndex: subIndex } as any;
+  }
+
+  saveUpdateDeleteAndFetchThePropertyValueFormData(data: SavePropertyLocationRequestModel, isTabChange: boolean = false): Observable<any> {
+    const isGeneralProperty = false;
+    const postUrl = `${environment.baseUrl}Property`;
+    const getUrl = `${environment.baseUrl}Property/GetAllProperty/${this.reviewRequestId}/${isGeneralProperty}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  updatePropertyLocationFormData(data: PropertyLocation[], isTabChange: boolean = false, isGeneralProperty: boolean = false): Observable<any> {
+    const postUrl = `${environment.baseUrl}Property/UpdateOccupancyOrGeneralProperty`;
+    const getUrl = `${environment.baseUrl}Property/GetAllProperty/${this.reviewRequestId}/${isGeneralProperty}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  saveUpdateAndFetchThePropertyFireLocationFormData(data: PropertyFireLocation[], isTabChange: boolean = false): Observable<any> {
+    const postUrl = `${environment.baseUrl}Property/AddOrUpdatePropertyFireLocation`;
+    const getUrl = `${environment.baseUrl}Property/GetPropertyFireLocations?reviewRequestId=${this.reviewRequestId}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  private saveUpdateAndFetchTheLatestActiveFormData<T>(postUrl: string, data: any, getUrl: string): Observable<T> {
+    return this.reToolService.post(postUrl, data).pipe(
+      switchMap((postResponse) => {
+        if (getUrl) {
+          return this.reToolService.get<T>(getUrl);
+        } else {
+          return of(postResponse as T);
+        }
+      }),
+      catchError(this.reToolService.handleError)
+    )
+  }
+
+  showErrorMessage(message: string, action: string) {
+    this.toastr.error(message, '', {
+      timeOut: AppConstants.snackbarDuration,
+      closeButton: true,
+      progressBar: true,
+      positionClass: "toast-top-right"
+    });
+  }
+
+  showSuccessMessage(message: string, action: string) {
+    this.toastr.success(message, '', {
+      timeOut: AppConstants.snackbarDuration,
+      closeButton: true,
+      progressBar: true,
+      positionClass: "toast-top-right"
+    });
+  }
+
+  actionStateChange(formGroup: FormGroup) {
+    this.subscription?.add(
+      formGroup?.get('Action').valueChanges.subscribe(value => {
+        this.hasFormChange$.next((value != ActionEnum.IsSaved))
+      })
+    );
+  }
+
+  saveUpdateAndFetchThePropertyEquipmentLocationFormData(data: PropertyEquipmentLocation[], isTabChange: boolean = false): Observable<any> {
+    const postUrl = `${environment.baseUrl}Property/UpdatePropertyEquipmentBreakdownLocation`;
+    const getUrl = `${environment.baseUrl}Property/GetPropertyEquipmentBreakdownLocations?reviewRequestId=${this.reviewRequestId}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  saveUpdateAndFetchTheCoverFormData(data: Cover, isTabChange: boolean = false): Observable<any> {
+    const postUrl = `${environment.baseUrl}Property/SaveOrUpdatePropertyAccountCover`;
+    const getUrl = `${environment.baseUrl}Property/GetPropertyAccountCover/${this.reviewRequestId}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  mergePropertyValueData<T extends DynamicAccessiblePropertyItem>(data: T[]): T[] {
+    const mergeMap = new Map<string, Partial<T & {
+      StreetAddresses: string[],
+      CityNames: string[],
+      StateProvinces: string[],
+      LocationAddressMapIds: number[]
+    }>>();
+
+    let mergedData: any[] = [];
+    data.forEach(item => {
+      const key = item.ULId;
+
+      if (!mergeMap.has(key)) {
+        mergeMap.set(key, {
+          ...item,
+          StreetAddresses: [],
+          CityNames: [],
+          StateProvinces: [],
+          LocationAddressMapIds: []
+        });
+      }
+
+      const existing = mergeMap.get(key);
+      existing.StreetAddresses.push(item.Address);
+      existing.CityNames.push(item.City);
+      existing.StateProvinces.push(item.StateProvince);
+      if (item instanceof PropertyValue)
+        existing.LocationAddressMapIds.push(item.LocationAddressMapId);
+    });
+
+    mergedData = Array.from(mergeMap.values());
+    mergedData.forEach(x => this.setAddressAndToolTip(x));
+    return mergedData;
+  }
+
+  // handle tooltip and final grid values
+  setAddressAndToolTip(data: any) {
+    if (data.Action === ActionEnum.IsDeleted) return;
+    
+    if (Array.from(new Set(data.StreetAddresses)).length > 1
+      || Array.from(new Set(data.CityNames)).length > 1
+      || Array.from(new Set(data.StateProvinces)).length > 1) {
+      data.Address = ReToolConstants.multiple;
+    } else {
+      data.Address = data.StreetAddresses[0];
+    }
+
+    if (Array.from(new Set(data.CityNames)).length > 1) {
+      data.City = ReToolConstants.multiple;
+    } else {
+      data.City = data.CityNames[0];
+    }
+
+    if (Array.from(new Set(data.StateProvinces)).length > 1) {
+      data.StateProvince = ReToolConstants.multiple;
+    } else {
+      data.StateProvince = data.StateProvinces[0];
+    }
+
+    const streetAddressToolTip = [];
+    streetAddressToolTip.push(data.StreetAddresses.map((address, index) => {
+      const city = data.CityNames[index] ? `${data.CityNames[index]}, ` : '';
+      return `${address}, ${city} ${data.StateProvinces[index]}`
+    }));
+
+    data.StreetAddressToolTip = [...new Set(streetAddressToolTip[0])].join('\n');
+  }
+
+  SetLocAddressSelectedData(data: any[]) {
+    this.selectedLocAddressData.next(data);
+  }
+  
+  setLocAddressPopupClosedSubject(status: boolean): void {
+    this.locAddressPopupClosedSubject.next(status);
+  }
+}
+--------------------------------------------------------------------------------------------------------------
+import { Injectable } from '@angular/core';
+import { RedistributionWeight } from '../models/redistribution-weights';
+import { ReToolConstants } from '../constants/re-tool.constants';
+import { GeneralPropertyTypeCodeWeightsEnum } from '../models/general-property-type-code-weights-enum';
+import { RiskFactorElementEnum } from '../models/risk-factor-element-enum';
+import { GeneralProperty } from '../models/general-property';
+import { Utility } from '../utility/mapper-util';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ReToolCalculationService {
+  exchangeCurrencyRate: number = 2;
+  private redistributionWeights: RedistributionWeight[] = [];
+  private fractionDigits: number = ReToolConstants.nine;
+
+  //#region 'Weight calculation region'
+
+  setRedistributionWeights(redistributionWeights: RedistributionWeight[]) {
+    this.redistributionWeights = redistributionWeights;
+    return {
+      calculate: this.calculateAll.bind(this)
+    };
+  }
+
+  setPropertyData<T>(row: T): any {
+    return {
+      setGroupOrTypeCode: (code: number) => this.setGroupOrTypeCode(row, code),
+    }
+  }
+
+  private calculateAll(): void {
+    this.redistributionWeights.forEach((rdWeights) => {
+      this.calculate(rdWeights);
+    });
+  }
+
+  private calculate(redistributionWeight: RedistributionWeight): RedistributionWeight {
+    let sum = 0;
+    for (const key in redistributionWeight.inputWeights) {
+      if (this.isValidInput(redistributionWeight.inputRatings[key])) {
+        sum = Number((sum + redistributionWeight.inputWeights[key] / 100).toFixed(this.fractionDigits));
+      }
+    }
+
+    Object.entries(redistributionWeight.inputRatings).forEach(([key]) => {
+      if (this.isValidInput(redistributionWeight.inputRatings[key])) {
+        const weight = ((redistributionWeight.inputWeights[key] / sum) / 100);
+        redistributionWeight.redistributedWeights[key] = parseFloat(weight.toFixed(this.fractionDigits));
+      }
+      else
+        redistributionWeight.redistributedWeights[key] = 0;
+    });
+
+    return redistributionWeight;
+  }
+
+  private getWeightDistributionByCode(code: number) {
+    return this.redistributionWeights[this.getIndexByCode(code)];
+  }
+
+  private getWeightDistributionRiskFactorByElement(code: number, element: RiskFactorElementEnum): number {
+    const redistributionWeight: RedistributionWeight
+      = this.getWeightDistributionByCode(code);
+    return parseFloat(
+      (
+        Number(this.isValidInput(redistributionWeight.inputRatings[element]) ? redistributionWeight.inputRatings[element] : 0) *
+        Number(redistributionWeight.redistributedWeights[element])
+      ).toFixed(this.fractionDigits));
+  }
+
+  private updateWeightDistribution(row: any, code: number, value: string | number | null, element: RiskFactorElementEnum): any {
+    let index = this.getIndexByCode(code);
+    if (index === -1) {
+      return {
+        getRiskFactor: () => -1,
+        getPDIndexValue: () => -1
+      }
+    }
+
+    let redistributionWeight = this.getWeightDistributionByCode(code);
+    redistributionWeight.inputRatings[element] = value;
+    const updatedDistributedWeight = this.calculate(redistributionWeight);
+    this.redistributionWeights[index] = updatedDistributedWeight;
+
+    return {
+      getRiskFactor: () => this.getWeightDistributionRiskFactorByElement(code, element),
+      getPDIndexValue: () => this.getPDIndexValue(row, code)
+    }
+  }
+
+  private setGroupOrTypeCode(row: any, code: number): any {
+    return {
+      setElement: (element: RiskFactorElementEnum) => this.setElement(row, code, element)
+    }
+  }
+
+  private setElement(row: any, code: number, element: RiskFactorElementEnum): any {
+    return {
+      updateWeightDistribution: (value: string | number | null) => this.updateWeightDistribution(row, code, value, element)
+    }
+  }
+
+  private getIndexByCode(code: number): number {
+    if (code === GeneralPropertyTypeCodeWeightsEnum.SemiconductorCrystalGrowing
+      || code === GeneralPropertyTypeCodeWeightsEnum.SemiconductorWaferFabrication) {
+      return this.redistributionWeights.findIndex(w => w.groupTypeCode === code);
+    }
+    else {
+      return this.redistributionWeights.findIndex(w => w.occupancyGroupId === code);
+    }
+  }
+
+  private isValidInput(rating: string | number): boolean {
+    return rating !== ReToolConstants.NA && rating !== null && !isNaN(Number(rating));
+  }
+
+  private getRedistributedFactorsSum(code: number): number {
+    let sum = 0;
+    let redistributionWeight = this.getWeightDistributionByCode(code);
+    Object.entries(redistributionWeight.redistributedWeights).forEach(([key]) => {
+      const calculatedWeight = this.getWeightDistributionRiskFactorByElement(code, key as RiskFactorElementEnum);
+      sum = Number((sum + calculatedWeight).toFixed(this.fractionDigits));
+    });
+    return sum;
+  }
+
+  private getPDIndexValue(property: GeneralProperty, code: number): number | null {
+    return this.getRedistributedFactorsSum(code) * this.getMultiplierFactor(property);
+  }
+
+  private getMultiplierFactor(property: GeneralProperty) {
+    const probableMaximumLossRate: number = Number(Utility.removeComma(property.ProbableMaximumLoss)) * this.exchangeCurrencyRate;
+    const maximumForeseeableLossRate: number = Number(Utility.removeComma(property.MaximumForeseeableLoss)) * this.exchangeCurrencyRate;
+    const normalLossExpectancyRate: number = Number(Utility.removeComma(property.NormalLossExpectancy)) * this.exchangeCurrencyRate;
+    const businessInterruptionValue: number = Number(property.BusinessInterruptionValue);
+    const businessInterruptionOtherValue: number = Number(property.BusinessInterruptionOtherValue);
+    const totalPD: number = Number(property.TotalPD);
+    const payRollValue: number = Number(property.PayRollValue);
+    const indemnityPeriod: number = Number(property.IndemnityPeriod);
+    const normalLossDeficiencyDriven: boolean = property.NormalLossDeficiencyDriven || false;
+
+    const totalPdBIOrOtherAndPayRoll = Number((totalPD
+      + (12 * (businessInterruptionValue + businessInterruptionOtherValue)
+        / indemnityPeriod) + payRollValue)
+      ?.toFixed(1));
+
+    const totalPdBIOrOtherAndPayRollRate = totalPdBIOrOtherAndPayRoll * this.exchangeCurrencyRate;
+    const totalPdBIOrOtherAndPayRollRateFactor = 0.25 * totalPdBIOrOtherAndPayRollRate;
+
+    if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) < (probableMaximumLossRate)
+      && normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate < 100)))
+    ) {
+      return 1;
+    }
+    else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) < (probableMaximumLossRate)
+      && normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate < 100)))
+    ) {
+      return 0.95;
+    }
+    else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) === (probableMaximumLossRate)
+      && normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate < 100)))
+    ) {
+      return 0.75;
+    }
+    else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) === (probableMaximumLossRate)
+      && normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate < 100)))
+    ) {
+      return 0.65;
+    }
+    else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) < (probableMaximumLossRate)
+      && normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate >= 100)))
+    ) {
+      return 0.95;
+    }
+    else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) < (probableMaximumLossRate)
+      && normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate >= 100)))
+    ) {
+      return 0.9;
+    }
+    else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) === (probableMaximumLossRate)
+      && normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate >= 100)))
+    ) {
+      return 0.7;
+    }
+    else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) === (probableMaximumLossRate)
+      && normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate >= 100)))
+    ) {
+      return 0.6;
+    }
+    else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) < (probableMaximumLossRate)
+      && !normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate < 100)))
+    ) {
+      return 1;
+    }
+    else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) < (probableMaximumLossRate)
+      && !normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate < 100)))
+    ) {
+      return 0.975;
+    }
+    else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) === (probableMaximumLossRate)
+      && !normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate < 100)))
+    ) {
+      return 1;
+    }
+    else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) === (probableMaximumLossRate)
+      && !normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) < (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate < 100)))
+    ) {
+      return 0.95;
+    }
+    else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) < (probableMaximumLossRate)
+      && !normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate >= 100)))
+    ) {
+      return 1;
+    }
+    else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) < (probableMaximumLossRate)
+      && !normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate >= 100)))
+    ) {
+      return 0.95;
+    }
+    else if (((probableMaximumLossRate) < (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) === (probableMaximumLossRate)
+      && !normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate >= 100)))
+    ) {
+      return 1;
+    }
+    else if (((probableMaximumLossRate) === (maximumForeseeableLossRate)
+      && (normalLossExpectancyRate) === (probableMaximumLossRate)
+      && !normalLossDeficiencyDriven)
+      && (((totalPdBIOrOtherAndPayRollRate) < 400
+        && (normalLossExpectancyRate) >= (totalPdBIOrOtherAndPayRollRateFactor))
+        || ((totalPdBIOrOtherAndPayRollRate) >= 400
+          && (normalLossExpectancyRate >= 100)))
+    ) {
+      return 0.9;
+    }
+    else
+      return 0;
+  }
+  //#endregion 'Weight calculation'
+}
+
+-------------------------------------------------------------------------------------------------------
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Subject } from 'rxjs';
+import { RoleNameEnum } from '../enums/rolename.enum';
+import { UserDetailsModel } from '../../core/models/user-details-model';
+import { MatSnackBar } from '@angular/material/snack-bar'
+import { AppConstants } from '../constants/app.constants';
+import { ProductLineEnum } from '../enums/productline.enum';
+import { FormGroup } from '@angular/forms';
+import { RequestStatusCount } from '../../features/dashboard/models/request-status-count';
+import { UserFeatureEnum } from '../enums/userfeature.enum';
+import { DatePipe } from '@angular/common';
+import { AppMaintenanceModel } from '../../core/models/app-maintenance';
+@Injectable({
+  providedIn: 'root'
+})
+export class CommonService {
+  private subjectToggleView = new Subject<boolean>();
+  subjectToggleView$ = this.subjectToggleView.asObservable();
+  userDetails: UserDetailsModel | undefined;
+  private subjectRequestStatusCountSub = new Subject<RequestStatusCount>();
+  subjectRequestStatusCountSub$ = this.subjectRequestStatusCountSub.asObservable();
+  private subjectAccountClearedSource = new Subject<void>();
+  subjectAccountClearedSub$ = this.subjectAccountClearedSource.asObservable();
+  private loadSavedFiltersSource = new Subject<void>();
+  loadSavedFiltersSub$ = this.loadSavedFiltersSource.asObservable();
+  appMaintainenanceDetails: AppMaintenanceModel | undefined;
+  private appMaintainenaceSub = new BehaviorSubject<boolean>(false);
+  appMaintainenaceSub$ = this.appMaintainenaceSub.asObservable();
+  private headerVisible = new Subject<boolean>();
+  headerVisible$ = this.headerVisible.asObservable();
+
+  constructor(private snackBar: MatSnackBar, private datePipe: DatePipe) { }
+
+  loadSavedFilters() {
+    this.loadSavedFiltersSource.next();
+  }
+
+  snackbarSuccessMessage(message: string, Title: string = "", _horizontalPosition: any = AppConstants.snackbarHorizontalPosition, _verticalPosition: any = AppConstants.snackbarVerticalPosition) {
+    this.snackBar.open(message, Title, {
+      duration: AppConstants.snackbarDuration,
+      horizontalPosition: _horizontalPosition,
+      verticalPosition: _verticalPosition,
+      panelClass: [AppConstants.snackbarSuccessStyle],
+    });
+  }
+
+  snackbarErrorMessage(message: string, Title: string = "", _horizontalPosition: any = AppConstants.snackbarHorizontalPosition, _verticalPosition: any = AppConstants.snackbarVerticalPosition) {
+    this.snackBar.open(message, Title, {
+      duration: AppConstants.snackbarDuration,
+      horizontalPosition: _horizontalPosition,
+      verticalPosition: _verticalPosition,
+      panelClass: [AppConstants.snackbarErrorStyle],
+    });
+  }
+
+  getDateByTimeZone(date, minutes) {
+    if (minutes < 0) {
+      date.setMinutes(date.getMinutes() + (minutes * -1));
+    }
+    else if (minutes > 0) {
+      date.setMinutes(date.getMinutes() - (minutes * +1));
+    }
+    return date;
+  }
+
+  isUserFromUnderwriterGroup() {
+    return this.userDetails?.roleId == RoleNameEnum.Underwriter || this.userDetails?.roleId == RoleNameEnum.UnderwriterTechnician || this.userDetails?.roleId == RoleNameEnum.UnderwriterManager;
+  }
+
+  isUserFromRiskEngineerGroup() {
+    return this.userDetails?.roleId == RoleNameEnum.RiskEngineer || this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader || this.userDetails?.roleId == RoleNameEnum.GlobalLeader;
+  }
+
+  isUserFromValuationGroup() {
+    return this.userDetails?.roleId == RoleNameEnum.ValuationLeader || this.userDetails?.roleId == RoleNameEnum.ValuationSpecialist;
+  }
+
+  isUserFromRiskEngineerGroupByToggleView(iSToggleShow: boolean) {
+    return iSToggleShow ? this.userDetails?.roleId == RoleNameEnum.RiskEngineer || this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader : this.userDetails?.roleId == RoleNameEnum.RiskEngineer || this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader || this.userDetails?.roleId == RoleNameEnum.GlobalLeader;
+  }
+
+  isUserFromRiskEngineerGroupExceptGlobalLeader() {
+    return this.userDetails?.roleId == RoleNameEnum.RiskEngineer || this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader;
+  }
+
+  isRoleFromRiskEngineerGroupExceptGlobalLeader(roleId) {
+    return roleId == RoleNameEnum.RiskEngineer || roleId == RoleNameEnum.CountryLeader || roleId == RoleNameEnum.RegionalLeader;
+  }
+
+  isRoleFromValuationGroup(roleId) {
+    return roleId == RoleNameEnum.ValuationLeader || roleId == RoleNameEnum.ValuationSpecialist;
+  }
+
+  isRoleFromUnderwriterGroup(roleId) {
+    return roleId == RoleNameEnum.Underwriter || roleId == RoleNameEnum.UnderwriterTechnician || roleId == RoleNameEnum.UnderwriterManager;
+  }
+
+  isUserFromLeaderRole() {
+    return this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader || this.userDetails?.roleId == RoleNameEnum.ValuationLeader;
+  }
+
+  isUserFromUWGroupOrRiskEngineer() {
+    return this.userDetails?.roleId == RoleNameEnum.Underwriter || this.userDetails?.roleId == RoleNameEnum.UnderwriterTechnician || this.userDetails?.roleId == RoleNameEnum.UnderwriterManager || this.userDetails?.roleId == RoleNameEnum.RiskEngineer;
+  }
+
+  isUserAssociatedwithBuiderRiskOrMarine() {
+    return (this.userDetails?.productLineId == ProductLineEnum.BuildersRisk || this.userDetails?.productLineId == ProductLineEnum.Marine)
+  }
+
+  addValidators(formGroup: FormGroup, validator: any) {
+    for (const key in formGroup.controls) {
+      formGroup.get(key).setValidators(validator[key]);
+      formGroup.get(key).updateValueAndValidity();
+    }
+  }
+
+  removeValidators(formGroup: FormGroup,) {
+    formGroup.clearValidators();
+    formGroup.updateValueAndValidity();
+  }
+
+  checkNullValue(value: any): any {
+    return value == "" || value == undefined || value == null ? null : value
+  }
+
+  isValueEmpty(value: any): any {
+    return value == "" || value == undefined || value == null || value.length <= 0 || value == 'null'
+  }
+
+  isValueEmptyAndNotLessThanZero(value: any): any {
+    return value === "" || value === undefined || value === null || value === 'null'
+  }
+
+  checkNullOrBlank(value: any): any {
+    return value == null || value == '' || value == undefined ? '-' : value
+  }
+
+  checkNullOrZero(value: any): any {
+    return value == "" || value == "0" || value == undefined || value == null ? null : value
+  }
+
+  sendRequestStatusCount(requestStatusCount: RequestStatusCount) {
+    this.subjectRequestStatusCountSub.next(requestStatusCount);
+  }
+
+  getPermissionStatus(featureId: number): boolean {
+    const userPermission = this.userDetails?.userPermission
+      .find(
+        permission => permission.userFeatureId == featureId
+      );
+
+    return userPermission != null && userPermission != undefined;
+  }
+
+  triggerAccountCleared() {
+    this.subjectAccountClearedSource.next();
+  }
+
+  snackbarErrorMessageforAlert(message: string, Title: string = "", _horizontalPosition: any = AppConstants.snackbarHorizontalPosition, _verticalPosition: any = AppConstants.snackbarVerticalPosition) {
+    this.snackBar.open(message, Title, {
+      duration: AppConstants.snackbarDurationforAlert,
+      horizontalPosition: _horizontalPosition,
+      verticalPosition: _verticalPosition,
+      panelClass: [AppConstants.snackbarErrorStyleForAlert],
+    });
+  }
+
+  removeYearSubFolder(filepath: string): string {
+    //split the filepath by '\\'
+    const parts = filepath.split('\\');
+
+    //find index of year part
+    const yearIndex = parts.findIndex(part => /^\d{4}$/.test(part));
+
+    //keep the parts upto and including the year
+    const newParts = yearIndex !== -1 ? parts.slice(0, yearIndex) : parts;
+
+    const newFilepath = newParts.join('/');
+    return newFilepath;
+  }
+
+  isUserFromRiskEngineerGroupExceptRiskEngineer() {
+    return this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader || this.userDetails?.roleId == RoleNameEnum.GlobalLeader;
+  }
+
+  isUserAdmin() {
+    const admin = this.userDetails?.userPermission.find(permission =>
+      permission.userFeatureId == UserFeatureEnum.userAdmin
+    );
+    return admin != null && admin != undefined;
+  }
+
+  getDropdownSelectValue(value: any): any {
+    return (value == "" || value == undefined || value == null || value == 0) ? AppConstants.defaultDropDownValue : value.toString()
+  }
+
+  convertToMediumDateFromat(value: Date): any {
+    return (value == null || value == undefined) ? '-' : this.datePipe.transform(value, 'mediumDate')
+  }
+
+  setAppMaintainenance(status: boolean) {
+    this.appMaintainenaceSub.next(status);
+  }
+
+  showHeader() {
+    this.headerVisible.next(true);
+  }
+
+  hideHeader() {
+    this.headerVisible.next(false);
+  }
+
+  getProductLineParameterForEdW(productLineId) {
+    switch (productLineId.toString()) {
+
+      case ProductLineEnum.GeneralCorporateProperty.toString():
+      case ProductLineEnum.Mining.toString():
+      case ProductLineEnum.PowerGeneration.toString():
+      case ProductLineEnum.OilGasAndPetrochemical.toString():
+      case ProductLineEnum.BuildersRisk.toString():
+      case ProductLineEnum.MidMarketMittelstandProperty.toString():
+        return AppConstants.productLineProperty;
+
+      case ProductLineEnum.Marine.toString():
+        return AppConstants.productLineMarine;
+
+      case ProductLineEnum.Programs.toString():
+        return AppConstants.productLinePrograms;
+
+      case ProductLineEnum.Other.toString():
+      default:
+        return null;
+    }
+  }
+
+  formatToDate(date: string | Date): any {
+    if (!date) return '-';
+    const parsedDate = new Date(date);
+    return isNaN(parsedDate.getTime()) ? '-' : parsedDate.setHours(0,0,0,0);
+  }
+  
+  convertExcelDate(cell: any): void {
+    if (cell && typeof cell.v === 'number') {
+      const excelDate = new Date(cell.v); //Directly used JS Date object, we are getting in milliseconds no need of further conversion
+      excelDate.setHours(0, 0, 0, 0);
+      
+      // check if excel date is invalid
+      if(isNaN(excelDate.getTime())){
+        return;
+      }
+
+      let serialDate = (excelDate.getTime() - new Date(1900, 0, 1).getTime()) / (1000 * 60 * 60 * 24) + 3;
+      serialDate = Math.floor(serialDate);
+      cell.v = serialDate;
+      cell.t = 'n';
+      cell.z = 'DD-MMM-YYYY';
+    }
+  }
+}
+-----------------------------------------
+export enum TabEnum {
+    Cover = 0,
+    AqiData = 1,
+    Fire = 2,
+    EquipmentBreakdown = 3,
+    PlcExtract = 4,
+    Activity = 5
+}
+-------------------------------------
+export enum SubTabEnum {
+    PropertyValue = 0,
+    Occupancy = 1,
+    GeneralProperty = 2,
+    NormalLossExpectancy = 4,
+    ProbableMaximumLoss = 5,
+    MaximumForeseeableLoss = 6,
+    EquipmentProbableMaximumLoss = 7,
+    EquipmentMaximumForeseeableLoss = 8
+}
+----------------------------------------------------------------
+export enum SubTabEncodedEnum {
+    Cover = 1,
+    PropertyValue = 8,
+    Occupancy = 9,
+    GeneralProperty = 10,
+    NormalLossExpectancy = 16,
+    ProbableMaximumLoss = 17,
+    MaximumForeseeableLoss = 18,
+    EquipmentProbableMaximumLoss = 24,
+    EquipmentMaximumForeseeableLoss = 25
+}
+
+------------------------------------------------------------
+
+export enum PropertyMasterDataTypeEnum {
+    CurrencyAndUnit = 0,
+    HumanElementRiskFactor = 1,
+    BIRiskFactor = 2,
+    Cover = 3
+}
+
+------------------------------------------------------------
+
+export enum RiskFactorElementEnum {
+    HumanElement = 'humanElement',
+    Construction = 'construction',
+    ConstructionHazards = 'constructionHazards',
+    DetectionSecurity = 'detectionSecurity',
+    AutomaticSprinklers = 'automaticSprinklers',
+    FireWaterSupply = 'fireWaterSupply',
+    FireManualResponse = 'fireManualResponse',
+    SpecialHazards = 'specialHazards',
+    EquipmentHazards = 'equipmentHazards',
+    ExternalExposures = 'externalExposures'
+}
+
+-------------------------------------------------------------
+
+import { Component, Inject } from '@angular/core';
+import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { FormControl, FormGroup, FormBuilder } from '@angular/forms';
+import { GridRowRecord } from '../../models/grid-row-record';
+import { PopupResponse } from '../../models/popup-response';
+import { ReToolConstants } from '../../constants/re-tool.constants';
+import { ReToolTabService } from '../../service/re-tool-tab.service';
+import { Subscription } from 'rxjs';
+import { PopupRequest } from '../../models/popup-request';
+
+@Component({
+  selector: 'app-comment',
+  templateUrl: './comment.component.html',
+  styleUrl: './comment.component.css'
+})
+export class CommentComponent {
+  subscription: Subscription | undefined = new Subscription();
+  commentPopupForm: FormGroup;
+  resultResponse: PopupResponse = { action: 0, data: null, gridRecordDetail: {} as GridRowRecord };
+
+  description:string;
+  location:string; city: string; state:string; country:string; title:string;
+  reToolConstant = ReToolConstants;
+  PropertyLocationId:number;
+
+  constructor( private fb: FormBuilder, public dialogRef: MatDialogRef<CommentComponent >,
+    @Inject(MAT_DIALOG_DATA) public request: PopupRequest,
+    private reToolTabService: ReToolTabService
+  ) {
+
+  }
+
+    ngOnInit() {
+      this.location = this.request?.data?.Location;
+      this.city = this.request?.data?.City;
+      this.state = this.request?.data?.State;
+      this.country = this.request?.data?.Country;
+      this.title = this.request?.data?.Title;
+      this.description = this.request.data.Description;
+      this.PropertyLocationId = this.request.data.PropertyLocationId;
+      this.resultResponse.gridRecordDetail = this.request.gridRecordDetail;
+      this.initializeForm();
+    }
+    initializeForm(){
+      this.commentPopupForm = this.fb.group({
+        Description: new FormControl(this.description),
+      });
+    }
+
+  save(result: any) {
+      this.commentPopupForm.markAllAsTouched();
+      this.commentPopupForm.markAsPristine();
+
+      if (this.commentPopupForm.status === ReToolConstants.valid) {
+        const formData = this.getFormData();
+        this.request.data.Description = formData.Description;
+        this.request.data.Location = this.request?.data?.Location;
+        this.request.data.City = this.request?.data?.City;
+        this.request.data.State = this.request?.data?.State;
+        this.request.data.Country = this.request?.data?.Country;
+        this.request.data.Title = this.request?.data?.Title;
+        this.request.data.PropertyLocationId = this.request.data.PropertyLocationId;
+        this.resultResponse.data = this.request.data;
+        this.resultResponse.action = 1;
+        this.dialogRef.close(this.resultResponse);
+      }
+      else
+        this.reToolTabService.showErrorMessage(ReToolConstants.humanElementCommentValidationMessage, '');
+  }
+
+  close(result: any) {
+    this.resultResponse.action = 0;
+    const formData = this.getFormData();
+    this.request.data.Description = formData.Description;
+    this.resultResponse.data = this.request.data;
+    this.dialogRef.close(this.resultResponse);
+  }
+
+  private getFormData(): any {
+    return this.commentPopupForm.getRawValue();
+  }
+}
+----------------------------------------------------------------------------------------------------
+import { Component, Inject } from '@angular/core';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { PopupResponse } from '../../models/popup-response';
+import { FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
+import { MasterDataModel } from '../../../dashboard/models/master-data';
+import { GridRowRecord } from '../../models/grid-row-record';
+import { Subscription } from 'rxjs';
+import { ReToolConstants } from '../../constants/re-tool.constants';
+import { PopupRequest } from '../../models/popup-request';
+import { ReToolTabService } from '../../service/re-tool-tab.service';
+import { CommonService } from '../../../../shared/services/common.service';
+import { Utility } from '../../utility/mapper-util';
+import { ConstructionRating } from '../../models/construction-rating';
+
+@Component({
+  selector: 'app-construction-risk-factor-calculator-popup',
+  templateUrl: './construction-risk-factor-calculator-popup.component.html',
+  styleUrl: './construction-risk-factor-calculator-popup.component.css'
+})
+export class ConstructionRiskFactorCalculatorPopupComponent {
+  subscription: Subscription | undefined = new Subscription();
+  title: string = '';
+  constructionRiskFactorForm!: FormGroup;
+  constructionRiskFactors: MasterDataModel[] = [];
+  constructionCalculated: number = 0;
+  maxLength: number = 0;
+  maxValue: number = 0;
+  isPercentage: boolean = false;
+  isPercentageValueExceedBy100: boolean = false;
+  submitted = false;
+  resultResponse: PopupResponse = { action: 0, data: null, gridRecordDetail: {} as GridRowRecord };
+  reToolConstant = ReToolConstants;
+  areaLabel: string = this.reToolConstant.areaFtMtSquarePercentage;
+
+  constructor(private fb: FormBuilder, public dialogRef: MatDialogRef<ConstructionRiskFactorCalculatorPopupComponent>,
+    @Inject(MAT_DIALOG_DATA) public request: PopupRequest, private reToolTabService: ReToolTabService, private commonService: CommonService) { }
+
+  ngOnInit() {
+    this.title = this.request?.title;
+    this.resultResponse.gridRecordDetail = this.request.gridRecordDetail;
+    this.initializeForm();
+    this.formatRiskFieldsBasedOnAreaType();
+    this.updateCommentValidator(this.request?.data?.constructionUpdated);
+    this.handleCommentValidator();
+    this.handleFormControlValueChange();
+  }
+
+  initializeForm() {
+    this.constructionRiskFactorForm = this.fb.group({
+      Area: new FormControl(this.request?.data?.constructionRisk?.area, Validators.required),
+      ReinforcedConcrete: new FormControl({ value: this.request?.data?.constructionRisk?.reinforcedConcrete, disabled: true }),
+      ConcreteonProtectedSteel: new FormControl({ value: this.request?.data?.constructionRisk?.concreteonProtectedSteel, disabled: true }),
+      PlankUnprotectedSteel: new FormControl({ value: this.request?.data?.constructionRisk?.plankUnprotectedSteel, disabled: true }),
+      NoncombustibleSteel: new FormControl({ value: this.request?.data?.constructionRisk?.noncombustibleSteel, disabled: true }),
+      LightNoncombustible: new FormControl({ value: this.request?.data?.constructionRisk?.lightNoncombustible, disabled: true }),
+      Combustible: new FormControl({ value: this.request?.data?.constructionRisk?.combustible, disabled: true }),
+      PlankTimber: new FormControl({ value: this.request?.data?.constructionRisk?.plankTimber, disabled: true }),
+      WoodDeckEquivalent: new FormControl({ value: this.request?.data?.constructionRisk?.woodDeckEquivalent, disabled: true }),
+      NonFMApprovedMetalPanel: new FormControl({ value: this.request?.data?.constructionRisk?.nonFMApprovedMetalPanel, disabled: true }),
+      BoardsonJoistsEquivalent: new FormControl({ value: this.request?.data?.constructionRisk?.boardsonJoistsEquivalent, disabled: true }),
+      Fabric: new FormControl({ value: this.request?.data?.constructionRisk?.fabric, disabled: true }),
+      TotalPlantArea: new FormControl({ value: this.request?.data?.constructionRisk?.totalPlantArea, disabled: true }),
+      EIFSConstruction: new FormControl(this.request?.data?.constructionRisk?.eIFSConstruction),
+      ConstructionCalculated: new FormControl({ value: this.request?.data?.constructionCalculated, disabled: true }),
+      ConstructionUpdated: new FormControl(this.request?.data?.constructionUpdated || '0.0'),
+      ConstructionUpdatedComment: new FormControl(this.request?.data?.constructionUpdatedComment || '')
+    });
+  }
+
+  handleOverrideConstructionRatingBlur(event: any) {
+    const input = (event.target as HTMLInputElement).value;
+    const value = parseFloat(input);
+    if (!isNaN(value)) {
+      event.target.value = parseFloat(input).toFixed(1);
+    }
+  }
+
+  onClose(result: any): void {
+    this.resultResponse.action = 0;
+    this.dialogRef.close(this.resultResponse);
+  }
+
+  onSave(result: any) {
+    this.constructionRiskFactorForm.markAllAsTouched();
+    this.constructionRiskFactorForm.markAsPristine();
+    this.submitted = true;
+
+    if (this.constructionRiskFactorForm.status === ReToolConstants.valid && !this.isPercentageValueExceedBy100) {
+      const formValue = this.getConstructionRiskFactorCalcData();
+      const formData = this.removePercentageAndCommaFormData(formValue);
+      this.request.data.constructionRisk.area = formData.Area;
+      this.request.data.constructionRisk.reinforcedConcrete = formData.ReinforcedConcrete;
+      this.request.data.constructionRisk.concreteonProtectedSteel = formData.ConcreteonProtectedSteel;
+      this.request.data.constructionRisk.plankUnprotectedSteel = formData.PlankUnprotectedSteel;
+      this.request.data.constructionRisk.noncombustibleSteel = formData.NoncombustibleSteel;
+      this.request.data.constructionRisk.lightNoncombustible = formData.LightNoncombustible;
+      this.request.data.constructionRisk.combustible = formData.Combustible;
+      this.request.data.constructionRisk.plankTimber = formData.PlankTimber;
+      this.request.data.constructionRisk.woodDeckEquivalent = formData.WoodDeckEquivalent;
+      this.request.data.constructionRisk.nonFMApprovedMetalPanel = formData.NonFMApprovedMetalPanel;
+      this.request.data.constructionRisk.boardsonJoistsEquivalent = formData.BoardsonJoistsEquivalent;
+      this.request.data.constructionRisk.fabric = formData.Fabric;
+      this.request.data.constructionRisk.totalPlantArea = formData.TotalPlantArea;
+      this.request.data.constructionRisk.eIFSConstruction = formData.EIFSConstruction;
+      this.request.data.constructionCalculated = formData.ConstructionCalculated;
+      this.request.data.constructionUpdated = formData.ConstructionUpdated
+      this.request.data.constructionUpdatedComment = formData.ConstructionUpdatedComment;
+      this.resultResponse.data = this.request.data;
+      this.resultResponse.action = 1;
+      this.dialogRef.close(this.resultResponse);
+    }
+    else if (this.isPercentageValueExceedBy100) {
+      this.reToolTabService.showErrorMessage(ReToolConstants.plantAreaExceedBy100Message, '');
+    } else if (this.constructionRiskFactorForm.get('ConstructionUpdatedComment').status === ReToolConstants.invalid) {
+      this.reToolTabService.showErrorMessage(ReToolConstants.commentValidationMessage, '');
+    }
+    else {
+      this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+    }
+
+  }
+
+  onOverrideConstructionBlur(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (!isNaN(parseInt(target.value))) {
+      this.updateCommentValidator(Number(target.value))
+    }
+  }
+
+  formatRiskFieldsBasedOnAreaType() {
+    const selectedValue = this.constructionRiskFactorForm.get('Area').value;
+    if (JSON.parse(selectedValue) != null) {
+      const controls = this.constructionRiskFactorForm.controls;
+      Object.keys(controls).forEach((controlName) => {
+
+        if (
+          controlName !== ReToolConstants.constructionCalculated &&
+          controlName !== ReToolConstants.constructionUpdated &&
+          controlName !== ReToolConstants.constructionUpdatedComment &&
+          controlName !== ReToolConstants.constructionArea &&
+          controlName !== ReToolConstants.constructionEIFS
+        ) {
+          const control = this.constructionRiskFactorForm.get(controlName);
+          let controlValue = control.value;
+
+          if (selectedValue === ReToolConstants.AreaFtMSquareValue && controlValue !== null && controlValue !== '') {
+            controlValue = Number(controlValue.toString().replace(ReToolConstants.removeSpecialCharacter, ReToolConstants.blank));
+            this.constructionRiskFactorForm.get(controlName).setValue(controlValue.toString().replace(ReToolConstants.numberCommaSepratedREGEX, ReToolConstants.comma))
+          }
+
+          else if (selectedValue === ReToolConstants.AreaPercentageValue && controlValue !== null && controlValue !== '') {
+            controlValue = parseFloat(Utility.removeComma(controlValue));
+            this.constructionRiskFactorForm.get(controlName).setValue(controlValue + ReToolConstants.percentage);
+          }
+
+          if (control?.disabled && controlName !== ReToolConstants.TotalPlantArea) {
+            control.enable();
+          }
+        }
+      });
+
+      if (selectedValue === ReToolConstants.AreaFtMSquareValue) {
+        this.maxLength = 7;
+        this.maxValue = 9999999.94;
+        this.isPercentage = false;
+        this.areaLabel = this.reToolConstant.areaFtMtSquare;
+      } else if (selectedValue === ReToolConstants.AreaPercentageValue) {
+        this.maxLength = 3;
+        this.maxValue = 100;
+        this.isPercentage = true;
+        this.areaLabel = this.reToolConstant.areaPercentage;
+        let totalPlantAreaValue = this.constructionRiskFactorForm.get('TotalPlantArea').value;
+        totalPlantAreaValue = totalPlantAreaValue ? Number(totalPlantAreaValue.toString().replace(ReToolConstants.percentage, ReToolConstants.blank)) : null;
+        this.isPercentageValueExceedBy100 = totalPlantAreaValue ? totalPlantAreaValue > 100 : false;
+      }
+    }
+  }
+
+  onAreaSelect() {
+    const selectedValue = this.constructionRiskFactorForm.get('Area').value;
+    if (JSON.parse(selectedValue) != null) {
+
+      const controls = this.constructionRiskFactorForm.controls;
+      Object.keys(controls).forEach((controlName) => {
+
+        if (controlName !== ReToolConstants.constructionUpdated &&
+          controlName !== ReToolConstants.constructionUpdatedComment &&
+          controlName !== ReToolConstants.constructionArea
+        ) {
+          const control = this.constructionRiskFactorForm.get(controlName);
+          let controlValue = control.value;
+
+          if (selectedValue == ReToolConstants.AreaFtMSquareValue && controlValue != null && controlValue != '') {
+            control.reset();
+          }
+
+          else if (selectedValue === ReToolConstants.AreaPercentageValue && controlValue != null && controlValue != '') {
+            control.reset();
+          }
+
+          if (control?.disabled && controlName !== ReToolConstants.TotalPlantArea && controlName !== ReToolConstants.constructionCalculated) {
+            control.enable();
+          }
+        }
+      });
+
+      if (selectedValue === ReToolConstants.AreaFtMSquareValue) {
+        this.maxLength = 7;
+        this.maxValue = 9999999.94;
+        this.isPercentage = false;
+        this.areaLabel = this.reToolConstant.areaFtMtSquare;
+      } else if (selectedValue === ReToolConstants.AreaPercentageValue) {
+        this.maxLength = 3;
+        this.maxValue = 100;
+        this.isPercentage = true;
+        this.areaLabel = this.reToolConstant.areaPercentage;
+        let totalPlantAreaValue = this.constructionRiskFactorForm.get('TotalPlantArea').value;
+        totalPlantAreaValue = totalPlantAreaValue ? Number(totalPlantAreaValue.toString().replace(ReToolConstants.percentage, ReToolConstants.blank)) : null;
+        this.isPercentageValueExceedBy100 = totalPlantAreaValue ? totalPlantAreaValue > 100 : false;
+      }
+    }
+  }
+
+  removePercentageAndCommaFormData(formData: any): any {
+    const selectedValue = this.constructionRiskFactorForm.get('Area').value;
+    let formValue: any;
+
+    if (JSON.parse(selectedValue) != null) {
+
+      if (selectedValue === ReToolConstants.AreaFtMSquareValue) {
+        return formValue = Utility.removeCommaForConstrcutionFormData(formData);
+      } else if (selectedValue === ReToolConstants.AreaPercentageValue) {
+        return formValue = Utility.removePercentageForConstrcutionFormData(formData);
+      }
+    }
+    return formData;
+  }
+
+  calculateConstructionRating(): any | null {
+    const formData = this.getConstructionRiskFactorCalcData();
+    let formValues: any;
+
+    if (formData.Area === ReToolConstants.AreaFtMSquareValue)
+      formValues = Utility.removeCommaForConstrcutionFormData(formData);
+    else
+      formValues = Utility.removePercentageForConstrcutionFormData(formData);
+
+    let calculateTotalPlantArea = 0;
+    let calculateIndexRating = 0;
+
+    const constructionFormRiskFactors = [
+      { name: ReToolConstants.reinforcedConcrete, rating: ConstructionRating.ReinforcedConcrete, iValue: formValues.ReinforcedConcrete },
+      { name: ReToolConstants.concreteonProtectedSteel, rating: ConstructionRating.ConcreteonProtectedSteel, iValue: formValues.ConcreteonProtectedSteel },
+      { name: ReToolConstants.plankUnprotectedSteel, rating: ConstructionRating.PlankUnprotectedSteel, iValue: formValues.PlankUnprotectedSteel },
+      { name: ReToolConstants.noncombustibleSteel, rating: ConstructionRating.NoncombustibleSteel, iValue: formValues.NoncombustibleSteel },
+      { name: ReToolConstants.lightNoncombustible, rating: ConstructionRating.LightNoncombustible, iValue: formValues.LightNoncombustible },
+      { name: ReToolConstants.combustible, rating: ConstructionRating.Combustible, iValue: formValues.Combustible },
+      { name: ReToolConstants.plankTimber, rating: ConstructionRating.PlankTimber, iValue: formValues.PlankTimber },
+      { name: ReToolConstants.woodDeckEquivalent, rating: ConstructionRating.WoodDeckEquivalent, iValue: formValues.WoodDeckEquivalent },
+      { name: ReToolConstants.nonFMApprovedMetalPanel, rating: ConstructionRating.NonFMApprovedMetalPanel, iValue: formValues.NonFMApprovedMetalPanel },
+      { name: ReToolConstants.boardsonJoistsEquivalent, rating: ConstructionRating.BoardsonJoistsEquivalent, iValue: formValues.BoardsonJoistsEquivalent },
+      { name: ReToolConstants.fabric, rating: ConstructionRating.Fabric, iValue: formValues.Fabric }
+    ];
+
+    calculateTotalPlantArea = this.totalPlantAreaCalculation(constructionFormRiskFactors);
+    if(constructionFormRiskFactors.every(item => item.iValue === null)){
+      this.constructionRiskFactorForm.get('TotalPlantArea').setValue(this.reToolConstant.blank);
+      return null;
+    }
+    
+    if (formData.Area === ReToolConstants.AreaFtMSquareValue) {
+      this.isPercentageValueExceedBy100 = false;
+      const formatTotalPlantAreaValue = calculateTotalPlantArea >= 0 ? calculateTotalPlantArea.toString().replace(ReToolConstants.numberCommaSepratedREGEX, ReToolConstants.comma) : null;
+      this.constructionRiskFactorForm.get('TotalPlantArea').setValue(formatTotalPlantAreaValue);
+    }
+
+    else if (formData.Area === ReToolConstants.AreaPercentageValue) {
+
+      this.isPercentageValueExceedBy100 = calculateTotalPlantArea > 100;
+      const formatTotalPlantAreaValue = calculateTotalPlantArea >= 0 ? calculateTotalPlantArea + ReToolConstants.percentage : null;
+      this.constructionRiskFactorForm.get('TotalPlantArea').setValue(formatTotalPlantAreaValue);
+
+      if (this.isPercentageValueExceedBy100) return null;
+    }
+
+    const isAllProgramsNotChecked = constructionFormRiskFactors
+      .filter((rf) => this.commonService.isValueEmptyAndNotLessThanZero(rf.iValue))
+      .length > 0;
+    // do not perform any calculation if any of the control is not selected 
+    //with the desired selection
+    if (isAllProgramsNotChecked) return null;
+
+    calculateIndexRating = this.calculateConstructionIndexRating(constructionFormRiskFactors, formData.Area, formData.EIFSConstruction, calculateTotalPlantArea);
+    return calculateIndexRating.toFixed(1);
+  }
+
+  calculateConstructionIndexRating(programs: any[], selectedArea: any, eIFSConstruction: string, totalPlantArea: number): number {
+    let constructionIndexRating = 0;
+    let totalAreaCalculation = 0;
+    for (const element of programs) {
+      totalAreaCalculation += Number(this.commonService.isValueEmpty(element.rating) ? null : (element.rating) * (element.iValue));
+    }
+
+    if (selectedArea === ReToolConstants.AreaFtMSquareValue && eIFSConstruction === ReToolConstants.valueTrue) {
+      constructionIndexRating = Math.round(Number((0.75 * totalAreaCalculation) / totalPlantArea) * 10) / 10;
+    }
+    else if (selectedArea === ReToolConstants.AreaFtMSquareValue && eIFSConstruction !== ReToolConstants.valueTrue) {
+      constructionIndexRating = Math.round(Number(totalAreaCalculation / totalPlantArea) * 10) / 10;
+    }
+
+    else if (selectedArea === ReToolConstants.AreaPercentageValue && eIFSConstruction === ReToolConstants.valueTrue) {
+      totalAreaCalculation = totalAreaCalculation / 100;
+      const calculate = (0.75 * totalAreaCalculation).toFixed(2);
+      constructionIndexRating = Math.round(Number(calculate) * 10) / 10
+    }
+    else if (selectedArea === ReToolConstants.AreaPercentageValue && eIFSConstruction !== ReToolConstants.valueTrue) {
+      totalAreaCalculation = totalAreaCalculation / 100;
+      constructionIndexRating = Math.round(Number(totalAreaCalculation) * 10) / 10;
+    }
+   
+    return isNaN(constructionIndexRating) ?  0.0 : constructionIndexRating;
+  }
+
+  totalPlantAreaCalculation(programs: any[]): number {
+    let totalPlantArea = 0;
+    for (const element of programs) {
+      totalPlantArea += Number(this.commonService.isValueEmptyAndNotLessThanZero(element.iValue) ? null : element.iValue);
+    }
+    return totalPlantArea
+  }
+
+  private handleFormControlValueChange() {
+    Object.keys(this.constructionRiskFactorForm.controls).forEach((control) => {
+      if (control !== ReToolConstants.TotalPlantArea && control !== ReToolConstants.constructionArea && control !== ReToolConstants.constructionCalculated && control !== ReToolConstants.constructionUpdated && control !== ReToolConstants.constructionUpdatedComment) {
+        this.subscription?.add(this.constructionRiskFactorForm.get(control)
+          ?.valueChanges.subscribe((value) => {
+            this.constructionRiskFactorForm.get(ReToolConstants.constructionCalculated).setValue(this.calculateConstructionRating(), { emitEvent: false });
+          })
+        );
+      }
+    });
+  }
+
+  private handleCommentValidator() {
+    const constructionUpdated = this.constructionRiskFactorForm.get('ConstructionUpdated')?.valueChanges.subscribe((value) => {
+      this.updateCommentValidator(value);
+    });
+
+    this.subscription?.add(constructionUpdated);
+  }
+
+  private updateCommentValidator(value: number) {
+    const commentControl = this.constructionRiskFactorForm.get('ConstructionUpdatedComment');
+
+    if (Number(value) > 0 || String(value) === ReToolConstants.NA)
+      commentControl?.setValidators(Validators.required);
+    else
+      commentControl?.clearValidators();
+
+    commentControl?.updateValueAndValidity();
+  }
+
+  private getConstructionRiskFactorCalcData(): any {
+    return this.constructionRiskFactorForm.getRawValue();
+  }
+
+}
+-----------------------------------------------------------------------------------------------------------------------
+
+import { Component, Inject } from '@angular/core';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { PopupResponse } from '../../models/popup-response';
+import { FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
+import { MasterDataModel } from '../../../dashboard/models/master-data';
+import { GridRowRecord } from '../../models/grid-row-record';
+import { Subscription } from 'rxjs';
+import { ReToolConstants } from '../../constants/re-tool.constants';
+import { PopupRequest } from '../../models/popup-request';
+import { ReToolTabService } from '../../service/re-tool-tab.service';
+import { CommonService } from '../../../../shared/services/common.service';
+
+@Component({
+  selector: 'app-human-element-risk-factor-calculator',
+  templateUrl: './human-element-risk-factor-calculator.component.html',
+  styleUrl: './human-element-risk-factor-calculator.component.css'
+})
+export class HumanElementRiskFactorCalculatorComponent {
+  subscription: Subscription | undefined = new Subscription();
+  title: string = '';
+  humanElementRiskFactorForm!: FormGroup;
+  humanElementRiskFactors: MasterDataModel[] = [];
+  humanElementCalculated: number = 0;
+  resultResponse: PopupResponse = { action: 0, data: null, gridRecordDetail: {} as GridRowRecord };
+  reToolConstant = ReToolConstants;
+
+  constructor(private fb: FormBuilder, public dialogRef: MatDialogRef<HumanElementRiskFactorCalculatorComponent>,
+    @Inject(MAT_DIALOG_DATA) public request: PopupRequest, private reToolTabService: ReToolTabService, private commonService: CommonService) { }
+
+  ngOnInit() {
+    this.title = this.request?.title;
+    this.resultResponse.gridRecordDetail = this.request.gridRecordDetail;
+    this.humanElementRiskFactors = this.request?.data?.humanElementRiskFactors;
+    this.initializeForm();
+    this.updateCommentValidator(this.request?.data?.humanElementUpdated);
+    this.handleFormControlValueChange();
+    this.handleCommentValidator();
+  }
+
+  initializeForm() {
+    this.humanElementRiskFactorForm = this.fb.group({
+      HotWorkManagement: new FormControl(this.request?.data?.humanElementRisk?.hotWorkManagement),
+      OtherIgnitionSourceControl: new FormControl(this.request?.data?.humanElementRisk?.otherIgnitionSourceControl),
+      ContractorManagement: new FormControl(this.request?.data?.humanElementRisk?.contractorManagement),
+      Maintenance: new FormControl(this.request?.data?.humanElementRisk?.maintenance),
+      Housekeeping: new FormControl(this.request?.data?.humanElementRisk?.housekeeping),
+      EmployeeTraining: new FormControl(this.request?.data?.humanElementRisk?.employeeTraining),
+      ManagementOfchange: new FormControl(this.request?.data?.humanElementRisk?.managementOfchange),
+      ImapairmentManagement: new FormControl(this.request?.data?.humanElementRisk?.imapairmentManagement),
+      PreIncidentPlanEmergencyResponse: new FormControl(this.request?.data?.humanElementRisk?.preIncidentPlanEmergencyResponse),
+      SupervisionMaintenanceOfFireProtEquip: new FormControl(this.request?.data?.humanElementRisk?.supervisionMaintenanceOfFireProtEquip),
+      FireProtectionWaterSuppliesAndOther: new FormControl(this.request?.data?.humanElementRisk?.fireProtectionWaterSuppliesAndOther),
+      HumanElementCalculated: new FormControl({ value: this.request?.data?.humanElementCalculated, disabled: true }),
+      HumanElementUpdated: new FormControl(this.request?.data?.humanElementUpdated || '0.0'),
+      HumanElementUpdatedComment: new FormControl(this.request?.data?.humanElementUpdatedComment || '')
+    });
+  }
+
+  handleOverrideHumanElementRatingBlur(event: any) {
+    const input = (event.target as HTMLInputElement).value;
+    const value = parseFloat(input);
+    if (!isNaN(value)) {
+      event.target.value = parseFloat(input).toFixed(1);
+    }
+  }
+
+  onClose(result: any): void {
+    this.resultResponse.action = 0;
+    this.dialogRef.close(this.resultResponse);
+  }
+
+  onSave(result: any) {
+    this.humanElementRiskFactorForm.markAllAsTouched();
+    this.humanElementRiskFactorForm.markAsPristine();
+
+    if (this.humanElementRiskFactorForm.status === ReToolConstants.valid) {
+      const formData = this.getHumanElementRiskFactorCalcData();
+      this.request.data.humanElementRisk.hotWorkManagement = formData.HotWorkManagement;
+      this.request.data.humanElementRisk.otherIgnitionSourceControl = formData.OtherIgnitionSourceControl;
+      this.request.data.humanElementRisk.contractorManagement = formData.ContractorManagement;
+      this.request.data.humanElementRisk.maintenance = formData.Maintenance;
+      this.request.data.humanElementRisk.housekeeping = formData.Housekeeping;
+      this.request.data.humanElementRisk.employeeTraining = formData.EmployeeTraining;
+      this.request.data.humanElementRisk.managementOfchange = formData.ManagementOfchange;
+      this.request.data.humanElementRisk.imapairmentManagement = formData.ImapairmentManagement;
+      this.request.data.humanElementRisk.preIncidentPlanEmergencyResponse = formData.PreIncidentPlanEmergencyResponse;
+      this.request.data.humanElementRisk.supervisionMaintenanceOfFireProtEquip = formData.SupervisionMaintenanceOfFireProtEquip;
+      this.request.data.humanElementRisk.fireProtectionWaterSuppliesAndOther = formData.FireProtectionWaterSuppliesAndOther;
+      this.request.data.humanElementCalculated = formData.HumanElementCalculated;
+      this.request.data.humanElementUpdated = formData.HumanElementUpdated
+      this.request.data.humanElementUpdatedComment = formData.HumanElementUpdatedComment; 
+      this.resultResponse.data = this.request.data;
+      this.resultResponse.action = 1;
+      this.dialogRef.close(this.resultResponse);
+    }
+    else
+      this.reToolTabService.showErrorMessage(ReToolConstants.humanElementCommentValidationMessage, '');
+
+  }
+
+  onOverrideHumanElemBlur(event: Event) {
+    const target = event.target as HTMLInputElement; 
+    if (!isNaN(parseInt(target.value))) {
+      this.updateCommentValidator(target.value)
+    }
+  }
+
+  private handleFormControlValueChange() {
+    Object.keys(this.humanElementRiskFactorForm.controls).forEach((control) => {
+      if (control !== ReToolConstants.humanElementCalculated && control !== ReToolConstants.humanElementUpdated && control !== ReToolConstants.humanElementUpdatedComment) {
+        this.subscription?.add(this.humanElementRiskFactorForm.get(control)
+          ?.valueChanges.subscribe((value) => {
+            this.humanElementRiskFactorForm.get(ReToolConstants.humanElementCalculated).setValue(this.calculateHumanElementRating(), { emitEvent: false });
+          })
+        );
+      }
+    });
+  }
+
+  private handleCommentValidator() {
+    const humanElementUpdated = this.humanElementRiskFactorForm.get('HumanElementUpdated')?.valueChanges.subscribe((value) => {
+      this.updateCommentValidator(value);
+    });
+
+    this.subscription?.add(humanElementUpdated);
+  }
+
+  private updateCommentValidator(value: string) {
+    const commentControl = this.humanElementRiskFactorForm.get('HumanElementUpdatedComment');
+
+    if (Number(value) > 0 || value === ReToolConstants.NA)
+      commentControl?.setValidators(Validators.required);
+    else
+      commentControl?.clearValidators();
+
+    commentControl?.updateValueAndValidity();
+  }
+
+  private getHumanElementRiskFactorCalcData(): any {
+    return this.humanElementRiskFactorForm.getRawValue();
+  }
+
+  private calculateHumanElementRating(): any | null {
+    const formValues = this.getHumanElementRiskFactorCalcData();
+    const humanElementFormRiskFactors = [
+      { name: ReToolConstants.hotWorkManagement, rating: formValues.HotWorkManagement, iValue: this.getDeficiencyFactor(formValues.HotWorkManagement) },
+      { name: ReToolConstants.otherIgnitionSourceControl, rating: formValues.OtherIgnitionSourceControl, iValue: this.getDeficiencyFactor(formValues.OtherIgnitionSourceControl) },
+      { name: ReToolConstants.contractorManagement, rating: formValues.ContractorManagement, iValue: this.getDeficiencyFactor(formValues.ContractorManagement) },
+      { name: ReToolConstants.maintenance, rating: formValues.Maintenance, iValue: this.getDeficiencyFactor(formValues.Maintenance) },
+      { name: ReToolConstants.housekeeping, rating: formValues.Housekeeping, iValue: this.getDeficiencyFactor(formValues.Housekeeping) },
+      { name: ReToolConstants.employeeTraining, rating: formValues.EmployeeTraining, iValue: this.getDeficiencyFactor(formValues.EmployeeTraining) },
+      { name: ReToolConstants.managementOfchange, rating: formValues.ManagementOfchange, iValue: this.getDeficiencyFactor(formValues.ManagementOfchange) },
+      { name: ReToolConstants.imapairmentManagement, rating: formValues.ImapairmentManagement, iValue: this.getDeficiencyFactor(formValues.ImapairmentManagement) },
+      { name: ReToolConstants.preIncidentPlanEmergencyResponse, rating: formValues.PreIncidentPlanEmergencyResponse, iValue: this.getDeficiencyFactor(formValues.PreIncidentPlanEmergencyResponse) },
+      { name: ReToolConstants.supervisionMaintenanceOfFireProtEquip, rating: formValues.SupervisionMaintenanceOfFireProtEquip, iValue: this.getDeficiencyFactor(formValues.SupervisionMaintenanceOfFireProtEquip) }
+    ];
+
+    const isAllProgramsNotChecked = humanElementFormRiskFactors
+      .filter((rf) => this.commonService.isValueEmpty(rf.rating))
+      .length > 0;
+
+    // do not perform any calculation if any of the control is not selected 
+    //with the desired selection
+    if (isAllProgramsNotChecked) return null;
+
+    const fireProtectionInstalled =
+      formValues.FireProtectionWaterSuppliesAndOther === 'false';
+
+    const iRange = fireProtectionInstalled
+      ? [ReToolConstants.hotWorkManagement, ReToolConstants.housekeeping]
+      : [ReToolConstants.hotWorkManagement, ReToolConstants.housekeeping, ReToolConstants.imapairmentManagement, ReToolConstants.supervisionMaintenanceOfFireProtEquip];
+
+    const iAllRange = [`${ReToolConstants.hotWorkManagement}:${ReToolConstants.supervisionMaintenanceOfFireProtEquip}`];
+    const calculation1 = this.performDefaultCalculation(humanElementFormRiskFactors);
+    const calculation2 = this.getIRangeSum(humanElementFormRiskFactors, iRange, iAllRange)
+
+    const total = Math.min(calculation1, calculation2);
+    return total.toFixed(1);
+  } 
+
+  private getIRangeSum(programs: any[], iRange: string[], iAllRange: string[]) {
+    const iRangeSum = this.calculateRangeSum(iRange, programs);
+    const iAllRangeSum = this.calculateRangeSum(iAllRange, programs);
+
+    if (iRangeSum >= 2 || iAllRangeSum >= 4) return 0;
+    else if (iRangeSum >= 1 || iAllRangeSum >= 3) return 3;
+    else if (iAllRangeSum >= 2) return 5;
+    else return this.performDefaultCalculation(programs);
+  }
+
+  private getDeficiencyFactor(value: string): number | null {
+    const isDeficiency = (this.humanElementRiskFactors
+      .find(x => x.value == value)?.text === ReToolConstants.noProgramSevereDeficiency);
+    return isDeficiency ? 1 : 0;
+  }
+
+  private calculateRangeSum(range: string[], programs: any[]): number {
+    const resolveRange = (rangePart: string): string[] => {
+      if (rangePart.includes(":")) {
+        // Handle range with colon
+        const [start, end] = rangePart.split(":");
+        const startIndex = programs.findIndex(p => p.name === start);
+        const endIndex = programs.findIndex(p => p.name === end);
+
+        // Ensure both start and end exist
+        if (startIndex === -1 || endIndex === -1 || startIndex > endIndex) {
+          console.warn(`Invalid range: ${rangePart}`);
+          return [];
+        }
+
+        // Get the element between start and end
+        return programs.slice(startIndex, endIndex + 1).map(p => p.name)
+      }
+      else {
+        return [rangePart];
+      }
+    };
+
+    const elementsToSum = range.flatMap(resolveRange);
+    return elementsToSum
+      .map(element => programs.find(p => p.name === element)?.iValue || 0)
+      .reduce((acc, curr) =>
+        Number(this.commonService.isValueEmpty(acc) ? null : acc) +
+        Number(this.commonService.isValueEmpty(curr) ? null : curr),
+        0
+      );
+  }
+
+  private performDefaultCalculation(programs: any[]): number {
+    let totalScore = 0;
+
+    for (const element of programs) {
+      totalScore += Number(this.commonService.isValueEmpty(element.rating) ? null : element.rating);
+    }
+
+    return Number(((10 / 3) * (totalScore / programs.length)).toFixed(1));
+  }
+}
+
+----------------------------------------------------------------------------------------------------------------
+import { Component, Inject } from '@angular/core';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { PopupResponse } from '../../models/popup-response';
+import { FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
+import { MasterDataModel } from '../../../dashboard/models/master-data';
+import { GridRowRecord } from '../../models/grid-row-record';
+import { Subscription } from 'rxjs';
+import { ReToolConstants } from '../../constants/re-tool.constants';
+import { PopupRequest } from '../../models/popup-request';
+import { ReToolTabService } from '../../service/re-tool-tab.service';
+import { CommonService } from '../../../../shared/services/common.service';
+
+@Component({
+  selector: 'app-business-interruption-risk-calculator',
+  templateUrl: './business-interruption-risk-calculator.component.html',
+  styleUrl: './business-interruption-risk-calculator.component.css'
+})
+export class BusinessInterruptionRiskCalculatorComponent {
+  subscription: Subscription | undefined = new Subscription();
+  title: string = '';
+  isAsterisk: boolean = false;
+  businessInterruptionRiskFactorForm!: FormGroup;
+  businessInterruptionRiskFactors: MasterDataModel[] = [];
+  businessInterruptionMakeups: MasterDataModel[] = [];
+  businessInterruptionRiskDisasters: MasterDataModel[] = [];
+  dropDownTextLength: number = 34;
+  tail: string = ReToolConstants.tail;
+  makeupSelectedText: string = '';
+  disasterRecoveryPlanSelectedText: string = '';
+  resultResponse: PopupResponse = { action: 0, data: null, gridRecordDetail: {} as GridRowRecord };
+
+  constructor(private fb: FormBuilder, public dialogRef: MatDialogRef<BusinessInterruptionRiskCalculatorComponent>,
+    @Inject(MAT_DIALOG_DATA) public request: PopupRequest, private reToolTabService: ReToolTabService, private commonService: CommonService) { }
+
+  ngOnInit() {
+
+    this.title = this.request?.title;
+    this.resultResponse.gridRecordDetail = this.request.gridRecordDetail;
+    this.businessInterruptionRiskFactors = this.request?.data?.businessInterruptionRiskFactors;
+    this.businessInterruptionMakeups = this.request?.data?.businessInterruptionMakeups;
+    this.businessInterruptionRiskDisasters = this.request?.data?.businessInterruptionRiskDisasters;
+    this.bindTypeOfValuationDropdown(this.businessInterruptionMakeups, true);
+    this.bindTypeOfValuationDropdown(this.businessInterruptionRiskDisasters);
+    this.initializeForm();
+    this.updateCommentValidator(this.request?.data?.businessInterruptionUpdated);
+    this.handleCommentValidator();
+    this.handleFormControlValueChange();
+    this.bindTooltipForMakeupAndDisasterRecovery();
+  }
+
+  initializeForm() {
+    this.businessInterruptionRiskFactorForm = this.fb.group({
+      Sesonality: new FormControl(this.request?.data?.businessInterruptionRisk?.sesonality),
+      ContingentBI: new FormControl(this.request?.data?.businessInterruptionRisk?.contingentBI),
+      InterdependentBI: new FormControl(this.request?.data?.businessInterruptionRisk?.interdependentBI),
+      UniqueEquipmentBottlenecks: new FormControl(this.request?.data?.businessInterruptionRisk?.uniqueEquipmentBottlenecks),
+      Makeup: new FormControl(this.request?.data?.businessInterruptionRisk?.makeup),
+      DisasterRecoveryPlan: new FormControl(this.request?.data?.businessInterruptionRisk?.disasterRecoveryPlan),
+      BusinessInterruptionCalculated: new FormControl({ value: this.request?.data?.businessInterruptionCalculated, disabled: true }),
+      BusinessInterruptionUpdated: new FormControl(this.request?.data?.businessInterruptionUpdated || '0.0'),
+      BusinessInterruptionUpdatedComment: new FormControl(this.request?.data?.businessInterruptionUpdatedComment || '')
+    });
+  }
+
+  handleOverrideBusinessInterruptionRatingBlur(event: any) {
+    const input = (event.target as HTMLInputElement).value;
+    const value = parseFloat(input);
+    if (!isNaN(value)) {
+      event.target.value = parseFloat(input).toFixed(1);
+    }
+  }
+
+  onClose(result: any): void {
+    this.resultResponse.action = 0;
+    this.dialogRef.close(this.resultResponse);
+  }
+
+  onSave(result: any) {
+    
+    this.businessInterruptionRiskFactorForm.markAllAsTouched();
+    this.businessInterruptionRiskFactorForm.markAsPristine();
+
+    if (this.businessInterruptionRiskFactorForm.status === ReToolConstants.valid) {
+      const formData = this.getBusinessInterruptionRiskFactorCalcData();
+      this.request.data.businessInterruptionRisk.businessInterruptionRisk = formData.BusinessInterruptionRisk;
+      this.request.data.businessInterruptionRisk.sesonality = formData.Sesonality;
+      this.request.data.businessInterruptionRisk.contingentBI = formData.ContingentBI;
+      this.request.data.businessInterruptionRisk.interdependentBI = formData.InterdependentBI;
+      this.request.data.businessInterruptionRisk.uniqueEquipmentBottlenecks = formData.UniqueEquipmentBottlenecks;
+      this.request.data.businessInterruptionRisk.makeup = formData.Makeup;
+      this.request.data.businessInterruptionRisk.disasterRecoveryPlan = formData.DisasterRecoveryPlan;
+      this.request.data.businessInterruptionCalculated = formData.BusinessInterruptionCalculated;
+      this.request.data.businessInterruptionUpdated = formData.BusinessInterruptionUpdated
+      this.request.data.businessInterruptionUpdatedComment = formData.BusinessInterruptionUpdatedComment;
+      this.resultResponse.data = this.request.data;
+      this.resultResponse.action = 1;
+      this.dialogRef.close(this.resultResponse);
+    }
+    else
+      this.reToolTabService.showErrorMessage(ReToolConstants.commentValidationMessage, '');
+
+  }
+
+  onOverrideBusinessInterruptionBlur(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (!isNaN(parseInt(target.value))) {
+      this.updateCommentValidator(target.value)
+    }
+  }
+
+  performDefaultCalculation(riskFactors: any[]): number {
+    let totalScore = 0;
+    for (const element of riskFactors) {
+      totalScore += Number(this.commonService.isValueEmpty(element.value) ? null : element.value);
+    }
+    const totalRisks = riskFactors.length;
+    return Number(((10 / 4) * (totalScore / totalRisks)).toFixed(1));
+  }
+
+  getBusinessInterruptionUpdateDisplayValue(businessInterruptionUpdated: number) {
+
+    if (businessInterruptionUpdated != null && !isNaN(businessInterruptionUpdated) && Number(businessInterruptionUpdated) > 0) {
+      return parseFloat(businessInterruptionUpdated.toString()).toFixed(1);
+    }
+    else
+      return '0.0';
+  }
+
+  handleCommentValidator() {
+    const buildingValue = this.businessInterruptionRiskFactorForm.get('BusinessInterruptionUpdated')?.valueChanges.subscribe((value) => {
+      this.updateCommentValidator(value);
+    });
+
+    this.subscription?.add(buildingValue);
+  }
+
+  updateCommentValidator(value: string) {
+    const commentControl = this.businessInterruptionRiskFactorForm.get('BusinessInterruptionUpdatedComment');
+
+    if (Number(value) > 0 || value === ReToolConstants.NA) {
+      this.isAsterisk = true;
+      commentControl?.setValidators(Validators.required);
+    }
+    else {
+      this.isAsterisk = false;
+      commentControl?.clearValidators();
+    }
+    commentControl?.updateValueAndValidity();
+  }
+
+  handleFormControlValueChange() {
+    Object.keys(this.businessInterruptionRiskFactorForm.controls).forEach((control) => {
+      if (control !== ReToolConstants.businessInterruptionCalculated && control !== ReToolConstants.businessInterruptionUpdated && control !== ReToolConstants.businessInterruptionUpdatedComment) {
+        this.subscription?.add(this.businessInterruptionRiskFactorForm.get(control)
+          ?.valueChanges.subscribe((value) => {
+            this.businessInterruptionRiskFactorForm.get('BusinessInterruptionCalculated').setValue(this.calculateBusinessInterruptionRating(), { emitEvent: false });
+          })
+        );
+      }
+    });
+  }
+
+  calculateBusinessInterruptionRating(): any | null {
+    const formValues = this.getBusinessInterruptionRiskFactorCalcData();
+    const riskFactors = [
+      { name: ReToolConstants.sesonality, value: formValues.Sesonality },
+      { name: ReToolConstants.contingentBI, value: formValues.ContingentBI },
+      { name: ReToolConstants.interdependentBI, value: formValues.InterdependentBI },
+      { name: ReToolConstants.uniqueEquipmentBottlenecks, value: formValues.UniqueEquipmentBottlenecks },
+      { name: ReToolConstants.makeup, value: formValues.Makeup },
+      { name: ReToolConstants.disasterRecoveryPlan, value: formValues.DisasterRecoveryPlan },
+    ];
+
+    const isAllProgramsNotChecked = riskFactors
+      .filter((rf) => this.commonService.isValueEmpty(rf.value))
+      .length > 0;
+
+    // do not perform any calculation if any of the constrol is not selected 
+    //with the desired selection
+    if (isAllProgramsNotChecked) return null;
+
+    const sHighRiskandHighImpactCount = riskFactors
+      .filter((rf) => {
+        return (
+          (rf.name === ReToolConstants.sesonality || rf.name === ReToolConstants.contingentBI || rf.name === ReToolConstants.interdependentBI || rf.name === ReToolConstants.uniqueEquipmentBottlenecks) &&
+          this.businessInterruptionRiskFactors.find(x => x.value == rf.value)?.text === ReToolConstants.highRiskAndHighImpact
+        )
+      })
+      .length;
+
+    const slimitedMakeupCapacityCount = riskFactors
+      .filter((rf) => {
+        return (
+          (rf.name === ReToolConstants.makeup) &&
+          this.businessInterruptionMakeups.find(x => x.value == rf.value)?.fullText === ReToolConstants.limitedMakeupCapacity
+        )
+      })
+      .length;
+
+    const sDisasterRecoveryPlanCount = riskFactors
+      .filter((rf) => {
+        return (
+          (rf.name === ReToolConstants.disasterRecoveryPlan) &&
+          this.businessInterruptionRiskDisasters.find(x => x.value == rf.value)?.fullText === ReToolConstants.noPlanPlaceSevereDeficiencies
+        )
+      })
+      .length;
+
+    let totalCountOfRiskImpact = sHighRiskandHighImpactCount + slimitedMakeupCapacityCount + sDisasterRecoveryPlanCount;
+    let outputRating: number = 0;
+
+    outputRating = this.performDefaultCalculation(riskFactors);
+
+    let outputRiskFactorImpact = 0;
+
+    if (totalCountOfRiskImpact === 1 && outputRating >= 5) outputRiskFactorImpact = 5.0;
+    if (totalCountOfRiskImpact === 1 && outputRating < 3) outputRiskFactorImpact = outputRating;
+    if (totalCountOfRiskImpact === 2 && outputRating >= 3) outputRiskFactorImpact = 3.0;
+    if (totalCountOfRiskImpact > 2) outputRiskFactorImpact = 0.0;
+    if (totalCountOfRiskImpact === 0) outputRiskFactorImpact = outputRating;
+    if(outputRiskFactorImpact === 0 && totalCountOfRiskImpact <= 2) outputRiskFactorImpact = outputRating;
+
+    return Math.min(outputRiskFactorImpact, outputRating).toFixed(1);
+  }
+
+  private getBusinessInterruptionRiskFactorCalcData(): any {
+    return this.businessInterruptionRiskFactorForm.getRawValue();
+  }
+
+  private bindTypeOfValuationDropdown(requestTypeModel: MasterDataModel[], isMakeupSelect: boolean = false) {
+    requestTypeModel = requestTypeModel.map(item => ({
+      ...item,
+      text: item.text.length > this.dropDownTextLength ? item.text.substring(0, this.dropDownTextLength) + this.tail : item.text,
+      fullText: item.text
+    }));
+
+    if (isMakeupSelect)
+      this.businessInterruptionMakeups = requestTypeModel;
+    else
+      this.businessInterruptionRiskDisasters = requestTypeModel;
+  }
+
+  bindTooltipForMakeupAndDisasterRecovery() {
+    const makeup = this.businessInterruptionRiskFactorForm.get('Makeup').value;
+    const disasterRecoveryPlan = this.businessInterruptionRiskFactorForm.get('DisasterRecoveryPlan').value;
+    this.makeupSelectedText = ReToolConstants.blank;
+    this.disasterRecoveryPlanSelectedText = ReToolConstants.blank;
+
+    if (JSON.parse(makeup) !== null) {
+      const makeupSelectedText = this.businessInterruptionMakeups.find(x => x.value === makeup).fullText;
+      this.makeupSelectedText = makeupSelectedText.length > this.dropDownTextLength ? makeupSelectedText : ReToolConstants.blank;;
+    }
+
+    if (JSON.parse(disasterRecoveryPlan) !== null) {
+      const disasterRecoverySelectedText = this.businessInterruptionRiskDisasters.find(x => x.value === disasterRecoveryPlan).fullText;
+      this.disasterRecoveryPlanSelectedText = disasterRecoverySelectedText;
+    }
+  }
+}
