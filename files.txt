@@ -1,36 +1,31 @@
 it('should open popup on cell click', () => {
-        spyOn(component, 'openDialog');
-        const event = new MouseEvent('click');
-        const element = { value: 'TestValue' };
-        component.openPopupOnCellClick(event, element, 'TestColumn');
-        expect(component.openDialog).toHaveBeenCalled();
-      });
-	  
-	  error compile time: Argument of type '"openDialog"' is not assignable to parameter of type 'keyof GeneralPropertyComponent'.
-	  
-	  
-	  it('should open dialog', () => {
-        component.openDialog({ columnName: 'TestColumn', value: 'TestValue' });
-        expect(dialogSpy.open).toHaveBeenCalled();
-      });
-	  
-	  error:- 
-	  Property 'openDialog' is private and only accessible within class 'GeneralPropertyComponent'.ts(2341)
-(method) GeneralPropertyComponent.openDialog(request: GridRowRecord, element?: any, popUpTitle?: string): void
+    spyOn<any>(component, 'openDialog'); // Ensure correct method reference
+    const event = new MouseEvent('click');
+    const element = { value: 'TestValue' };
+    
+    component.openPopupOnCellClick(event, element, 'TestColumn');
+    
+    expect(component['openDialog']).toHaveBeenCalled();
+  });
 
-Argument of type '{ columnName: string; value: string; }' is not assignable to parameter of type 'GridRowRecord'.
-  Type '{ columnName: string; value: string; }' is missing the following properties from type 'GridRowRecord': rowIndex, 
+it('should open dialog', () => {
+  spyOn(dialogSpy, 'open');
 
+  const mockGridRowRecord = {
+    rowIndex: 1,
+    columnName: 'TestColumn',
+    value: 'TestValue'
+  }; // Ensure all required properties are included
+
+  component['openDialog'](mockGridRowRecord); // Call the private method safely
+
+  expect(dialogSpy.open).toHaveBeenCalled();
+});
 
 it('should update drop down selection', () => {
-        spyOn(component, 'calculatePdIndexValue');
-        component.updateDropDownSelection(0, 'TestKey', 5);
-        expect(component.calculatePdIndexValue).toHaveBeenCalled();
-      });
-
-error:
-
-Property 'calculatePdIndexValue' is private and only accessible within class 'GeneralPropertyComponent'.ts(2341)
-(method) GeneralPropertyComponent.calculatePdIndexValue(row: AbstractControl<any, any>, elementKey: string, value: number): 
-Argument of type '"calculatePdIndexValue"' is not assignable to parameter of type 'keyof GeneralPropertyComponent'.
-
+  spyOn<any>(component, 'calculatePdIndexValue'); // Properly reference the private method
+  
+  component.updateDropDownSelection(0, 'TestKey', 5);
+  
+  expect(component['calculatePdIndexValue']).toHaveBeenCalled();
+});
