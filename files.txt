@@ -1,76 +1,21 @@
-it('should open human element popup on human element cell click and update human element calculated value in human element column', () => {
-    // ✅ Mock popup response with correct structure
-    const popupResponse = {
-        data: {
-            humanElementCalculated: 3,  // This value should be updated in form
-            humanElementUpdated: 0.0,
-            humanElementUpdatedComment: ''
-        },
-        gridRecordDetail: {
-            rowIndex: 0,
-            columnName: 'HumanElementDisplayValue',
-            rowPKId: 143,
-            value: {}
-        },
-        action: 1  // Simulates "Save" action in the popup
-    };
+Spec List | Failures
+GeneralPropertyComponent > should open human element popup on human element cell click and update human element calculated value in human element column
+Expected undefined to be '3.0'.
+    at <Jasmine>
+    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/general-property/general-property.component.spec.ts:613:60)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
+    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
+GeneralPropertyComponent
+SyntaxError: "undefined" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at GeneralPropertyComponent.updatePatchRowFromHEPopup (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/general-property/general-property.component.ts:647:51)
+    at <Jasmine>
+    at Object.next (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/general-property/general-property.component.ts:290:20)
+    at ConsumerObserver.next (http://localhost:9876/_karma_webpack_/webpack:/node_modules/rxjs/dist/esm/internal/Subscriber.js:91:33)
+    at SafeSubscriber._next (http://localhost:9876/_karma_webpack_/webpack:/node_modules/rxjs/dist/esm/internal/Subscriber.js:60:26)
 
-    // ✅ Ensure event.target.id follows the correct format
-    const mockPopupColumnEvent = {
-        column: { field: 'HumanElementDisplayValue' },
-        rowIndex: 0,
-        event: {
-            target: {
-                id: 'row-0_dataKey-143_HumanElementDisplayValue_HumanElementRiskFactorCalculatorComponent'
-            }
-        }
-    };
 
-    // ✅ Ensure mock cell data is structured correctly
-    const mockCellData = {
-        value: {
-            HumanElementCalculated: 0.0,
-            HumanElementUpdated: 0.0,
-            HumanElementUpdatedComment: ''
-        }
-    };
-
-    // ✅ Ensure form array is properly initialized with the expected form control
-    const formArray = component['getFormArray']();
-    formArray.push(new FormGroup({
-        PropertyLocationId: new FormControl(143),
-        HumanElementDisplayValue: new FormControl(0.0),  // 🔥 Ensures the control exists!
-        HumanElementCalculated: new FormControl(0.0),
-        HumanElementUpdated: new FormControl(0.0),
-        HumanElementUpdatedComment: new FormControl('')
-    }));
-
-    // ✅ Spy on dialog open method to return the mock response
-    dialogSpy.open.and.returnValue({
-        afterClosed: () => of(popupResponse)
-    } as any);
-
-    // ✅ Spy on `updatePatchRowFromHEPopup` to ensure it's called
-    spyOn(component as any, 'updatePatchRowFromHEPopup').and.callThrough();
-
-    // ✅ Call the method
-    component.openPopupOnCellClick(mockPopupColumnEvent.event as any, mockCellData, 'HumanElementDisplayValue');
-
-    // ✅ Verify that the dialog opens
-    expect(dialogSpy.open).toHaveBeenCalled();
-
-    // ✅ Validate dialog configuration
-    const dialogConfig: MatDialogConfig<any> = dialogSpy.open.calls.mostRecent().args[1];
-    expect(dialogConfig.data.title).toBe('Property/Human Element Risk Factor Calculator');
-    expect(dialogConfig.data.data.humanElementCalculated).toBe(0);
-
-    // ✅ Ensure `updatePatchRowFromHEPopup` is called
-    expect(component['updatePatchRowFromHEPopup']).toHaveBeenCalledWith(popupResponse);
-
-    // ✅ Ensure form array exists and has at least one row
-    expect(formArray.length).toBeGreaterThan(0);
-
-    // ✅ Get the first row and check if HumanElementDisplayValue was updated
-    const row = formArray.at(0) as FormGroup;
-    expect(row.get('HumanElementDisplayValue')?.value).toBe('3.0');  // 🔥 Ensures value is properly updated
-});
+   spyOn(component as any, 'getFormGroup').and.returnValue(new FormGroup({
+            RiskFactor: new FormControl("{\"humanElementRisk\":{\"hotWorkManagement\":null,\"otherIgnitionSourceControl\":null,\"otherIgnitionSourceControl\":null,\"contractorManagement\":null,\"maintenance\":null,\"housekeeping\":null,\"employeeTraining\":null,\"managementOfchange\":null,\"imapairmentManagement\":null,\"preIncidentPlanEmergencyResponse\":null,\"supervisionMaintenanceOfFireProtEquip\":null,\"fireProtectionWaterSuppliesAndOther\":null}}")
+          }));
