@@ -1,54 +1,129 @@
-it('should get general property weight', () => {
-    const mockData: GeneralProperty[] = [
-      {
-        ULId: '1',
-        Address: '123 Street',
-        City: 'New York',
-        Country: 'USA',
-        OccupancyTypeCode: 5,
-        OccupancyGroupCode: 10
-      },
-      {
-        ULId: '2',
-        Address: '456 Avenue',
-        City: 'Los Angeles',
-        Country: 'USA',
-        OccupancyTypeCode: 3,
-        OccupancyGroupCode: 7
-      }
-    ];
-
-    spyOn(Utility, 'isValidOccupancyTypeCode').and.callFake(code => code === 5);
-
-    const mockResponse: GeneralPropertyWeightResponse[] = [
-      { 
-        generalPropertyGroupCodeWeightId: 1,
-        occupancyGroupId: 10,
-        groupCode: 'G1',
-        typeCode: 5,
-        weight: 50 
-      },
-      { 
-        generalPropertyGroupCodeWeightId: 2,
-        occupancyGroupId: 7,
-        groupCode: 'G2',
-        typeCode: 3,
-        weight: 30 
-      }
-    ];
-
-    reToolServiceSpy.getGeneralPropertyWeight.and.returnValue(of(mockResponse));
-    spyOn(component as any, 'buildRedistributedWeightData');
-    spyOn(reToolCalculationServiceSpy, 'setRedistributionWeights').and.callThrough();
-
-    component['getGeneralPropertyWeight'](mockData as any);
-
-    expect(reToolServiceSpy.getGeneralPropertyWeight).toHaveBeenCalledWith([5, 7]);
-    expect(component['weights']).toEqual(mockResponse);
-    expect(component['buildRedistributedWeightData']).toHaveBeenCalledWith(mockData);
-    expect(reToolCalculationServiceSpy.setRedistributionWeights).toHaveBeenCalledWith(component['redistributionWeights']);
+    it('should get general property weight', () => {
+        const mockData: GeneralProperty[] = [
+          {
+              ULId: '1',
+              Address: '123 Street',
+              City: 'New York',
+              Country: 'USA',
+              OccupancyTypeCode: 5,
+              OccupancyGroupCode: 10,
+              LocationName: '',
+              StateProvince: '',
+              ConstructionHazards: '',
+              DetectionSecurity: '',
+              FireWaterSupply: '',
+              FireManualResponse: '',
+              SpecialHazards: '',
+              EquipmentHazards: '',
+              ExternalExposures: '',
+              ConfidenceIndex: '',
+              LossPreventionSource: '',
+              LossPreventionComments: '',
+              Action: ActionEnum.IsSaved,
+              VerCol: '',
+              BuildingValue: 0,
+              EquipmentValue: 0,
+              InventoryValue: 0,
+              OtherValue: 0,
+              BusinessInterruptionValue: 0,
+              BusinessInterruptionOtherValue: 0,
+              PayRollValue: 0,
+              NormalLossDeficiencyDriven: false,
+              IndemnityPeriod: 0
+          },
+          {
+              ULId: '2',
+              Address: '456 Avenue',
+              City: 'Los Angeles',
+              Country: 'USA',
+              OccupancyTypeCode: 3,
+              OccupancyGroupCode: 7,
+              LocationName: '',
+              StateProvince: '',
+              ConstructionHazards: '',
+              DetectionSecurity: '',
+              FireWaterSupply: '',
+              FireManualResponse: '',
+              SpecialHazards: '',
+              EquipmentHazards: '',
+              ExternalExposures: '',
+              ConfidenceIndex: '',
+              LossPreventionSource: '',
+              LossPreventionComments: '',
+              Action: ActionEnum.IsSaved,
+              VerCol: '',
+              BuildingValue: 0,
+              EquipmentValue: 0,
+              InventoryValue: 0,
+              OtherValue: 0,
+              BusinessInterruptionValue: 0,
+              BusinessInterruptionOtherValue: 0,
+              PayRollValue: 0,
+              NormalLossDeficiencyDriven: false,
+              IndemnityPeriod: 0
+          }
+        ];
     
-    // Instead of calling a private method, spy on a public one that calls `calculate`
-    spyOn(reToolCalculationServiceSpy, 'performCalculation').and.callThrough(); // Assuming `performCalculation` is public
-    expect(reToolCalculationServiceSpy.performCalculation).toHaveBeenCalled();
-});
+        spyOn(Utility, 'isValidOccupancyTypeCode').and.callFake(code => code === 5);
+    
+        const mockResponse: GeneralPropertyWeightResponse[] = [
+          {
+              generalPropertyGroupCodeWeightId: 1,
+              occupancyGroupId: 10,
+              groupCode: 2221,
+              typeCode: 5,
+              humanElement: 0,
+              construction: 0,
+              constructionHazards: 0,
+              detectionSecurity: 0,
+              automaticSprinklers: 0,
+              fireWaterSupply: 0,
+              fireManualResponse: 0,
+              specialHazards: 0,
+              equipmentHazards: 0,
+              externalExposures: 0,
+              totalPropertyDamage: 0,
+              totalBusinessInterruption: 0,
+              statusId: 0
+          },
+          {
+              generalPropertyGroupCodeWeightId: 2,
+              occupancyGroupId: 7,
+              groupCode: 2223,
+              typeCode: 3,
+              humanElement: 0,
+              construction: 0,
+              constructionHazards: 0,
+              detectionSecurity: 0,
+              automaticSprinklers: 0,
+              fireWaterSupply: 0,
+              fireManualResponse: 0,
+              specialHazards: 0,
+              equipmentHazards: 0,
+              externalExposures: 0,
+              totalPropertyDamage: 0,
+              totalBusinessInterruption: 0,
+              statusId: 0
+          }
+        ];
+    
+        reToolServiceSpy.getGeneralPropertyWeight.and.returnValue(of(mockResponse));
+        spyOn(component as any, 'buildRedistributedWeightData');
+        spyOn(reToolCalculationServiceSpy, 'setRedistributionWeights').and.callThrough();
+    
+        component['getGeneralPropertyWeight'](mockData as any);
+    
+        expect(reToolServiceSpy.getGeneralPropertyWeight).toHaveBeenCalledWith([5, 7]);
+        expect(component['weights']).toEqual(mockResponse);
+        expect(component['buildRedistributedWeightData']).toHaveBeenCalledWith(mockData);
+        expect(reToolCalculationServiceSpy.setRedistributionWeights).toHaveBeenCalledWith(component['redistributionWeights']);
+        
+        // Instead of calling a private method, spy on a public one that calls `calculate`
+        spyOn(reToolCalculationServiceSpy as any, 'calculate').and.callThrough(); // Assuming `performCalculation` is public
+        expect(reToolCalculationServiceSpy['calculate']).toHaveBeenCalled();
+    });
+  
+GeneralPropertyComponent > should get general property weight
+Error: <spyOn> : setRedistributionWeights has already been spied upon
+Usage: spyOn(<object>, <methodName>)
+
