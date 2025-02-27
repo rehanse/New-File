@@ -1,5 +1,5 @@
 it('should open human element popup on human element cell click and update human element calculated value in human element column', () => {
-    // Ensure popupResponse has correct structure
+    // Mock popup response with correct structure
     const popupResponse = {
         data: {
             humanElementCalculated: 3,
@@ -7,13 +7,18 @@ it('should open human element popup on human element cell click and update human
         }
     };
 
-    // Ensure mock event has a valid column.field
+    // 🔥 Ensure event.target.id follows the expected format required by getGidRowRecordDetail()
     const mockPopupColumnEvent = {
         column: { field: 'HumanElementCalculated' },
-        rowIndex: 0
+        rowIndex: 0,
+        event: {
+            target: {
+                id: 'row-0_dataKey-123_HumanElementCalculated_' // ✅ Correct format for `split('_')`
+            }
+        }
     };
 
-    // Ensure mock cell data is structured correctly
+    // Mock cell data ensuring it has the correct structure
     const mockCellData = {
         value: {
             HumanElementCalculated: 0.0,
@@ -22,7 +27,7 @@ it('should open human element popup on human element cell click and update human
         }
     };
 
-    // Spy on dialog open method
+    // Spy on dialog open method to return the mock response
     dialogSpy.open.and.returnValue({
         afterClosed: () => of(popupResponse)
     } as any);
@@ -30,20 +35,20 @@ it('should open human element popup on human element cell click and update human
     // Call the method
     component.openPopupOnCellClick(mockPopupColumnEvent as any, mockCellData, '');
 
-    // Verify that dialog opens correctly
+    // ✅ Verify that the dialog opens
     expect(dialogSpy.open).toHaveBeenCalled();
 
-    // Validate dialog config
+    // ✅ Validate dialog configuration data
     const dialogConfig: MatDialogConfig<any> = dialogSpy.open.calls.mostRecent().args[1];
     expect(dialogConfig.data.title).toBe('Property/Human Element Risk Factor Calculator');
     expect(dialogConfig.data.data.humanElementCalculated).toBe(0);
 
-    // Fix: Ensure that getFormArray() has the correct structure
+    // ✅ Ensure form array exists and has at least one entry
     const formArray = component['getFormArray']();
-    expect(formArray).toBeTruthy(); // Ensure it's defined
-    expect(formArray.length).toBeGreaterThan(0); // Ensure it has elements
+    expect(formArray).toBeTruthy();
+    expect(formArray.length).toBeGreaterThan(0);
 
-    // Get the first row in the form array
+    // ✅ Get the first row in the form array and validate value update
     const row = formArray.at(0) as FormGroup;
     expect(row.get('HumanElementDisplayValue')?.value).toBe('3.0');
 });
