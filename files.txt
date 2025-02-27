@@ -1,9 +1,75 @@
-GeneralPropertyComponent > should open human element popup on human element cell click and update human element calculated value in human element column
-Expected undefined to be '3.0'.
-    at <Jasmine>
-    at UserContext.apply (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/components/tab-component/general-property/general-property.component.spec.ts:610:60)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:368:26)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone.js:367:52)
-GeneralPropertyComponent
-SyntaxError: "undefined" is not valid JSON
+it('should open human element popup on human element cell click and update human element calculated value in human element column', () => {
+    // ✅ Mock popup response with correct structure
+    const popupResponse = {
+        data: {
+            humanElementCalculated: 3,  // Expected value update
+            humanElementUpdated: 0.0,
+            humanElementUpdatedComment: ''
+        },
+        gridRecordDetail: {
+            rowIndex: 0,
+            columnName: 'HumanElementDisplayValue',
+            rowPKId: 143,
+            value: {}
+        },
+        action: 1  // Simulates "Save" action in the popup
+    };
+
+    // ✅ Ensure event.target.id follows the correct format
+    const mockPopupColumnEvent = {
+        column: { field: 'HumanElementDisplayValue' },
+        rowIndex: 0,
+        event: {
+            target: {
+                id: 'row-0_dataKey-143_HumanElementDisplayValue_HumanElementRiskFactorCalculatorComponent'
+            }
+        }
+    };
+
+    // ✅ Ensure mock cell data is structured correctly
+    const mockCellData = {
+        value: {
+            HumanElementCalculated: 0.0,
+            HumanElementUpdated: 0.0,
+            HumanElementUpdatedComment: ''
+        }
+    };
+
+    // ✅ Mock `getFormGroup()` to return a valid form structure
+    spyOn(component as any, 'getFormGroup').and.returnValue(new FormGroup({
+        PropertyLocationId: new FormControl(143),
+        HumanElementDisplayValue: new FormControl(0.0),  // 🔥 Ensures the control exists!
+        HumanElementCalculated: new FormControl(0.0),
+        HumanElementUpdated: new FormControl(0.0),
+        HumanElementUpdatedComment: new FormControl(''),
+        RiskFactor: new FormControl("{\"humanElementRisk\":{\"hotWorkManagement\":null,\"otherIgnitionSourceControl\":null,\"contractorManagement\":null,\"maintenance\":null,\"housekeeping\":null,\"employeeTraining\":null,\"managementOfChange\":null,\"impairmentManagement\":null,\"preIncidentPlanEmergencyResponse\":null,\"supervisionMaintenanceOfFireProtEquip\":null,\"fireProtectionWaterSuppliesAndOther\":null}}")
+    }));
+
+    // ✅ Spy on `updatePatchRowFromHEPopup` to ensure it's called
+    spyOn(component as any, 'updatePatchRowFromHEPopup').and.callThrough();
+
+    // ✅ Spy on dialog open method to return the mock response
+    dialogSpy.open.and.returnValue({
+        afterClosed: () => of(popupResponse)
+    } as any);
+
+    // ✅ Call the method
+    component.openPopupOnCellClick(mockPopupColumnEvent.event as any, mockCellData, 'HumanElementDisplayValue');
+
+    // ✅ Verify that the dialog opens
+    expect(dialogSpy.open).toHaveBeenCalled();
+
+    // ✅ Validate dialog configuration
+    const dialogConfig: MatDialogConfig<any> = dialogSpy.open.calls.mostRecent().args[1];
+    expect(dialogConfig.data.title).toBe('Property/Human Element Risk Factor Calculator');
+    expect(dialogConfig.data.data.humanElementCalculated).toBe(0);
+
+    // ✅ Ensure `updatePatchRowFromHEPopup` is called
+    expect(component['updatePatchRowFromHEPopup']).toHaveBeenCalledWith(popupResponse);
+
+    // ✅ Get the first row from the mocked form
+    const row = componentby calling our spy method
+
+    // ✅ Ensure `HumanElementDisplayValue` was updated to "3.0"
+    expect(row.get('HumanElementDisplayValue')?.value).toBe(3.0);  // 🔥 Fix: Ensures value is properly updated
+});
