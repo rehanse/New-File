@@ -1,14 +1,49 @@
-GeneralPropertyComponent > should open human element popup on human element cell click and update human element calculated value in human element column
-TypeError: Cannot read properties of undefined (reading 'split')
-
- private getGidRowRecordDetail(input: string): GridRowRecord {
-    const [rowPart, idPart, column, popup] = input.split('_');
-    const record: GridRowRecord = {
-      rowIndex: parseInt(rowPart.split('-')[1]),
-      columnName: column,
-      rowPKId: parseInt(idPart.split('-')[1]),
-      value: '',
-      popup: popup
+it('should open human element popup on human element cell click and update human element calculated value in human element column', () => {
+    // Ensure popupResponse has correct structure
+    const popupResponse = {
+        data: {
+            humanElementCalculated: 3,
+            humanElementUpdated: 0.0
+        }
     };
-    return record;
-  }
+
+    // Ensure mock event has a valid column.field
+    const mockPopupColumnEvent = {
+        column: { field: 'HumanElementCalculated' },
+        rowIndex: 0
+    };
+
+    // Ensure mock cell data is structured correctly
+    const mockCellData = {
+        value: {
+            HumanElementCalculated: 0.0,
+            HumanElementUpdated: 0.0,
+            HumanElementUpdatedComment: ''
+        }
+    };
+
+    // Spy on dialog open method
+    dialogSpy.open.and.returnValue({
+        afterClosed: () => of(popupResponse)
+    } as any);
+
+    // Call the method
+    component.openPopupOnCellClick(mockPopupColumnEvent as any, mockCellData, '');
+
+    // Verify that dialog opens correctly
+    expect(dialogSpy.open).toHaveBeenCalled();
+
+    // Validate dialog config
+    const dialogConfig: MatDialogConfig<any> = dialogSpy.open.calls.mostRecent().args[1];
+    expect(dialogConfig.data.title).toBe('Property/Human Element Risk Factor Calculator');
+    expect(dialogConfig.data.data.humanElementCalculated).toBe(0);
+
+    // Fix: Ensure that getFormArray() has the correct structure
+    const formArray = component['getFormArray']();
+    expect(formArray).toBeTruthy(); // Ensure it's defined
+    expect(formArray.length).toBeGreaterThan(0); // Ensure it has elements
+
+    // Get the first row in the form array
+    const row = formArray.at(0) as FormGroup;
+    expect(row.get('HumanElementDisplayValue')?.value).toBe('3.0');
+});
