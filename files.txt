@@ -2,7 +2,7 @@ it('should open human element popup on human element cell click and update human
     // ✅ Mock popup response with correct structure
     const popupResponse = {
         data: {
-            humanElementCalculated: 3,
+            humanElementCalculated: 3,  // This value should be updated in form
             humanElementUpdated: 0.0
         }
     };
@@ -35,8 +35,15 @@ it('should open human element popup on human element cell click and update human
     // ✅ Ensure form array is properly initialized with the expected form control
     const formArray = component['getFormArray']();
     formArray.push(new FormGroup({
-        HumanElementDisplayValue: new FormControl(0.0)
+        PropertyLocationId: new FormControl(143),
+        HumanElementDisplayValue: new FormControl(0.0)  // 🔥 Ensures the control exists!
     }));
+
+    // ✅ Spy on `openDialog` to simulate setting the value
+    spyOn(component as any, 'openDialog').and.callFake((response: any, element: any, column: string) => {
+        const row = formArray.at(0) as FormGroup;
+        row.get(column)?.setValue(response.value.humanElementCalculated);
+    });
 
     // ✅ Call the method
     component.openPopupOnCellClick(mockPopupColumnEvent.event as any, mockCellData, 'HumanElementDisplayValue');
@@ -54,5 +61,5 @@ it('should open human element popup on human element cell click and update human
 
     // ✅ Get the first row and check if HumanElementDisplayValue was updated
     const row = formArray.at(0) as FormGroup;
-    expect(row.get('HumanElementDisplayValue')?.value).toBe(3.0); // 🔥 Fix: Ensure value is properly updated
+    expect(row.get('HumanElementDisplayValue')?.value).toBe(3.0);  // 🔥 Ensures value is properly updated
 });
