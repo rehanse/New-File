@@ -1,15 +1,56 @@
-it('should handle blur event correctly', () => {
-    const event = { target: { value: '2.5' } } as any;
-    const rowIndex = 0;
-    const mockFormGroup = new FormGroup({
-      SomeField: new FormControl('') // Replace 'SomeField' with the actual field name from handleBlur
-    });
-
-    spyOn<any>(component, 'getFormGroup').and.returnValue(mockFormGroup);
-
-    expect(() => {
-      component.handleBlur(event, rowIndex);
-    }).not.toThrow();
+it('should get general property weight', () => {
+        const mockData = [
+          { OccupancyTypeCode: 5, OccupancyGroupCode: 10 },
+          { OccupancyTypeCode: 3, OccupancyGroupCode: 7 }
+        ];
+        spyOn(Utility, 'isValidOccupancyTypeCode').and.callFake(code => code === 5);
+        const mockResponse = [{ weight: 50 }, { weight: 30 }];
+        reToolServiceSpy.getGeneralPropertyWeight.and.returnValue(of(mockResponse));
+        spyOn(component as any, 'buildRedistributedWeightData');
+        spyOn(reToolCalculationServiceSpy, 'setRedistributionWeights').and.callThrough();
     
-    expect(event.target.value).toBe('2.5');
+        component['getGeneralPropertyWeight'](mockData as any);
+    
+        expect(reToolServiceSpy.getGeneralPropertyWeight).toHaveBeenCalledWith([5, 7]);
+        expect(component['weights']).toEqual(mockResponse);
+        expect(component['buildRedistributedWeightData']).toHaveBeenCalledWith(mockData);
+        expect(reToolCalculationServiceSpy.setRedistributionWeights).toHaveBeenCalledWith(component['redistributionWeights']);
+        expect(reToolCalculationServiceSpy.calculate).toHaveBeenCalled();
   });
+  
+  Error on code :
+  1. reToolServiceSpy.getGeneralPropertyWeight.and.returnValue(of(mockResponse));
+  
+  Argument of type 'Observable<{ weight: number; }[]>' is not assignable to parameter of type 'Observable<GeneralPropertyWeightResponse[]>'.
+  Type '{ weight: number; }[]' is not assignable to type 'GeneralPropertyWeightResponse[]'.
+    Type '{ weight: number; }' is missing the following properties from type 'GeneralPropertyWeightResponse': generalPropertyGroupCodeWeightId, occupancyGroupId, groupCode, typeCode, and 13 more.ts(2345)
+const mockResponse: {
+    weight: number;
+}[]
+
+2. expect(component['weights']).toEqual(mockResponse);
+
+Argument of type '{ weight: number; }[]' is not assignable to parameter of type 'Expected<ArrayLike<GeneralPropertyWeightResponse>> | ArrayContaining<GeneralPropertyWeightResponse>'.
+  Type '{ weight: number; }[]' is not assignable to type '{ [x: number]: ExpectedRecursive<GeneralPropertyWeightResponse>; length: ExpectedRecursive<number>; }'.
+    'number' index signatures are incompatible.
+      Type '{ weight: number; }' is not assignable to type 'ExpectedRecursive<GeneralPropertyWeightResponse>'.ts(2345)
+const mockResponse: {
+    weight: number;
+}[]
+
+3.expect(component['buildRedistributedWeightData']).toHaveBeenCalledWith(mockData);
+
+Argument of type '{ OccupancyTypeCode: number; OccupancyGroupCode: number; }[]' is not assignable to parameter of type 'Expected<GeneralProperty[]>'.
+  Type '{ OccupancyTypeCode: number; OccupancyGroupCode: number; }[]' is not assignable to type 'GeneralProperty[]'.
+    Type '{ OccupancyTypeCode: number; OccupancyGroupCode: number; }' is missing the following properties from type 'GeneralProperty': ULId, Address, City, Country, and 23 more.ts(2345)
+const mockData: {
+    OccupancyTypeCode: number;
+    OccupancyGroupCode: number;
+}[]
+
+4. expect(reToolCalculationServiceSpy.calculate).toHaveBeenCalled();
+
+Property 'calculate' is private and only accessible within class 'ReToolCalculationService'.ts(2341)
+(method) ReToolCalculationService.calculate(redistributionWeight: RedistributionWeight): RedistributionWeight
+
+fix this error I have attached the file which mentioned all the code and references classes, interfaces and services and models please search and provide the fixed code
