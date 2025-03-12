@@ -1,63 +1,161 @@
+import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CoverComponent } from './cover.component';
-import { ReactiveFormsModule, FormBuilder } from '@angular/forms';
 import { ReToolService } from '../../../service/re-tool.service';
 import { ReToolTabService } from '../../../service/re-tool-tab.service';
 import { CommonService } from '../../../../../shared/services/common.service';
 import { ReToolCalculationService } from '../../../service/re-tool-calculation-service';
-import { of, Subject } from 'rxjs';
+import { of } from 'rxjs';
 
-describe('CoverComponent', () => {
+describe('CoverComponent - getHighestFireAndEBBasedOnLocation', () => {
   let component: CoverComponent;
   let fixture: ComponentFixture<CoverComponent>;
-  let reToolTabServiceMock: jasmine.SpyObj<ReToolTabService>;
-  let reToolServiceMock: jasmine.SpyObj<ReToolService>;
-  let commonServiceMock: jasmine.SpyObj<CommonService>;
-  let reToolCalculationServiceMock: jasmine.SpyObj<ReToolCalculationService>;
+  let formBuilder: FormBuilder;
 
   beforeEach(async () => {
-    // Create mocks with spies
-    reToolTabServiceMock = jasmine.createSpyObj('ReToolTabService', ['on', 'emit', 'showErrorMessage', 'actionStateChange'], { formStatus: 'VALID' });
-    reToolServiceMock = jasmine.createSpyObj('ReToolService', ['getOccupancyGroup', 'getPropertyMaster']);
-    commonServiceMock = jasmine.createSpyObj('CommonService', ['checkNullOrZero']);
-    reToolCalculationServiceMock = jasmine.createSpyObj('ReToolCalculationService', ['updateOverAllRating']);
-
-    // Mocking on() to return observable
-    reToolTabServiceMock.on.and.callFake((eventName: string) => {
-      return of({}); // Return an empty observable or mock event data as needed
-    });
-
-    // Mocking API methods to return observable
-    reToolServiceMock.getOccupancyGroup.and.returnValue(of({ occupancyGroups: [], hazard: [], equipmentBreakdown: [] }));
-    reToolServiceMock.getPropertyMaster.and.returnValue(of({ interdependency: [], qualityOfSupplyChainInfo: [] }));
-    commonServiceMock.checkNullOrZero.and.returnValue(0); // Default mock value
-
     await TestBed.configureTestingModule({
-      imports: [ReactiveFormsModule],
       declarations: [CoverComponent],
+      imports: [ReactiveFormsModule],
       providers: [
         FormBuilder,
-        { provide: ReToolService, useValue: reToolServiceMock },
-        { provide: ReToolTabService, useValue: reToolTabServiceMock },
-        { provide: CommonService, useValue: commonServiceMock },
-        { provide: ReToolCalculationService, useValue: reToolCalculationServiceMock }
-      ]
+        { provide: ReToolService, useValue: {} },
+        { provide: ReToolTabService, useValue: {} },
+        { provide: CommonService, useValue: {} },
+        { provide: ReToolCalculationService, useValue: {} },
+      ],
     }).compileComponents();
-  });
 
-  beforeEach(() => {
     fixture = TestBed.createComponent(CoverComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges(); // Triggers ngOnInit
+    formBuilder = TestBed.inject(FormBuilder);
+
+    // Initialize the form to avoid undefined errors
+    component.coverForm = formBuilder.group({
+      PropertyLocations: [[]], // Will be set dynamically in tests
+      HighestNormalLossExpectancy: [''],
+      HighestNormalLossExpectancyLocationName: [''],
+      HighestProbableMaximumLoss: [''],
+      HighestProbableMaximumLossLocationName: [''],
+      HighestMaximumForeseeableLoss: [''],
+      HighestMaximumForeseeableLossLocationName: [''],
+      HighestEBProbableMaximumLoss: [''],
+      HighestEBProbableMaximumLossLocationName: [''],
+      HighestEBMaximumForeseeableLoss: [''],
+      HighestEBMaximumForeseeableLossLocationName: [''],
+    });
   });
 
-  it('should create the component', () => {
-    expect(component).toBeTruthy();
+  /**
+   * ✅ Test Case 1: Proper data and correct highest selection
+   */
+  it('should set highest values for all loss types when valid property locations are provided', () => {
+    const mockLocations = [
+      {
+        normalLossExpectancy: 10,
+        probableMaximumLoss: 20,
+        maximumForeseeableLoss: 30,
+        ebProbableMaximumLoss: 40,
+        ebMaximumForeseeableLoss: 50,
+        locationName: 'Location A',
+      },
+      {
+        normalLossExpectancy: 60,
+        probableMaximumLoss: 70,
+        maximumForeseeableLoss: 80,
+        ebProbableMaximumLoss: 90,
+        ebMaximumForeseeableLoss: 100,
+        locationName: 'Location B',
+      },
+    ];
+
+    component.coverForm.get('PropertyLocations').setValue(mockLocations);
+    component['getHighestFireAndEBBasedOnLocation'](component.coverForm);
+
+    expect(component.coverForm.get('HighestNormalLossExpectancy').value).toBe('60.0');
+    expect(component.coverForm.get('HighestNormalLossExpectancyLocationName').value).toBe('Location B');
+
+    expect(component.coverForm.get('HighestProbableMaximumLoss').value).toBe('70.0');
+    expect(component.coverForm.get('HighestProbableMaximumLossLocationName').value).toBe('Location B');
+
+    expect(component.coverForm.get('HighestMaximumForeseeableLoss').value).toBe('80.0');
+    expect(component.coverForm.get('HighestMaximumForeseeableLossLocationName').value).toBe('Location B');
+
+    expect(component.coverForm.get('HighestEBProbableMaximumLoss').value).toBe('90.0');
+    expect(component.coverForm.get('HighestEBProbableMaximumLossLocationName').value).toBe('Location B');
+
+    expect(component.coverForm.get('HighestEBMaximumForeseeableLoss').value).toBe('100.0');
+    expect(component.coverForm.get('HighestEBMaximumForeseeableLossLocationName').value).toBe('Location B');
   });
 
-  // Example for testing form initialization
-  it('should initialize form', () => {
-    expect(component.coverForm).toBeTruthy();
-    expect(component.coverForm instanceof Object).toBeTrue();
+  /**
+   * ✅ Test Case 2: Should handle zero and negative values by ignoring them (only positives > 0 considered)
+   */
+  it('should ignore zero and negative values and not set fields if no valid values found', () => {
+    const mockLocations = [
+      {
+        normalLossExpectancy: 0,
+        probableMaximumLoss: -10,
+        maximumForeseeableLoss: null,
+        ebProbableMaximumLoss: undefined,
+        ebMaximumForeseeableLoss: 0,
+        locationName: 'Location C',
+      },
+    ];
+
+    component.coverForm.get('PropertyLocations').setValue(mockLocations);
+    component['getHighestFireAndEBBasedOnLocation'](component.coverForm);
+
+    expect(component.coverForm.get('HighestNormalLossExpectancy').value).toBe('');
+    expect(component.coverForm.get('HighestNormalLossExpectancyLocationName').value).toBe('');
+
+    expect(component.coverForm.get('HighestProbableMaximumLoss').value).toBe('');
+    expect(component.coverForm.get('HighestProbableMaximumLossLocationName').value).toBe('');
+
+    expect(component.coverForm.get('HighestMaximumForeseeableLoss').value).toBe('');
+    expect(component.coverForm.get('HighestMaximumForeseeableLossLocationName').value).toBe('');
+
+    expect(component.coverForm.get('HighestEBProbableMaximumLoss').value).toBe('');
+    expect(component.coverForm.get('HighestEBProbableMaximumLossLocationName').value).toBe('');
+
+    expect(component.coverForm.get('HighestEBMaximumForeseeableLoss').value).toBe('');
+    expect(component.coverForm.get('HighestEBMaximumForeseeableLossLocationName').value).toBe('');
+  });
+
+  /**
+   * ✅ Test Case 3: Should handle empty PropertyLocations gracefully (no error, no value set)
+   */
+  it('should handle empty PropertyLocations array gracefully', () => {
+    component.coverForm.get('PropertyLocations').setValue([]);
+    component['getHighestFireAndEBBasedOnLocation'](component.coverForm);
+
+    expect(component.coverForm.get('HighestNormalLossExpectancy').value).toBe('');
+    expect(component.coverForm.get('HighestNormalLossExpectancyLocationName').value).toBe('');
+    expect(component.coverForm.get('HighestProbableMaximumLoss').value).toBe('');
+    expect(component.coverForm.get('HighestProbableMaximumLossLocationName').value).toBe('');
+    expect(component.coverForm.get('HighestMaximumForeseeableLoss').value).toBe('');
+    expect(component.coverForm.get('HighestMaximumForeseeableLossLocationName').value).toBe('');
+    expect(component.coverForm.get('HighestEBProbableMaximumLoss').value).toBe('');
+    expect(component.coverForm.get('HighestEBProbableMaximumLossLocationName').value).toBe('');
+    expect(component.coverForm.get('HighestEBMaximumForeseeableLoss').value).toBe('');
+    expect(component.coverForm.get('HighestEBMaximumForeseeableLossLocationName').value).toBe('');
+  });
+
+  /**
+   * ✅ Test Case 4: Should handle null PropertyLocations (e.g., uninitialized or erroneous form state)
+   */
+  it('should handle null PropertyLocations gracefully', () => {
+    component.coverForm.get('PropertyLocations').setValue(null);
+    expect(() => component['getHighestFireAndEBBasedOnLocation'](component.coverForm)).not.toThrow();
+
+    expect(component.coverForm.get('HighestNormalLossExpectancy').value).toBe('');
+    expect(component.coverForm.get('HighestNormalLossExpectancyLocationName').value).toBe('');
+    expect(component.coverForm.get('HighestProbableMaximumLoss').value).toBe('');
+    expect(component.coverForm.get('HighestProbableMaximumLossLocationName').value).toBe('');
+    expect(component.coverForm.get('HighestMaximumForeseeableLoss').value).toBe('');
+    expect(component.coverForm.get('HighestMaximumForeseeableLossLocationName').value).toBe('');
+    expect(component.coverForm.get('HighestEBProbableMaximumLoss').value).toBe('');
+    expect(component.coverForm.get('HighestEBProbableMaximumLossLocationName').value).toBe('');
+    expect(component.coverForm.get('HighestEBMaximumForeseeableLoss').value).toBe('');
+    expect(component.coverForm.get('HighestEBMaximumForeseeableLossLocationName').value).toBe('');
   });
 });
