@@ -1,288 +1,328 @@
-return await _applicationDbContext.PropertyAccounts
-    .Join(_applicationDbContext.PropertyLocations, propertyAccount
-        => propertyAccount.PropertyAccountId, propertyLocation => propertyLocation.PropertyAccountId,
-           (propertyAccount, propertyLocation)
-        => new { propertyAccount, propertyLocation })
-    .Join(_applicationDbContext.PropertyLocationAddressMaps, combined
-        => combined.propertyLocation.PropertyLocationId,
-           propertyLocationAddressMap => propertyLocationAddressMap.PropertyLocationId,
-           (propertyLocationAccountCombineEntry, propertyLocationAddressMap)
-        => new { propertyLocationAccountCombineEntry, propertyLocationAddressMap })
+// First, join PropertyAccount with PropertyLocation
+var propertyLocationJoin = from pa in _applicationDbContext.PropertyAccounts
+                          join pl in _applicationDbContext.PropertyLocations
+                          on pa.PropertyAccountId equals pl.PropertyAccountId
+                          select new { pa, pl };
 
-    .Join(_applicationDbContext.LocationAddressesMaps, combined
-        => combined.propertyLocationAddressMap.LocationAddressMapId, locationAddressMap => locationAddressMap.LocationAddressMapId,
-           (propertyLocationAddressMapCombineEntry, locationAddressMap)
-        => new { propertyLocationAddressMapCombineEntry, locationAddressMap })
-    .Join(_applicationDbContext.Locations, combined
-        => combined.locationAddressMap.LocationId, location => location.LocationId,
-           (locationMapCombineEntry, location)
-        => new { locationMapCombineEntry, location })
-    .Join(_applicationDbContext.Addresses, combineEntry
-    => combineEntry.locationMapCombineEntry.locationAddressMap.AddressId, address => address.AddressId,
-    (addressMapCombineEntry, address) => new
-    {
-        propertyLocation = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAccountCombineEntry.propertyLocation,
-        propertyAccount = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAccountCombineEntry.propertyAccount,
-        location = addressMapCombineEntry.locationMapCombineEntry.locationAddressMap.Location,
-        address = address,
-        propertyLocationAddressMap = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAddressMap,
-        locationAddressMap = addressMapCombineEntry.locationMapCombineEntry.locationAddressMap
-    })
-    // apply left join for property fire locations using DefaultIfEmpty
-    .GroupJoin(_applicationDbContext.PropertyFireLocations,
-    combined => combined.propertyLocation.PropertyLocationId,
-    propertyFire => propertyFire.PropertyLocationId,
-    (combined, propertyFires) => new { combined, propertyFires = propertyFires.DefaultIfEmpty() })
-    .SelectMany(x => x.propertyFires,
-    (x, propertyFire) => new
-    {
-        x.combined.propertyLocation,
-        x.combined.propertyAccount,
-        x.combined.location,
-        x.combined.address,
-        x.combined.propertyLocationAddressMap,
-        x.combined.locationAddressMap,
-        propertyFire
-    })
-    .Where(x =>
-        x.propertyAccount.StatusId == 1 &&
-        x.propertyAccount.ReviewRequestId == reviewRequestId &&
-        x.propertyLocation.StatusId == 1 &&
-        x.location.StatusId == 1 &&
-        x.address.StatusId == 1
-    )
-    // apply left join for Property equipment Locations using DefaultIfEmpty
-    .GroupJoin(_applicationDbContext.PropertyEquipmentLocations,
-    combined => combined.propertyLocation.PropertyLocationId,
-    propertyEquipment => propertyEquipment.PropertyLocationId,
-    (combined, propertyEquipments) => new { combined, propertyEquipments = propertyEquipments.DefaultIfEmpty() })
-    .SelectMany(x => x.propertyEquipments,
-    (x, propertyEquipment) => new
-    {
-        x.combined.propertyLocation,
-        x.combined.propertyAccount,
-        x.combined.location,
-        x.combined.address,
-        x.combined.propertyLocationAddressMap,
-        x.combined.locationAddressMap,
-        x.combined.propertyFire,
-        propertyEquipment
-    })
-    .Where(x =>
-        x.propertyAccount.StatusId == 1 &&
-        x.propertyAccount.ReviewRequestId == reviewRequestId &&
-        x.propertyLocation.StatusId == 1 &&
-        x.location.StatusId == 1 &&
-        x.address.StatusId == 1
-    )
+// Join with PropertyLocationAddressMaps
+var locationAddressMapJoin = from plj in propertyLocationJoin
+                            join plam in _applicationDbContext.PropertyLocationAddressMaps
+                            on plj.pl.PropertyLocationId equals plam.PropertyLocationId
+                            select new { plj.pa, plj.pl, plam };
+
+// Join with LocationAddressesMaps
+var addressMapJoin = from lamj in locationAddressMapJoin
+                    join lam in _applicationDbContext.LocationAddressesMaps
+                    on lamj.plam.LocationAddressMapId equals lam.LocationAddressMapId
+                    select new { lamj.pa, lamj.pl, lamj.plam, lam };
+
+// Join with Location
+var locationJoin = from amj in addressMapJoin
+                  join l in _applicationDbContext.Locations
+                  on amj.lam.LocationId equals l.LocationId
+                  select new { amj.pa, amj.pl, amj.plam, amj.lam, l };
+
+// Join with Address
+var addressJoin = from lj in locationJoin
+                 join a in _applicationDbContext.Addresses
+                 on lj.lam.AddressId equals a.AddressId
+                 select new { lj.pa, lj.pl, lj.plam, lj.lam, lj.l, a };
+
+// Left join with PropertyFireLocations
+var fireLocationJoin = from aj in addressJoin
+                      join pfl in _applicationDbContext.PropertyFireLocations
+                      on aj.pl.PropertyLocationId equals pfl.PropertyLocationId into pflJoin
+                      from pfl in pflJoin.DefaultIfEmpty()
+                      select new { aj.pa, aj.pl, aj.plam, aj.lam, aj.l, aj.a, pfl };
+
+// Left join with PropertyEquipmentLocations
+var equipmentLocationJoin = from flj in fireLocationJoin
+                           join pel in _applicationDbContext.PropertyEquipmentLocations
+                           on flj.pl.PropertyLocationId equals pel.PropertyLocationId into pelJoin
+                           from pel in pelJoin.DefaultIfEmpty()
+                           select new { flj.pa, flj.pl, flj.plam, flj.lam, flj.l, flj.a, flj.pfl, pel };
+
+// Final where and select
+var result = await equipmentLocationJoin
+    .Where(x => x.pa.StatusId == 1 &&
+                x.pa.ReviewRequestId == reviewRequestId &&
+                x.pl.StatusId == 1 &&
+                x.l.StatusId == 1 &&
+                x.a.StatusId == 1)
     .Select(x => new PropertyLocationResponse
     {
-        PropertyLocationId = x.propertyLocation.PropertyLocationId,
-        LocationId = x.location.LocationId,
-        CountryId = x.location.CountryId,
-        PropertyAccountId = x.propertyAccount.PropertyAccountId,
-        BuildingValue = x.propertyLocation.BuildingValue,
-        EquipmentValue = x.propertyLocation.EquipmentValue,
-        InventoryValue = x.propertyLocation.InventoryValue,
-        OtherValue = x.propertyLocation.OtherValue,
-        BusinessInterruptionValue = x.propertyLocation.BusinessInterruptionValue,
-        BusinessInterruptionOtherValue = x.propertyLocation.BusinessInterruptionOtherValue,
-        IndemnityPeriod = x.propertyLocation.IndemnityPeriod,
-        PayrollValue = x.propertyLocation.PayrollValue,
-        PayrollDayValue = x.propertyLocation.PayrollDayValue,
-        OccupancyGroup = x.propertyLocation.OccupancyGroup,
-        OccupancyType = x.propertyLocation.OccupancyType,
-        OccupancyCode = x.propertyLocation.OccupancyCode,
-        Hazard = x.propertyLocation.Hazard,
-        IsHazardUpdated = x.propertyLocation.IsHazardUpdated,
-        EquipmentBreakdown = x.propertyLocation.EquipmentBreakdown,
-        IsEquipmentBreakdownUpdated = x.propertyLocation.IsEquipmentBreakdownUpdated,
-        GroupBuildingArea = x.propertyLocation.GroupBuildingArea,
-        BuildingStatus = x.propertyLocation.BuildingStatus,
-        Nonthermal = x.propertyLocation.Nonthermal,
-        Theft = x.propertyLocation.Theft,
-        CommodityDescription = x.propertyLocation.CommodityDescription,
-        AutomaticSprinklersPercentage = x.propertyLocation.AutomaticSprinklersPercentage,
-        AutomaticSprinklersNeededPercentage = x.propertyLocation.AutomaticSprinklersNeededPercentage,
-        HumanElementCalculated = x.propertyLocation.HumanElementCalculated,
-        HumanElementUpdated = x.propertyLocation.HumanElementUpdated,
-        HumanElementUpdatedComment = x.propertyLocation.HumanElementUpdatedComment,
-        ConstructionCalculated = x.propertyLocation.ConstructionCalculated,
-        ConstructionUpdated = x.propertyLocation.ConstructionUpdated,
-        RiskFactor = x.propertyLocation.RiskFactor,
-        ConstructionUpdatedComment = x.propertyLocation.ConstructionUpdatedComment,
-        ConstructionHazards = x.propertyLocation.ConstructionHazards,
-        ConstructionHazardsComment = x.propertyLocation.ConstructionHazardsComment,
-        DetectionSecurity = x.propertyLocation.DetectionSecurity,
-        DetectionSecurityComment = x.propertyLocation.DetectionSecurityComment,
-        AutomaticSprinklers = x.propertyLocation.AutomaticSprinklers,
-        AutomaticSprinklersComment = x.propertyLocation.AutomaticSprinklersComment,
-        FireWaterSupply = x.propertyLocation.FireWaterSupply,
-        FireWaterSupplyComment = x.propertyLocation.FireWaterSupplyComment,
-        FireManualResponse = x.propertyLocation.FireManualResponse,
-        FireManualResponseComment = x.propertyLocation.FireManualResponseComment,
-        SpecialHazards = x.propertyLocation.SpecialHazards,
-        SpecialHazardsComment = x.propertyLocation.SpecialHazardsComment,
-        EquipmentHazards = x.propertyLocation.EquipmentHazards,
-        EquipmentHazardsComment = x.propertyLocation.EquipmentHazardsComment,
-        ExternalExposures = x.propertyLocation.ExternalExposures,
-        ExternalExposuresComment = x.propertyLocation.ExternalExposuresComment,
-        BusinessInterruptionCalculated = x.propertyLocation.BusinessInterruptionCalculated,
-        BusinessInterruptionUpdated = x.propertyLocation.BusinessInterruptionUpdated,
-        BusinessInterruptionUpdatedComment = x.propertyLocation.BusinessInterruptionUpdatedComment,
-        PropertyDamageIndexCalculated = x.propertyLocation.PropertyDamageIndexCalculated,
-        PropertyDamageIndexUpdated = x.propertyLocation.PropertyDamageIndexUpdated,
-        PropertyDamageIndexPrevious = x.propertyLocation.PropertyDamageIndexPrevious,
-        PropertyDamageIndexAdjusted = x.propertyLocation.PropertyDamageIndexAdjusted,
-        PropertyDamageIndexAdjustedComment = x.propertyLocation.PropertyDamageIndexAdjustedComment,
-        ConfidenceIndex = x.propertyLocation.ConfidenceIndex,
-        LossPreventionSource = x.propertyLocation.LossPreventionSource,
-        LossPreventionDate = x.propertyLocation.LossPreventionDate,
-        LossPreventionComments = x.propertyLocation.LossPreventionComments,
-        StatusId = x.propertyLocation.StatusId,
-        VerCol = x.propertyLocation.VerCol,
-        CreatedOnDate = x.propertyLocation.CreatedOnDate,
-        CreatedByUserId = x.propertyLocation.CreatedByUserId,
-        LocationName = x.location.LocationName,
-        Address = x.address.AddressName,
-        City = x.address.City!,
-        StateProvince = x.address.State!,
-        Country = x.address.Country.CountryName,
-        CurrencyId = x.propertyAccount.Currency,
-        UnitId = x.propertyAccount.Unit,
-        PropertyLocationAddressMapId = x.propertyLocationAddressMap.PropertyLocationAddressMapId,
-        LocationAddressMapId = x.locationAddressMap.LocationAddressMapId,
-        TimeElementExcluded = x.propertyAccount.TimeElementExcluded,
-        MaximumForeseeableLoss = ((x.propertyFire!.MaximumLossPropertyDamage ?? 0.0m)
-                                         + (x.propertyFire!.MaximumLossOtherPropertyDamage ?? 0.0m)
-                                         + (x.propertyFire!.MaximumLossBusinessInterruption ?? 0.0m)
-                                         + (x.propertyFire!.MaximumLossInterBusinessInterruption ?? 0.0m)
-                                         + (x.propertyFire!.MaximumLossOtherTimeElement ?? 0.0m)),
-        ProbableMaximumLoss = ((x.propertyFire!.ProbableLossPropertyDamage ?? 0.0m)
-                                         + (x.propertyFire!.ProbableLossOtherPropertyDamage ?? 0.0m)
-                                         + (x.propertyFire!.ProbableLossBusinessInterruption ?? 0.0m)
-                                         + (x.propertyFire!.ProbableLossInterBusinessInterruption ?? 0.0m)
-                                         + (x.propertyFire!.ProbableLossOtherTimeElement ?? 0.0m)),
-        NormalLossExpectancy = ((x.propertyFire!.NormalLossPropertyDamage ?? 0.0m)
-                                         + (x.propertyFire!.NormalLossOtherPropertyDamage ?? 0.0m)
-                                         + (x.propertyFire!.NormalLossBusinessInterruption ?? 0.0m)
-                                         + (x.propertyFire!.NormalLossInterBusinessInterruption ?? 0.0m)
-                                         + (x.propertyFire!.NormalLossOtherTimeElement ?? 0.0m)),
-        EBProbableMaximumLoss = ((x.propertyEquipment!.ProbableLossPropertyDamage ?? 0.0m)
-                                         + (x.propertyEquipment!.ProbableLossOtherPropertyDamage ?? 0.0m)
-                                         + (x.propertyEquipment!.ProbableLossBusinessInterruption ?? 0.0m)
-                                         + (x.propertyEquipment!.ProbableLossInterBusinessInterruption ?? 0.0m)
-                                         + (x.propertyEquipment!.ProbableLossOtherTimeElement ?? 0.0m)),
-        EBMaximumForeseeableLoss = ((x.propertyEquipment!.MaximumLossPropertyDamage ?? 0.0m)
-                                         + (x.propertyEquipment!.MaximumLossOtherPropertyDamage ?? 0.0m)
-                                         + (x.propertyEquipment!.MaximumLossBusinessInterruption ?? 0.0m)
-                                         + (x.propertyEquipment!.MaximumLossInterBusinessInterruption ?? 0.0m)
-                                         + (x.propertyEquipment!.MaximumLossOtherTimeElement ?? 0.0m)),
-        ReportedBuildingValue = x.propertyAccount.ReportedBuildingValue,
-        ReportedContentsValue = x.propertyAccount.ReportedContentsValue,
-        ReportedTotalBIValue = x.propertyAccount.ReportedTotalBivalue
+        PropertyLocationId = x.pl.PropertyLocationId,
+        LocationId = x.l.LocationId,
+        CountryId = x.l.CountryId,
+        PropertyAccountId = x.pa.PropertyAccountId,
+        BuildingValue = x.pl.BuildingValue,
+        EquipmentValue = x.pl.EquipmentValue,
+        // map rest of the fields as needed...
+        MaximumForeseeableLoss = ((x.pfl?.MaximumLossPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.MaximumLossOtherPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.MaximumLossBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.MaximumLossInterBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.MaximumLossOtherTimeElement ?? 0.0m)),
+        ProbableMaximumLoss = ((x.pfl?.ProbableLossPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.ProbableLossOtherPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.ProbableLossBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.ProbableLossInterBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.ProbableLossOtherTimeElement ?? 0.0m)),
+        EBProbableMaximumLoss = ((x.pel?.ProbableLossPropertyDamage ?? 0.0m)
+                                     + (x.pel?.ProbableLossOtherPropertyDamage ?? 0.0m)
+                                     + (x.pel?.ProbableLossBusinessInterruption ?? 0.0m)
+                                     + (x.pel?.ProbableLossInterBusinessInterruption ?? 0.0m)
+                                     + (x.pel?.ProbableLossOtherTimeElement ?? 0.0m)),
+        // continue mapping...
+    })
+    .OrderBy(p => p.PropertyLocationId)
+    .AsNoTracking()
+    .ToListAsync();
+-----------------------
 
-    }).OrderBy(p => p.PropertyLocationId).AsNoTracking().ToListAsync();
-	
-	
-	
-	---------------------exception.Message---------------------------------
-	
-	
-	The LINQ expression 'DbSet<PropertyAccount>()
-    .Join(
-        inner: DbSet<PropertyLocation>(), 
-        outerKeySelector: propertyAccount => propertyAccount.PropertyAccountId, 
-        innerKeySelector: propertyLocation => propertyLocation.PropertyAccountId, 
-        resultSelector: (propertyAccount, propertyLocation) => new { 
-            propertyAccount = propertyAccount, 
-            propertyLocation = propertyLocation
-         })
-    .Join(
-        inner: DbSet<PropertyLocationAddressMap>(), 
-        outerKeySelector: combined => combined.propertyLocation.PropertyLocationId, 
-        innerKeySelector: propertyLocationAddressMap => propertyLocationAddressMap.PropertyLocationId, 
-        resultSelector: (propertyLocationAccountCombineEntry, propertyLocationAddressMap) => new { 
-            propertyLocationAccountCombineEntry = propertyLocationAccountCombineEntry, 
-            propertyLocationAddressMap = propertyLocationAddressMap
-         })
-    .Join(
-        inner: DbSet<LocationAddressMap>(), 
-        outerKeySelector: combined => combined.propertyLocationAddressMap.LocationAddressMapId, 
-        innerKeySelector: locationAddressMap => locationAddressMap.LocationAddressMapId, 
-        resultSelector: (propertyLocationAddressMapCombineEntry, locationAddressMap) => new { 
-            propertyLocationAddressMapCombineEntry = propertyLocationAddressMapCombineEntry, 
-            locationAddressMap = locationAddressMap
-         })
-    .Join(
-        inner: DbSet<Location>(), 
-        outerKeySelector: combined => combined.locationAddressMap.LocationId, 
-        innerKeySelector: location => location.LocationId, 
-        resultSelector: (locationMapCombineEntry, location) => new { 
-            locationMapCombineEntry = locationMapCombineEntry, 
-            location = location
-         })
-    .Join(
-        inner: DbSet<Address>(), 
-        outerKeySelector: combineEntry => combineEntry.locationMapCombineEntry.locationAddressMap.AddressId, 
-        innerKeySelector: address => address.AddressId, 
-        resultSelector: (addressMapCombineEntry, address) => new { 
-            propertyLocation = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAccountCombineEntry.propertyLocation, 
-            propertyAccount = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAccountCombineEntry.propertyAccount, 
-            location = addressMapCombineEntry.locationMapCombineEntry.locationAddressMap.Location, 
-            address = address, 
-            propertyLocationAddressMap = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAddressMap, 
-            locationAddressMap = addressMapCombineEntry.locationMapCombineEntry.locationAddressMap
-         })
-    .GroupJoin(
-        inner: DbSet<PropertyFireLocation>(), 
-        outerKeySelector: combined => combined.propertyLocation.PropertyLocationId, 
-        innerKeySelector: propertyFire => propertyFire.PropertyLocationId, 
-        resultSelector: (combined, propertyFires) => new { 
-            combined = combined, 
-            propertyFires = propertyFires
-                .AsQueryable()
-                .DefaultIfEmpty()
-         })' could not be translated. Either rewrite the query in a form that can be translated, or switch to client evaluation explicitly by inserting a call to 'AsEnumerable', 'AsAsyncEnumerable', 'ToList', or 'ToListAsync'. See https://go.microsoft.com/fwlink/?linkid=2101038 for more information.
-		 
-		 -----------exception.StackTrace--------------
- at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
-   at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
-   at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
-   at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
-   at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
-   at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
-   at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
-   at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
-   at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.Expand(Expression query)
-   at Microsoft.EntityFrameworkCore.Query.QueryTranslationPreprocessor.Process(Expression query)
-   at Microsoft.EntityFrameworkCore.Query.QueryCompilationContext.CreateQueryExecutorExpression[TResult](Expression query)
-   at Microsoft.EntityFrameworkCore.Query.QueryCompilationContext.CreateQueryExecutor[TResult](Expression query)
-   at Microsoft.EntityFrameworkCore.Storage.Database.CompileQuery[TResult](Expression query, Boolean async)
-   at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.CompileQueryCore[TResult](IDatabase database, Expression query, IModel model, Boolean async)
-   at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.<>c__DisplayClass11_0`1.<ExecuteCore>b__0()
-   at Microsoft.EntityFrameworkCore.Query.Internal.CompiledQueryCache.GetOrAddQuery[TResult](Object cacheKey, Func`1 compiler)
-   at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.ExecuteCore[TResult](Expression query, Boolean async, CancellationToken cancellationToken)
-   at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.ExecuteAsync[TResult](Expression query, CancellationToken cancellationToken)
-   at Microsoft.EntityFrameworkCore.Query.Internal.EntityQueryProvider.ExecuteAsync[TResult](Expression expression, CancellationToken cancellationToken)
-   at Microsoft.EntityFrameworkCore.Query.Internal.EntityQueryable`1.GetAsyncEnumerator(CancellationToken cancellationToken)
-   at System.Runtime.CompilerServices.ConfiguredCancelableAsyncEnumerable`1.GetAsyncEnumerator()
-   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.<ToListAsync>d__67`1.MoveNext()
-   at EnterpriseApps.RET.Persistence.Property.Repository.Query.PropertyQueryRepository.<GetAllProperty>d__4.MoveNext() in C:\Users\mdrehan.hashmi\Source\Repos\EnterpriseApps-RET\main\code\src\EnterpriseApps.RET.Persistence\Property\Repository\Query\PropertyQueryRepository.cs:line 32
-   at EnterpriseApps.RET.Application.Property.Handlers.QueryHandlers.GetPropertyQueryHandler.<Handle>d__2.MoveNext() in C:\Users\mdrehan.hashmi\Source\Repos\EnterpriseApps-RET\main\code\src\EnterpriseApps.RET.Application\Property\Handlers\QueryHandlers\GetPropertyQueryHandler.cs:line 25
-   at EnterpriseApps.RET.Api.Controllers.PropertyController.<Get>d__3.MoveNext() in C:\Users\mdrehan.hashmi\Source\Repos\EnterpriseApps-RET\main\code\src\EnterpriseApps.RET.Api\Controllers\PropertyController.cs:line 50
-   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfActionResultExecutor.<Execute>d__0.MoveNext()
-   at System.Threading.Tasks.ValueTask`1.get_Result()
-   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<<InvokeActionMethodAsync>g__Awaited|12_0>d.MoveNext()
-   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<<InvokeNextActionFilterAsync>g__Awaited|10_0>d.MoveNext()
-   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
-   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
-   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()
---- End of stack trace from previous location ---
-   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<<InvokeFilterPipelineAsync>g__Awaited|20_0>d.MoveNext()
-   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<<InvokeAsync>g__Logged|17_1>d.MoveNext()
-   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<<InvokeAsync>g__Logged|17_1>d.MoveNext()
-   at Microsoft.AspNetCore.Routing.EndpointMiddleware.<<Invoke>g__AwaitRequestTask|7_0>d.MoveNext()
-   at EnterpriseApps.RET.Api.Middleware.CustomHeaderMiddleware.<InvokeAsync>d__2.MoveNext() in C:\Users\mdrehan.hashmi\Source\Repos\EnterpriseApps-RET\main\code\src\EnterpriseApps.RET.Api\Middleware\CustomHeaderMiddleware.cs:line 23
-   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.<Invoke>d__11.MoveNext()
-   at Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddlewareImpl.<<Invoke>g__Awaited|10_0>d.MoveNext()
+var result = await equipmentLocationJoin
+    .Where(x => x.pa.StatusId == 1 &&
+                x.pa.ReviewRequestId == reviewRequestId &&
+                x.pl.StatusId == 1 &&
+                x.l.StatusId == 1 &&
+                x.a.StatusId == 1)
+    .Select(x => new PropertyLocationResponse
+    {
+        PropertyLocationId = x.pl.PropertyLocationId,
+        LocationId = x.l.LocationId,
+        CountryId = x.l.CountryId,
+        PropertyAccountId = x.pa.PropertyAccountId,
+        BuildingValue = x.pl.BuildingValue,
+        EquipmentValue = x.pl.EquipmentValue,
+        InventoryValue = x.pl.InventoryValue,
+        OtherValue = x.pl.OtherValue,
+        BusinessInterruptionValue = x.pl.BusinessInterruptionValue,
+        BusinessInterruptionOtherValue = x.pl.BusinessInterruptionOtherValue,
+        IndemnityPeriod = x.pl.IndemnityPeriod,
+        PayrollValue = x.pl.PayrollValue,
+        PayrollDayValue = x.pl.PayrollDayValue,
+        OccupancyGroup = x.pl.OccupancyGroup,
+        OccupancyType = x.pl.OccupancyType,
+        OccupancyCode = x.pl.OccupancyCode,
+        Hazard = x.pl.Hazard,
+        IsHazardUpdated = x.pl.IsHazardUpdated,
+        EquipmentBreakdown = x.pl.EquipmentBreakdown,
+        IsEquipmentBreakdownUpdated = x.pl.IsEquipmentBreakdownUpdated,
+        GroupBuildingArea = x.pl.GroupBuildingArea,
+        BuildingStatus = x.pl.BuildingStatus,
+        Nonthermal = x.pl.Nonthermal,
+        Theft = x.pl.Theft,
+        CommodityDescription = x.pl.CommodityDescription,
+        AutomaticSprinklersPercentage = x.pl.AutomaticSprinklersPercentage,
+        AutomaticSprinklersNeededPercentage = x.pl.AutomaticSprinklersNeededPercentage,
+        HumanElementCalculated = x.pl.HumanElementCalculated,
+        HumanElementUpdated = x.pl.HumanElementUpdated,
+        HumanElementUpdatedComment = x.pl.HumanElementUpdatedComment,
+        ConstructionCalculated = x.pl.ConstructionCalculated,
+        ConstructionUpdated = x.pl.ConstructionUpdated,
+        RiskFactor = x.pl.RiskFactor,
+        ConstructionUpdatedComment = x.pl.ConstructionUpdatedComment,
+        ConstructionHazards = x.pl.ConstructionHazards,
+        ConstructionHazardsComment = x.pl.ConstructionHazardsComment,
+        DetectionSecurity = x.pl.DetectionSecurity,
+        DetectionSecurityComment = x.pl.DetectionSecurityComment,
+        AutomaticSprinklers = x.pl.AutomaticSprinklers,
+        AutomaticSprinklersComment = x.pl.AutomaticSprinklersComment,
+        FireWaterSupply = x.pl.FireWaterSupply,
+        FireWaterSupplyComment = x.pl.FireWaterSupplyComment,
+        FireManualResponse = x.pl.FireManualResponse,
+        FireManualResponseComment = x.pl.FireManualResponseComment,
+        SpecialHazards = x.pl.SpecialHazards,
+        SpecialHazardsComment = x.pl.SpecialHazardsComment,
+        EquipmentHazards = x.pl.EquipmentHazards,
+        EquipmentHazardsComment = x.pl.EquipmentHazardsComment,
+        ExternalExposures = x.pl.ExternalExposures,
+        ExternalExposuresComment = x.pl.ExternalExposuresComment,
+        BusinessInterruptionCalculated = x.pl.BusinessInterruptionCalculated,
+        BusinessInterruptionUpdated = x.pl.BusinessInterruptionUpdated,
+        BusinessInterruptionUpdatedComment = x.pl.BusinessInterruptionUpdatedComment,
+        PropertyDamageIndexCalculated = x.pl.PropertyDamageIndexCalculated,
+        PropertyDamageIndexUpdated = x.pl.PropertyDamageIndexUpdated,
+        PropertyDamageIndexPrevious = x.pl.PropertyDamageIndexPrevious,
+        PropertyDamageIndexAdjusted = x.pl.PropertyDamageIndexAdjusted,
+        PropertyDamageIndexAdjustedComment = x.pl.PropertyDamageIndexAdjustedComment,
+        ConfidenceIndex = x.pl.ConfidenceIndex,
+        LossPreventionSource = x.pl.LossPreventionSource,
+        LossPreventionDate = x.pl.LossPreventionDate,
+        LossPreventionComments = x.pl.LossPreventionComments,
+        StatusId = x.pl.StatusId,
+        VerCol = x.pl.VerCol,
+        CreatedOnDate = x.pl.CreatedOnDate,
+        CreatedByUserId = x.pl.CreatedByUserId,
+        LocationName = x.l.LocationName,
+        Address = x.a.AddressName,
+        City = x.a.City!,
+        StateProvince = x.a.State!,
+        Country = x.a.Country.CountryName,
+        CurrencyId = x.pa.Currency,
+        UnitId = x.pa.Unit,
+        PropertyLocationAddressMapId = x.plam.PropertyLocationAddressMapId,
+        LocationAddressMapId = x.lam.LocationAddressMapId,
+        TimeElementExcluded = x.pa.TimeElementExcluded,
+        MaximumForeseeableLoss = ((x.pfl?.MaximumLossPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.MaximumLossOtherPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.MaximumLossBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.MaximumLossInterBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.MaximumLossOtherTimeElement ?? 0.0m)),
+        ProbableMaximumLoss = ((x.pfl?.ProbableLossPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.ProbableLossOtherPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.ProbableLossBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.ProbableLossInterBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.ProbableLossOtherTimeElement ?? 0.0m)),
+        NormalLossExpectancy = ((x.pfl?.NormalLossPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.NormalLossOtherPropertyDamage ?? 0.0m)
+                                     + (x.pfl?.NormalLossBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.NormalLossInterBusinessInterruption ?? 0.0m)
+                                     + (x.pfl?.NormalLossOtherTimeElement ?? 0.0m)),
+        EBProbableMaximumLoss = ((x.pel?.ProbableLossPropertyDamage ?? 0.0m)
+                                     + (x.pel?.ProbableLossOtherPropertyDamage ?? 0.0m)
+                                     + (x.pel?.ProbableLossBusinessInterruption ?? 0.0m)
+                                     + (x.pel?.ProbableLossInterBusinessInterruption ?? 0.0m)
+                                     + (x.pel?.ProbableLossOtherTimeElement ?? 0.0m)),
+        EBMaximumForeseeableLoss = ((x.pel?.MaximumLossPropertyDamage ?? 0.0m)
+                                     + (x.pel?.MaximumLossOtherPropertyDamage ?? 0.0m)
+                                     + (x.pel?.MaximumLossBusinessInterruption ?? 0.0m)
+                                     + (x.pel?.MaximumLossInterBusinessInterruption ?? 0.0m)
+                                     + (x.pel?.MaximumLossOtherTimeElement ?? 0.0m)),
+        ReportedBuildingValue = x.pa.ReportedBuildingValue,
+        ReportedContentsValue = x.pa.ReportedContentsValue,
+        ReportedTotalBIValue = x.pa.ReportedTotalBivalue
+    })
+    .OrderBy(p => p.PropertyLocationId)
+    .AsNoTracking()
+    .ToListAsync();
+---------------------------------
+
+var result = await _applicationDbContext.PropertyAccounts
+    .Join(_applicationDbContext.PropertyLocations,
+        pa => pa.PropertyAccountId,
+        pl => pl.PropertyAccountId,
+        (pa, pl) => new { pa, pl })
+    .Join(_applicationDbContext.PropertyLocationAddressMaps,
+        combined => combined.pl.PropertyLocationId,
+        plam => plam.PropertyLocationId,
+        (combined, plam) => new { combined.pa, combined.pl, plam })
+    .Join(_applicationDbContext.LocationAddressesMaps,
+        combined => combined.plam.LocationAddressMapId,
+        lam => lam.LocationAddressMapId,
+        (combined, lam) => new { combined.pa, combined.pl, combined.plam, lam })
+    .Join(_applicationDbContext.Locations,
+        combined => combined.lam.LocationId,
+        loc => loc.LocationId,
+        (combined, loc) => new { combined.pa, combined.pl, combined.plam, combined.lam, loc })
+    .Join(_applicationDbContext.Addresses,
+        combined => combined.lam.AddressId,
+        addr => addr.AddressId,
+        (combined, addr) => new { combined.pa, combined.pl, combined.plam, combined.lam, combined.loc, addr })
+
+    // Left Join for PropertyFireLocations
+    .GroupJoin(_applicationDbContext.PropertyFireLocations,
+        combined => combined.pl.PropertyLocationId,
+        pfl => pfl.PropertyLocationId,
+        (combined, pfl) => new { combined, pfl })
+    .SelectMany(x => x.pfl.DefaultIfEmpty(), (x, pfl) => new { x.combined.pa, x.combined.pl, x.combined.plam, x.combined.lam, x.combined.loc, x.combined.addr, pfl })
+
+    // Left Join for PropertyEquipmentLocations
+    .GroupJoin(_applicationDbContext.PropertyEquipmentLocations,
+        combined => combined.pl.PropertyLocationId,
+        pel => pel.PropertyLocationId,
+        (combined, pel) => new { combined, pel })
+    .SelectMany(x => x.pel.DefaultIfEmpty(), (x, pel) => new { x.combined.pa, x.combined.pl, x.combined.plam, x.combined.lam, x.combined.loc, x.combined.addr, x.combined.pfl, pel })
+
+    // Filtering
+    .Where(x =>
+        x.pa.StatusId == 1 &&
+        x.pa.ReviewRequestId == reviewRequestId &&
+        x.pl.StatusId == 1 &&
+        x.loc.StatusId == 1 &&
+        x.addr.StatusId == 1)
+
+    // Final Projection
+    .Select(x => new PropertyLocationResponse
+    {
+        PropertyLocationId = x.pl.PropertyLocationId,
+        LocationId = x.loc.LocationId,
+        CountryId = x.loc.CountryId,
+        PropertyAccountId = x.pa.PropertyAccountId,
+        BuildingValue = x.pl.BuildingValue,
+        EquipmentValue = x.pl.EquipmentValue,
+        InventoryValue = x.pl.InventoryValue,
+        OtherValue = x.pl.OtherValue,
+        BusinessInterruptionValue = x.pl.BusinessInterruptionValue,
+        BusinessInterruptionOtherValue = x.pl.BusinessInterruptionOtherValue,
+        IndemnityPeriod = x.pl.IndemnityPeriod,
+        PayrollValue = x.pl.PayrollValue,
+        PayrollDayValue = x.pl.PayrollDayValue,
+        OccupancyGroup = x.pl.OccupancyGroup,
+        OccupancyType = x.pl.OccupancyType,
+        OccupancyCode = x.pl.OccupancyCode,
+        Hazard = x.pl.Hazard,
+        IsHazardUpdated = x.pl.IsHazardUpdated,
+        EquipmentBreakdown = x.pl.EquipmentBreakdown,
+        IsEquipmentBreakdownUpdated = x.pl.IsEquipmentBreakdownUpdated,
+        GroupBuildingArea = x.pl.GroupBuildingArea,
+        BuildingStatus = x.pl.BuildingStatus,
+        Nonthermal = x.pl.Nonthermal,
+        Theft = x.pl.Theft,
+        CommodityDescription = x.pl.CommodityDescription,
+        AutomaticSprinklersPercentage = x.pl.AutomaticSprinklersPercentage,
+        AutomaticSprinklersNeededPercentage = x.pl.AutomaticSprinklersNeededPercentage,
+        HumanElementCalculated = x.pl.HumanElementCalculated,
+        HumanElementUpdated = x.pl.HumanElementUpdated,
+        HumanElementUpdatedComment = x.pl.HumanElementUpdatedComment,
+        ConstructionCalculated = x.pl.ConstructionCalculated,
+        ConstructionUpdated = x.pl.ConstructionUpdated,
+        RiskFactor = x.pl.RiskFactor,
+        ConstructionUpdatedComment = x.pl.ConstructionUpdatedComment,
+        ConstructionHazards = x.pl.ConstructionHazards,
+        ConstructionHazardsComment = x.pl.ConstructionHazardsComment,
+        DetectionSecurity = x.pl.DetectionSecurity,
+        DetectionSecurityComment = x.pl.DetectionSecurityComment,
+        AutomaticSprinklers = x.pl.AutomaticSprinklers,
+        AutomaticSprinklersComment = x.pl.AutomaticSprinklersComment,
+        FireWaterSupply = x.pl.FireWaterSupply,
+        FireWaterSupplyComment = x.pl.FireWaterSupplyComment,
+        FireManualResponse = x.pl.FireManualResponse,
+        FireManualResponseComment = x.pl.FireManualResponseComment,
+        SpecialHazards = x.pl.SpecialHazards,
+        SpecialHazardsComment = x.pl.SpecialHazardsComment,
+        EquipmentHazards = x.pl.EquipmentHazards,
+        EquipmentHazardsComment = x.pl.EquipmentHazardsComment,
+        ExternalExposures = x.pl.ExternalExposures,
+        ExternalExposuresComment = x.pl.ExternalExposuresComment,
+        BusinessInterruptionCalculated = x.pl.BusinessInterruptionCalculated,
+        BusinessInterruptionUpdated = x.pl.BusinessInterruptionUpdated,
+        BusinessInterruptionUpdatedComment = x.pl.BusinessInterruptionUpdatedComment,
+        PropertyDamageIndexCalculated = x.pl.PropertyDamageIndexCalculated,
+        PropertyDamageIndexUpdated = x.pl.PropertyDamageIndexUpdated,
+        PropertyDamageIndexPrevious = x.pl.PropertyDamageIndexPrevious,
+        PropertyDamageIndexAdjusted = x.pl.PropertyDamageIndexAdjusted,
+        PropertyDamageIndexAdjustedComment = x.pl.PropertyDamageIndexAdjustedComment,
+        ConfidenceIndex = x.pl.ConfidenceIndex,
+        LossPreventionSource = x.pl.LossPreventionSource,
+        LossPreventionDate = x.pl.LossPreventionDate,
+        LossPreventionComments = x.pl.LossPreventionComments,
+        StatusId = x.pl.StatusId,
+        VerCol = x.pl.VerCol,
+        CreatedOnDate = x.pl.CreatedOnDate,
+        CreatedByUserId = x.pl.CreatedByUserId,
+        LocationName = x.loc.LocationName,
+        Address = x.addr.AddressName,
+        City = x.addr.City!,
+        StateProvince = x.addr.State!,
+        Country = x.addr.Country.CountryName,
+        CurrencyId = x.pa.Currency,
+        UnitId = x.pa.Unit,
+        PropertyLocationAddressMapId = x.plam.PropertyLocationAddressMapId,
+        LocationAddressMapId = x.lam.LocationAddressMapId,
+        TimeElementExcluded = x.pa.TimeElementExcluded,
+        MaximumForeseeableLoss = ((x.pfl?.MaximumLossPropertyDamage ?? 0.0m) + (x.pfl?.MaximumLossOtherPropertyDamage ?? 0.0m) + (x.pfl?.MaximumLossBusinessInterruption ?? 0.0m) + (x.pfl?.MaximumLossInterBusinessInterruption ?? 0.0m) + (x.pfl?.MaximumLossOtherTimeElement ?? 0.0m)),
+        ProbableMaximumLoss = ((x.pfl?.ProbableLossPropertyDamage ?? 0.0m) + (x.pfl?.ProbableLossOtherPropertyDamage ?? 0.0m) + (x.pfl?.ProbableLossBusinessInterruption ?? 0.0m) + (x.pfl?.ProbableLossInterBusinessInterruption ?? 0.0m) + (x.pfl?.ProbableLossOtherTimeElement ?? 0.0m)),
+        EBMaximumForeseeableLoss = ((x.pel?.MaximumLossPropertyDamage ?? 0.0m) + (x.pel?.MaximumLossOtherPropertyDamage ?? 0.0m) + (x.pel?.MaximumLossBusinessInterruption ?? 0.0m) + (x.pel?.MaximumLossInterBusinessInterruption ?? 0.0m) + (x.pel?.MaximumLossOtherTimeElement ?? 0.0m)),
+        EBProbableMaximumLoss = ((x.pel?.ProbableLossPropertyDamage ?? 0.0m) + (x.pel?.ProbableLossOtherPropertyDamage ?? 0.0m) + (x.pel?.ProbableLossBusinessInterruption ?? 0.0m))
+    }).ToListAsync();
