@@ -1,3 +1,251 @@
+return await _applicationDbContext.PropertyAccounts
+    .Join(_applicationDbContext.PropertyLocations, propertyAccount
+        => propertyAccount.PropertyAccountId, propertyLocation => propertyLocation.PropertyAccountId,
+           (propertyAccount, propertyLocation)
+        => new { propertyAccount, propertyLocation })
+    .Join(_applicationDbContext.PropertyLocationAddressMaps, combined
+        => combined.propertyLocation.PropertyLocationId,
+           propertyLocationAddressMap => propertyLocationAddressMap.PropertyLocationId,
+           (propertyLocationAccountCombineEntry, propertyLocationAddressMap)
+        => new { propertyLocationAccountCombineEntry, propertyLocationAddressMap })
+
+    .Join(_applicationDbContext.LocationAddressesMaps, combined
+        => combined.propertyLocationAddressMap.LocationAddressMapId, locationAddressMap => locationAddressMap.LocationAddressMapId,
+           (propertyLocationAddressMapCombineEntry, locationAddressMap)
+        => new { propertyLocationAddressMapCombineEntry, locationAddressMap })
+    .Join(_applicationDbContext.Locations, combined
+        => combined.locationAddressMap.LocationId, location => location.LocationId,
+           (locationMapCombineEntry, location)
+        => new { locationMapCombineEntry, location })
+    .Join(_applicationDbContext.Addresses, combineEntry
+    => combineEntry.locationMapCombineEntry.locationAddressMap.AddressId, address => address.AddressId,
+    (addressMapCombineEntry, address) => new
+    {
+        propertyLocation = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAccountCombineEntry.propertyLocation,
+        propertyAccount = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAccountCombineEntry.propertyAccount,
+        location = addressMapCombineEntry.locationMapCombineEntry.locationAddressMap.Location,
+        address = address,
+        propertyLocationAddressMap = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAddressMap,
+        locationAddressMap = addressMapCombineEntry.locationMapCombineEntry.locationAddressMap
+    })
+    // apply left join for property fire locations using DefaultIfEmpty
+    .GroupJoin(_applicationDbContext.PropertyFireLocations,
+    combined => combined.propertyLocation.PropertyLocationId,
+    propertyFire => propertyFire.PropertyLocationId,
+    (combined, propertyFires) => new { combined, propertyFires = propertyFires.DefaultIfEmpty() })
+    .SelectMany(x => x.propertyFires,
+    (x, propertyFire) => new
+    {
+        x.combined.propertyLocation,
+        x.combined.propertyAccount,
+        x.combined.location,
+        x.combined.address,
+        x.combined.propertyLocationAddressMap,
+        x.combined.locationAddressMap,
+        propertyFire
+    })
+    .Where(x =>
+        x.propertyAccount.StatusId == 1 &&
+        x.propertyAccount.ReviewRequestId == reviewRequestId &&
+        x.propertyLocation.StatusId == 1 &&
+        x.location.StatusId == 1 &&
+        x.address.StatusId == 1
+    )
+    // apply left join for Property equipment Locations using DefaultIfEmpty
+    .GroupJoin(_applicationDbContext.PropertyEquipmentLocations,
+    combined => combined.propertyLocation.PropertyLocationId,
+    propertyEquipment => propertyEquipment.PropertyLocationId,
+    (combined, propertyEquipments) => new { combined, propertyEquipments = propertyEquipments.DefaultIfEmpty() })
+    .SelectMany(x => x.propertyEquipments,
+    (x, propertyEquipment) => new
+    {
+        x.combined.propertyLocation,
+        x.combined.propertyAccount,
+        x.combined.location,
+        x.combined.address,
+        x.combined.propertyLocationAddressMap,
+        x.combined.locationAddressMap,
+        x.combined.propertyFire,
+        propertyEquipment
+    })
+    .Where(x =>
+        x.propertyAccount.StatusId == 1 &&
+        x.propertyAccount.ReviewRequestId == reviewRequestId &&
+        x.propertyLocation.StatusId == 1 &&
+        x.location.StatusId == 1 &&
+        x.address.StatusId == 1
+    )
+    .Select(x => new PropertyLocationResponse
+    {
+        PropertyLocationId = x.propertyLocation.PropertyLocationId,
+        LocationId = x.location.LocationId,
+        CountryId = x.location.CountryId,
+        PropertyAccountId = x.propertyAccount.PropertyAccountId,
+        BuildingValue = x.propertyLocation.BuildingValue,
+        EquipmentValue = x.propertyLocation.EquipmentValue,
+        InventoryValue = x.propertyLocation.InventoryValue,
+        OtherValue = x.propertyLocation.OtherValue,
+        BusinessInterruptionValue = x.propertyLocation.BusinessInterruptionValue,
+        BusinessInterruptionOtherValue = x.propertyLocation.BusinessInterruptionOtherValue,
+        IndemnityPeriod = x.propertyLocation.IndemnityPeriod,
+        PayrollValue = x.propertyLocation.PayrollValue,
+        PayrollDayValue = x.propertyLocation.PayrollDayValue,
+        OccupancyGroup = x.propertyLocation.OccupancyGroup,
+        OccupancyType = x.propertyLocation.OccupancyType,
+        OccupancyCode = x.propertyLocation.OccupancyCode,
+        Hazard = x.propertyLocation.Hazard,
+        IsHazardUpdated = x.propertyLocation.IsHazardUpdated,
+        EquipmentBreakdown = x.propertyLocation.EquipmentBreakdown,
+        IsEquipmentBreakdownUpdated = x.propertyLocation.IsEquipmentBreakdownUpdated,
+        GroupBuildingArea = x.propertyLocation.GroupBuildingArea,
+        BuildingStatus = x.propertyLocation.BuildingStatus,
+        Nonthermal = x.propertyLocation.Nonthermal,
+        Theft = x.propertyLocation.Theft,
+        CommodityDescription = x.propertyLocation.CommodityDescription,
+        AutomaticSprinklersPercentage = x.propertyLocation.AutomaticSprinklersPercentage,
+        AutomaticSprinklersNeededPercentage = x.propertyLocation.AutomaticSprinklersNeededPercentage,
+        HumanElementCalculated = x.propertyLocation.HumanElementCalculated,
+        HumanElementUpdated = x.propertyLocation.HumanElementUpdated,
+        HumanElementUpdatedComment = x.propertyLocation.HumanElementUpdatedComment,
+        ConstructionCalculated = x.propertyLocation.ConstructionCalculated,
+        ConstructionUpdated = x.propertyLocation.ConstructionUpdated,
+        RiskFactor = x.propertyLocation.RiskFactor,
+        ConstructionUpdatedComment = x.propertyLocation.ConstructionUpdatedComment,
+        ConstructionHazards = x.propertyLocation.ConstructionHazards,
+        ConstructionHazardsComment = x.propertyLocation.ConstructionHazardsComment,
+        DetectionSecurity = x.propertyLocation.DetectionSecurity,
+        DetectionSecurityComment = x.propertyLocation.DetectionSecurityComment,
+        AutomaticSprinklers = x.propertyLocation.AutomaticSprinklers,
+        AutomaticSprinklersComment = x.propertyLocation.AutomaticSprinklersComment,
+        FireWaterSupply = x.propertyLocation.FireWaterSupply,
+        FireWaterSupplyComment = x.propertyLocation.FireWaterSupplyComment,
+        FireManualResponse = x.propertyLocation.FireManualResponse,
+        FireManualResponseComment = x.propertyLocation.FireManualResponseComment,
+        SpecialHazards = x.propertyLocation.SpecialHazards,
+        SpecialHazardsComment = x.propertyLocation.SpecialHazardsComment,
+        EquipmentHazards = x.propertyLocation.EquipmentHazards,
+        EquipmentHazardsComment = x.propertyLocation.EquipmentHazardsComment,
+        ExternalExposures = x.propertyLocation.ExternalExposures,
+        ExternalExposuresComment = x.propertyLocation.ExternalExposuresComment,
+        BusinessInterruptionCalculated = x.propertyLocation.BusinessInterruptionCalculated,
+        BusinessInterruptionUpdated = x.propertyLocation.BusinessInterruptionUpdated,
+        BusinessInterruptionUpdatedComment = x.propertyLocation.BusinessInterruptionUpdatedComment,
+        PropertyDamageIndexCalculated = x.propertyLocation.PropertyDamageIndexCalculated,
+        PropertyDamageIndexUpdated = x.propertyLocation.PropertyDamageIndexUpdated,
+        PropertyDamageIndexPrevious = x.propertyLocation.PropertyDamageIndexPrevious,
+        PropertyDamageIndexAdjusted = x.propertyLocation.PropertyDamageIndexAdjusted,
+        PropertyDamageIndexAdjustedComment = x.propertyLocation.PropertyDamageIndexAdjustedComment,
+        ConfidenceIndex = x.propertyLocation.ConfidenceIndex,
+        LossPreventionSource = x.propertyLocation.LossPreventionSource,
+        LossPreventionDate = x.propertyLocation.LossPreventionDate,
+        LossPreventionComments = x.propertyLocation.LossPreventionComments,
+        StatusId = x.propertyLocation.StatusId,
+        VerCol = x.propertyLocation.VerCol,
+        CreatedOnDate = x.propertyLocation.CreatedOnDate,
+        CreatedByUserId = x.propertyLocation.CreatedByUserId,
+        LocationName = x.location.LocationName,
+        Address = x.address.AddressName,
+        City = x.address.City!,
+        StateProvince = x.address.State!,
+        Country = x.address.Country.CountryName,
+        CurrencyId = x.propertyAccount.Currency,
+        UnitId = x.propertyAccount.Unit,
+        PropertyLocationAddressMapId = x.propertyLocationAddressMap.PropertyLocationAddressMapId,
+        LocationAddressMapId = x.locationAddressMap.LocationAddressMapId,
+        TimeElementExcluded = x.propertyAccount.TimeElementExcluded,
+        MaximumForeseeableLoss = ((x.propertyFire!.MaximumLossPropertyDamage ?? 0.0m)
+                                         + (x.propertyFire!.MaximumLossOtherPropertyDamage ?? 0.0m)
+                                         + (x.propertyFire!.MaximumLossBusinessInterruption ?? 0.0m)
+                                         + (x.propertyFire!.MaximumLossInterBusinessInterruption ?? 0.0m)
+                                         + (x.propertyFire!.MaximumLossOtherTimeElement ?? 0.0m)),
+        ProbableMaximumLoss = ((x.propertyFire!.ProbableLossPropertyDamage ?? 0.0m)
+                                         + (x.propertyFire!.ProbableLossOtherPropertyDamage ?? 0.0m)
+                                         + (x.propertyFire!.ProbableLossBusinessInterruption ?? 0.0m)
+                                         + (x.propertyFire!.ProbableLossInterBusinessInterruption ?? 0.0m)
+                                         + (x.propertyFire!.ProbableLossOtherTimeElement ?? 0.0m)),
+        NormalLossExpectancy = ((x.propertyFire!.NormalLossPropertyDamage ?? 0.0m)
+                                         + (x.propertyFire!.NormalLossOtherPropertyDamage ?? 0.0m)
+                                         + (x.propertyFire!.NormalLossBusinessInterruption ?? 0.0m)
+                                         + (x.propertyFire!.NormalLossInterBusinessInterruption ?? 0.0m)
+                                         + (x.propertyFire!.NormalLossOtherTimeElement ?? 0.0m)),
+        EBProbableMaximumLoss = ((x.propertyEquipment!.ProbableLossPropertyDamage ?? 0.0m)
+                                         + (x.propertyEquipment!.ProbableLossOtherPropertyDamage ?? 0.0m)
+                                         + (x.propertyEquipment!.ProbableLossBusinessInterruption ?? 0.0m)
+                                         + (x.propertyEquipment!.ProbableLossInterBusinessInterruption ?? 0.0m)
+                                         + (x.propertyEquipment!.ProbableLossOtherTimeElement ?? 0.0m)),
+        EBMaximumForeseeableLoss = ((x.propertyEquipment!.MaximumLossPropertyDamage ?? 0.0m)
+                                         + (x.propertyEquipment!.MaximumLossOtherPropertyDamage ?? 0.0m)
+                                         + (x.propertyEquipment!.MaximumLossBusinessInterruption ?? 0.0m)
+                                         + (x.propertyEquipment!.MaximumLossInterBusinessInterruption ?? 0.0m)
+                                         + (x.propertyEquipment!.MaximumLossOtherTimeElement ?? 0.0m)),
+        ReportedBuildingValue = x.propertyAccount.ReportedBuildingValue,
+        ReportedContentsValue = x.propertyAccount.ReportedContentsValue,
+        ReportedTotalBIValue = x.propertyAccount.ReportedTotalBivalue
+
+    }).OrderBy(p => p.PropertyLocationId).AsNoTracking().ToListAsync();
+	
+	
+	
+	---------------------exception.Message---------------------------------
+	
+	
+	The LINQ expression 'DbSet<PropertyAccount>()
+    .Join(
+        inner: DbSet<PropertyLocation>(), 
+        outerKeySelector: propertyAccount => propertyAccount.PropertyAccountId, 
+        innerKeySelector: propertyLocation => propertyLocation.PropertyAccountId, 
+        resultSelector: (propertyAccount, propertyLocation) => new { 
+            propertyAccount = propertyAccount, 
+            propertyLocation = propertyLocation
+         })
+    .Join(
+        inner: DbSet<PropertyLocationAddressMap>(), 
+        outerKeySelector: combined => combined.propertyLocation.PropertyLocationId, 
+        innerKeySelector: propertyLocationAddressMap => propertyLocationAddressMap.PropertyLocationId, 
+        resultSelector: (propertyLocationAccountCombineEntry, propertyLocationAddressMap) => new { 
+            propertyLocationAccountCombineEntry = propertyLocationAccountCombineEntry, 
+            propertyLocationAddressMap = propertyLocationAddressMap
+         })
+    .Join(
+        inner: DbSet<LocationAddressMap>(), 
+        outerKeySelector: combined => combined.propertyLocationAddressMap.LocationAddressMapId, 
+        innerKeySelector: locationAddressMap => locationAddressMap.LocationAddressMapId, 
+        resultSelector: (propertyLocationAddressMapCombineEntry, locationAddressMap) => new { 
+            propertyLocationAddressMapCombineEntry = propertyLocationAddressMapCombineEntry, 
+            locationAddressMap = locationAddressMap
+         })
+    .Join(
+        inner: DbSet<Location>(), 
+        outerKeySelector: combined => combined.locationAddressMap.LocationId, 
+        innerKeySelector: location => location.LocationId, 
+        resultSelector: (locationMapCombineEntry, location) => new { 
+            locationMapCombineEntry = locationMapCombineEntry, 
+            location = location
+         })
+    .Join(
+        inner: DbSet<Address>(), 
+        outerKeySelector: combineEntry => combineEntry.locationMapCombineEntry.locationAddressMap.AddressId, 
+        innerKeySelector: address => address.AddressId, 
+        resultSelector: (addressMapCombineEntry, address) => new { 
+            propertyLocation = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAccountCombineEntry.propertyLocation, 
+            propertyAccount = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAccountCombineEntry.propertyAccount, 
+            location = addressMapCombineEntry.locationMapCombineEntry.locationAddressMap.Location, 
+            address = address, 
+            propertyLocationAddressMap = addressMapCombineEntry.locationMapCombineEntry.propertyLocationAddressMapCombineEntry.propertyLocationAddressMap, 
+            locationAddressMap = addressMapCombineEntry.locationMapCombineEntry.locationAddressMap
+         })
+    .GroupJoin(
+        inner: DbSet<PropertyFireLocation>(), 
+        outerKeySelector: combined => combined.propertyLocation.PropertyLocationId, 
+        innerKeySelector: propertyFire => propertyFire.PropertyLocationId, 
+        resultSelector: (combined, propertyFires) => new { 
+            combined = combined, 
+            propertyFires = propertyFires
+                .AsQueryable()
+                .DefaultIfEmpty()
+         })' could not be translated. Either rewrite the query in a form that can be translated, or switch to client evaluation explicitly by inserting a call to 'AsEnumerable', 'AsAsyncEnumerable', 'ToList', or 'ToListAsync'. See https://go.microsoft.com/fwlink/?linkid=2101038 for more information.
+		 
+		 -----------exception.StackTrace--------------
  at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
    at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
    at Microsoft.EntityFrameworkCore.Query.Internal.NavigationExpandingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)
