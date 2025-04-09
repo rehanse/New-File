@@ -1,49 +1,215 @@
-calculateOverAllRatingNAP(rows: any[], tivPercent: number, aci: number): number | null {
-    if (!rows?.length || tivPercent <= 0 || aci <= 0) return null;
+import { Component, computed, inject, model, Inject, signal } from '@angular/core';
+import { FormBuilder, FormControl, FormGroup } from '@angular/forms';
+import { Subscription } from 'rxjs';
+import { PopupResponse } from '../../models/popup-response';
+import { ReToolConstants } from '../../constants/re-tool.constants';
+import { GridRowRecord } from '../../models/grid-row-record';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { PopupRequest } from '../../models/popup-request';
+import { ReToolTabService } from '../../service/re-tool-tab.service';
+import { CompleteReviewEmail } from '../../models/complete-review-email';
+import { UserEmailIds } from '../../models/email-ids';
+import { LiveAnnouncer } from '@angular/cdk/a11y';
+import { COMMA, ENTER } from '@angular/cdk/keycodes';
+import { MatChipEditedEvent, MatChipInputEvent } from '@angular/material/chips';
+import { ReToolService } from '../../service/re-tool.service';
 
-    const tivReview = rows.reduce((sum, row) => sum + (row.ReviewedTIV ?? 0), 0);
-    if (this.commonService.isValueEmpty(tivReview) || tivReview <= 0) return null;
+@Component({
+  selector: 'app-cover-complete-review-email',
+  templateUrl: './cover-complete-review-email.component.html',
+  styleUrl: './cover-complete-review-email.component.css',
+})
+export class CoverCompleteReviewEmailComponent {
+  subscription: Subscription | undefined = new Subscription();
+  title: string = '';
+  coverCompleteReviewEmailForm!: FormGroup;
+  completeReviewEmailModel: CompleteReviewEmail = null;
+  resultResponse: PopupResponse = { action: 0, data: null, gridRecordDetail: {} as GridRowRecord };
+  reToolConstant = ReToolConstants;
+  textAreaHeightReset: boolean = true;
+  readonly currentFruit = model('');
+  readonly addOnBlur = true;
+  readonly separatorKeysCodes = [ENTER, COMMA] as const;
+  ccEmailList = signal<UserEmailIds[]>([]);
+  ccMailIdList: string[];
+  toEmailList = signal<UserEmailIds[]>([]);
+  toMailIdList: string[];
 
-    const countByCondition = (condition: (row: any) => boolean) => rows.filter(condition).length;
-    
-    const countHighEBR = countByCondition(row => Number(row.EquipmentBreakdown) === 3);
-    const countNLEValue = countByCondition(row => row.NormalLossExpectancy > 0);
-    const countPMLValue = countByCondition(row => row.ProbableMaximumLoss > 0);
-    const countMFLValue = countByCondition(row => row.MaximumForeseeableLoss > 0);
-    const countCountryValue = Number(localStorage.getItem('countryCount') ?? 0) || 1; // Avoid division by zero
-    
-    const countEBPML = countByCondition(row => Number(row.EquipmentBreakdown) === 3 && row.EBProbableMaximumLoss > 0);
-    const countEBMFL = countByCondition(row => Number(row.EquipmentBreakdown) === 3 && row.EBMaximumForeseeableLoss > 0);
-    
-    const baseCalculation = tivPercent * (aci / 5) * (1 / 3) * (countNLEValue + countPMLValue + countMFLValue) / countCountryValue;
-    
-    let overAllRatingNAP = countHighEBR > 0 
-        ? baseCalculation * (0.5 * (1 / 3) + 0.5 * 0.5 * (countEBPML + countEBMFL) / countHighEBR)
-        : baseCalculation;
+  readonly filteredFruits = computed(() => {
+    const currentFruit = this.currentFruit().toLowerCase();
+    return currentFruit
+      ? this.ccMailIdList.filter(fruit => fruit.toLowerCase().includes(currentFruit))
+      : this.ccMailIdList.slice();
+  });
+  readonly announcer = inject(LiveAnnouncer);
 
-    return isFinite(overAllRatingNAP) ? Math.round(overAllRatingNAP) : 0;
-}
------------------------------------------------
-calculateOverAllRatingNAP(rows: any[], tivPercent: number, aci: number): number | null {
-    if (!rows?.length || tivPercent <= 0 || aci <= 0) return null;
+  constructor(private fb: FormBuilder, public dialogRef: MatDialogRef<CoverCompleteReviewEmailComponent>,
+    @Inject(MAT_DIALOG_DATA) public request: PopupRequest, private reToolTabService: ReToolTabService, private reToolService: ReToolService) { }
 
-    const tivReview = rows.reduce((sum, row) => sum + (row.ReviewedTIV ?? 0), 0);
-    if (this.commonService.isValueEmpty(tivReview) || tivReview <= 0) return null;
+  ngOnInit() {
+    this.title = this.request?.title;
+    this.initializeForm();
+    this.ccMailIdList = this.request?.data?.ccMailIds;
+    this.toMailIdList = [this.request?.data?.underWritter];
+    const ccFormattedEmail = this.ccMailIdList.map(ccEmail => ({ mailId: ccEmail, userName: ccEmail }));
+    const toFormattedEmail = this.toMailIdList.map(toEmail => ({ mailId: toEmail, userName: toEmail }));
+    this.ccEmailList.set(ccFormattedEmail);
+    this.toEmailList.set(toFormattedEmail);
+  }
 
-    const countHighEBR = rows.filter(ebr => Number(ebr.EquipmentBreakdown) === 3).length;
-    const countNLEValue = rows.filter(nle => nle.NormalLossExpectancy > 0).length;
-    const countPMLValue = rows.filter(pml => pml.ProbableMaximumLoss > 0).length;
-    const countMFLValue = rows.filter(mfl => mfl.MaximumForeseeableLoss > 0).length;
-    const countCountryValue = Number(localStorage.getItem('countryCount') ?? 0) || 1; // Avoid division by zero
-    
-    const countEBPML = rows.filter(ebpml => Number(ebpml.EquipmentBreakdown) === 3 && ebpml.EBProbableMaximumLoss > 0).length;
-    const countEBMFL = rows.filter(ebmfl => Number(ebmfl.EquipmentBreakdown) === 3 && ebmfl.EBMaximumForeseeableLoss > 0).length;
+  initializeForm() {
+    this.coverCompleteReviewEmailForm = this.fb.group({
+      UnderWritter: new FormControl({ value: this.request?.data?.underWritter, disabled: false }),
+      CCUserMailIds: new FormControl({ value: this.request?.data?.ccUserMailIds, disabled: false }),
+      CCMailIds: new FormControl(this.request?.data?.ccMailIds),
+      PropertyAccountId: new FormControl(this.request?.data?.propertyAccountId),
+      ReviewRequestId: new FormControl(this.request?.data?.reviewRequestId),
+      AccountName: new FormControl(this.request?.data?.accountName),
+      Subject: new FormControl({ value: this.request?.data?.subject, disabled: false }),
+      Message: new FormControl({ value: this.request?.data?.message, disabled: false }),
+    });
+  }
 
-    let overAllRatingNAP = tivPercent * (aci / 5) * (1 / 3) * (countNLEValue + countPMLValue + countMFLValue) / countCountryValue;
-    
-    if (countHighEBR > 0) {
-        overAllRatingNAP *= (0.5 * (1 / 3) * (countNLEValue + countPMLValue + countMFLValue) / countCountryValue + 0.5 * 0.5 * (countEBPML + countEBMFL) / countHighEBR);
+  add(event: MatChipInputEvent, isCCEmail: boolean): void {
+    const value = (event.value || '').trim();
+
+    if (value && isCCEmail) {
+      this.ccEmailList.update(mailList => [...mailList, { mailId: value, userName: value }]);
     }
+    else if(value && !isCCEmail){
+      this.toEmailList.update(mailList => [...mailList, { mailId: value, userName: value }]);
+    }
+    // Clear the input value
+    event.chipInput!.clear();
+  }
 
-    return isFinite(overAllRatingNAP) ? Math.round(overAllRatingNAP) : 0;
+  remove(email: UserEmailIds, isCCEmail: boolean): void {
+    if(isCCEmail)
+    {
+      this.ccEmailList.update(mailList => {
+        const index = mailList.indexOf(email);
+        if (index < 0) {
+          return mailList;
+        }
+  
+        mailList.splice(index, 1);
+        this.announcer.announce(`Removed ${email.mailId}`);
+        return [...mailList];
+      });
+
+    }
+    else {
+      this.toEmailList.update(mailList => {
+        const index = mailList.indexOf(email);
+        if (index < 0) {
+          return mailList;
+        }
+  
+        mailList.splice(index, 1);
+        this.announcer.announce(`Removed ${email.mailId}`);
+        return [...mailList];
+      });
+    }
+   
+  }
+
+  edit(email: UserEmailIds, event: MatChipEditedEvent, isCCEmail: boolean) {
+    const value = event.value.trim();
+
+    if (!value) {
+      this.remove(email, true);
+      return;
+    }
+ 
+    if(isCCEmail)
+    {
+      this.ccEmailList.update(mailList => {
+        const index = mailList.indexOf(email);
+        if (index >= 0) {
+          mailList[index].mailId = value;
+          return [...mailList];
+        }
+        return mailList;
+      });
+    }
+    else{
+      this.toEmailList.update(mailList => {
+        const index = mailList.indexOf(email);
+        if (index >= 0) {
+          mailList[index].mailId = value;
+          return [...mailList];
+        }
+        return mailList;
+      });
+    }
+    
+  }
+
+  onClose(result: any): void {
+    this.resultResponse.action = 0;
+    this.dialogRef.close(this.resultResponse);
+  }
+
+  onSave(result: any) {
+    this.coverCompleteReviewEmailForm.markAllAsTouched();
+    this.coverCompleteReviewEmailForm.markAsPristine();
+
+    if (this.coverCompleteReviewEmailForm.status === ReToolConstants.valid) {
+      const formData = this.getcoverCompleteReviewEmailFormData();
+      this.request.data.UnderWritter = formData.UnderWritter;
+      this.request.data.ccUserMailIds = formData.CCUserMailIds;
+      this.request.data.ccMailIds = formData.CCMailIds;
+      this.request.data.subject = formData.Subject;
+      this.request.data.message = formData.Message;
+      this.resultResponse.data = this.request.data;
+      this.resultResponse.action = 1;
+
+      const requestModel: any = {
+        PropertyAccountId: formData.PropertyAccountId,
+        ReviewRequestId: formData.ReviewRequestId,
+        UnderWriterEmail: this.toEmailList().map(to => to.mailId).join(';'),
+        CCUserMailIds: this.ccEmailList().map(to => to.mailId).join(';'),
+        Subject: formData.Subject,
+        Message: formData.Message,
+        AccountName: formData.AccountName
+      }
+
+      const objSendMailRequest = this.reToolService.sendCoverCompleteMailRequest(requestModel).subscribe({
+        next: (response) => {
+          if (response === true) {
+            this.reToolTabService.showSuccessMessage(ReToolConstants.coverCompleteReviewEmailSuccess, '');
+            this.dialogRef.close(this.resultResponse);
+          } else {
+            this.reToolTabService.showErrorMessage(ReToolConstants.coverCompleteReviewEmailFail, '');
+          }
+        },
+        error: (error) => {
+        },
+      });
+      this.subscription?.add(objSendMailRequest);
+    }
+    else
+      this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+  }
+
+  adjustHeight(event: Event): void {
+    const textarea = event.target as HTMLTextAreaElement;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }
+
+  private getcoverCompleteReviewEmailFormData(): any {
+    return this.coverCompleteReviewEmailForm.getRawValue();
+  }
 }
+
+
+-----------error on ng serve-----
+X [ERROR] TS2305: Module '"@angular/core"' has no exported member 'model'. [plugin angular-compiler]
+
+    src/app/features/re-tool/popup/cover-complete-review-email/cover-complete-review-email.component.ts:1:38:
+      1 │ ... Component, computed, inject, model, Inject, signal } from '@ang...
+        ╵                                  ~~~~~
+
+Application bundle generation failed. [16.026 seconds]                                                                                                                               
+Watch mode enabled. Watching for file changes...
