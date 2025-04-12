@@ -1,12 +1,2 @@
-CoverCompleteReviewEmailComponent > should create the component and initialize form
-Error: mat-chip-grid must be used in combination with matChipInputFor.
-    at MatChipGrid.call [as ngAfterViewInit] (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/material/fesm2022/chips.mjs:1730:19)
-    at callHookInternal (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3544:14)
-    at callHook (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3571:13)
-    at callHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3526:17)
-    at executeInitAndCheckHooks (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:3476:9)
-    at refreshView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13482:21)
-    at detectChangesInView (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13636:9)
-    at detectChangesInViewIfAttached (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13599:5)
-    at detectChangesInComponent (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13588:5)
-    at detectChangesInChildComponents (http://localhost:9876/_karma_webpack_/webpack:/node_modules/@angular/core/fesm2022/core.mjs:13649:9)
+CoverCompleteReviewEmailComponent > should add a valid CC email
+TypeError: this.coverCompleteReviewEmailForm.get(...).value is not a function
