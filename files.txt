@@ -1,2 +1,5 @@
-CoverCompleteReviewEmailComponent > should add a valid CC email
-TypeError: this.coverCompleteReviewEmailForm.get(...).value is not a function
+it('should add a valid CC email', () => {
+  const event: any = { value: 'valid@test.com', chipInput: { clear: () => {} } };
+  component.addCCEmail(event);
+  expect(component.ccReceiver().includes('valid@test.com')).toBeTrue();
+});
