@@ -1,5 +1,28 @@
-it('should add a valid CC email', () => {
-  const event: any = { value: 'valid@test.com', chipInput: { clear: () => {} } };
-  component.addCCEmail(event);
-  expect(component.ccReceiver().includes('valid@test.com')).toBeTrue();
-});
+CoverCompleteReviewEmailComponent > should add a valid CC email
+Expected false to be true.
+    at <Jasmine>
+    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/popup/cover-complete-review-email/cover-complete-review-email.component.spec.ts:73:63)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:158)
+    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:46)
+CoverCompleteReviewEmailComponent > should show validation error if form is invalid
+TypeError: Cannot read properties of undefined (reading 'subscribe')
+    at CoverCompleteReviewEmailComponent.onSave (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/popup/cover-complete-review-email/cover-complete-review-email.component.ts:106:101)
+    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/popup/cover-complete-review-email/cover-complete-review-email.component.spec.ts:134:15)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:158)
+    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:46)
+    at Zone.run (http://localhost:9876/_karma_webpack_/polyfills.js:133:35)
+    at runInTestZone (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:555:34)
+    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:570:20)
+    at <Jasmine>
+CoverCompleteReviewEmailComponent > should save and send email when form is valid
+Error: 2 periodic timer(s) still in the queue.
+    at UserContext.fakeAsyncFn (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:1994:27)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:158)
+    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
+    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:46)
+    at Zone.run (http://localhost:9876/_karma_webpack_/polyfills.js:133:35)
+    at runInTestZone (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:555:34)
+    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:570:20)
+    at <Jasmine>
