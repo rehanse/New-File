@@ -214,7 +214,95 @@ export class CoverCompleteReviewEmailComponent {
         }
     }
 }
+\\------------------------------cover-complete-review-email.component.html
 
+<div class="modal-dialog modal-md modal-dialog-centered">
+<div class="modal-content">
+    <form [formGroup]="coverCompleteReviewEmailForm">
+        <div class="modal-header">
+            <h1 class="modal-title">{{title}}</h1>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                (click)="onClose(true)"></button>
+        </div>
+        <div class="modal-body scrollbar p-1 pb-3">
+            <div class="container-fluid">
+                <div class="row g-2">
+                    <div class="col-12 email-box">
+                        <label>To</label>
+                        <mat-label></mat-label>
+                        <mat-chip-grid #chipGrid aria-label="Email selection">
+                            @for (toEmail of toReceiver(); track $index) {
+                            <mat-chip-row (removed)="removeToEmail(toEmail)">
+                                {{toEmail}}
+                                <button matChipRemove [attr.aria-label]="'remove ' + toEmail">
+                                    <mat-icon>cancel</mat-icon>
+                                </button>
+                            </mat-chip-row>
+                            }
+                        </mat-chip-grid>
+                        <input class="chip-input-visible form-control" placeholder="New Email..." #toEmailInput
+                            formControlName="ToEmailValue"
+                            [matChipInputFor]="chipGrid"
+                            [matAutocomplete]="auto" 
+                            [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
+                            (matChipInputTokenEnd)="addToEmail($event)" />
+                        <mat-autocomplete #auto="matAutocomplete"
+                            (optionSelected)="selectedToEmail($event); toEmailInput.value = ''">
+                            @for (toMail of filteredEmails; track toMail) {
+                            <mat-option [value]="toMail.mailId"><span class="option-fw-nm">{{toMail.userName}}</span><br><span class="option-fw-em">{{toMail.mailId}}</span> </mat-option>
+                            }
+                        </mat-autocomplete>
+                    </div>
+                    <div class="col-12 email-box">
+                        <label>CC</label>
+                        <div class="col-12">
+                                <mat-label></mat-label>
+                                <mat-chip-grid #chipGrid aria-label="Email selection">
+                                    @for (ccEmail of ccReceiver(); track $index) {
+                                    <mat-chip-row (removed)="removeCcEmail(ccEmail)">
+                                        {{ccEmail}}
+                                        <button matChipRemove [attr.aria-label]="'remove ' + ccEmail">
+                                            <mat-icon>cancel</mat-icon>
+                                        </button>
+                                    </mat-chip-row>
+                                    }
+                                </mat-chip-grid>
+                                <input class="chip-input-visible form-control" placeholder="New Email..." #ccEmailInput
+                                    formControlName="CCEmailValue"
+                                    [matChipInputFor]="chipGrid"
+                                    [matAutocomplete]="auto1" 
+                                    [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
+                                    (matChipInputTokenEnd)="addCCEmail($event)" />
+                                <mat-autocomplete #auto1="matAutocomplete"
+                                    (optionSelected)="selectedCCEmail($event); ccEmailInput.value = ''">
+                                    @for (ccMail of filteredEmails; track ccMail) {
+                                    <mat-option [value]="ccMail.mailId"><span class="option-fw-nm">{{ccMail.userName}}</span><br><span class="option-fw-em">{{ccMail.mailId}}</span> </mat-option>
+                                    }
+                                </mat-autocomplete>
+                        </div>
+                    </div>
+                    <div class="col-12">
+
+                    </div>
+                    <div class="col-12">
+                        <label>Subject</label>
+                        <textarea class="messageTextArea" rows="1" [maxLength]="250" formControlName="Subject"
+                            (input)="adjustHeight($event)"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Body</label>
+                        <textarea class="messageTextArea" rows="4" [maxLength]="2000" formControlName="Message"
+                            (input)="adjustHeight($event)"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer p-3 pt-1 pb-1">
+            <button class="btn Btn-primary btn-w" (click)="onSave(true)">Send Email</button>
+        </div>
+    </form>
+</div>
+</div>
 
 
 \\--------------------------------------ReToolTabService.ts---------------------------------------------------
