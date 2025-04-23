@@ -1,1 +1,144 @@
-test
+import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
+import { ActivityTaskReviewPopupComponent } from './activity-task-review-popup.component';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { ReactiveFormsModule, FormsModule } from '@angular/forms';
+import { CommonService } from 'src/app/shared/services/common.service';
+import { ReToolService } from '../../service/re-tool.service';
+import { ReToolTabService } from '../../service/re-tool-tab.service';
+import { of } from 'rxjs';
+import { PopupRequest } from '../../models/popup-request';
+import { RiskEngineerGroupUserResponseModel } from '../../models/risk-engineer-group-users-response-model';
+import { AcivityTaskEnum } from '../../models/activity-assigned-enum';
+import { ReToolConstants } from '../../constants/re-tool.constants';
+
+describe('ActivityTaskReviewPopupComponent', () => {
+  let component: ActivityTaskReviewPopupComponent;
+  let fixture: ComponentFixture<ActivityTaskReviewPopupComponent>;
+  let dialogRef: jasmine.SpyObj<MatDialogRef<ActivityTaskReviewPopupComponent>>;
+  let reToolService: jasmine.SpyObj<ReToolService>;
+  let reToolTabService: ReToolTabService;
+  let commonService: jasmine.SpyObj<CommonService>;
+
+  const mockRequest: PopupRequest = {
+    title: 'Test Subject',
+    data: {
+      addNewReview: true,
+      propertyAccountId: 1,
+      activityTaskId: 2,
+      typeOfLossEstimate: 1,
+      description: 'Initial desc',
+      assignedTo: 3,
+      assignedStatusId: 0,
+      assignedToName: 'Reviewer',
+      regionId: 101,
+      countryId: 102,
+      taskDueDate: new Date().toISOString(),
+      subject: 'Subject',
+      statusId: 1,
+      verCol: '',
+      createdByUserId: 5,
+      createdOnDate: new Date()
+    },
+    gridRecordDetail: {
+      rowIndex: 0,
+      columnName: 'Test',
+      rowPKId: 123,
+      value: 'value'
+    }
+  };
+
+  beforeEach(waitForAsync(() => {
+    dialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
+    reToolService = jasmine.createSpyObj('ReToolService', ['AddOrEditActivityTask', 'getRiskEngineerGroupUsers']);
+    reToolTabService = { reviewRequestId: 10 } as ReToolTabService;
+    commonService = jasmine.createSpyObj('CommonService', ['getDateByTimeZone', 'isRoleFromEditActivityTaskReviewer'], {
+      userDetails: { roleId: 1, regionId: 101, countryId: 102 }
+    });
+    commonService.getDateByTimeZone.and.callFake(date => new Date(date));
+
+    TestBed.configureTestingModule({
+      declarations: [ActivityTaskReviewPopupComponent],
+      imports: [ReactiveFormsModule, FormsModule],
+      providers: [
+        { provide: MatDialogRef, useValue: dialogRef },
+        { provide: MAT_DIALOG_DATA, useValue: mockRequest },
+        { provide: CommonService, useValue: commonService },
+        { provide: ReToolService, useValue: reToolService },
+        { provide: ReToolTabService, useValue: reToolTabService }
+      ]
+    }).compileComponents();
+  }));
+
+  beforeEach(waitForAsync(() => {
+    fixture = TestBed.createComponent(ActivityTaskReviewPopupComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges(); // First detectChanges
+    fixture.whenStable().then(() => {
+      fixture.detectChanges(); // Re-sync after ngAfterViewInit
+    });
+  }));
+
+  it('should create component and initialize form', () => {
+    expect(component).toBeTruthy();
+    expect(component.activityTaskPopUpForm).toBeDefined();
+  });
+
+  it('should call onClose and close dialog', () => {
+    component.onClose();
+    expect(dialogRef.close).toHaveBeenCalled();
+  });
+
+  it('should calculate TypeOfLossEstimate value and set subject', () => {
+    component.title = 'Test Title';
+    component.activityTaskPopUpForm.get('TypeOfLossEstimateForFire')?.setValue(true);
+    component.activityTaskPopUpForm.get('TypeOfLossEstimateForEB')?.setValue(false);
+
+    const result = component.getTypeOfLossEstimate();
+    expect(result).toBe(1);
+    expect(component.subjectValue).toContain(ReToolConstants.fireEstimateLoss);
+  });
+
+  it('should return form data from private method getActivityTaskPopUpFormData', () => {
+    const formData = component['getActivityTaskPopUpFormData']();
+    expect(formData.PropertyAccountId).toBe(1);
+  });
+
+  it('should select risk engineer user and update status', () => {
+    component.riskEngineerUserSelected({ userId: 9 });
+    expect(component.selectedUserVal).toBe(9);
+    expect(component.activityTaskPopUpForm.get('AssignedStatusId')?.value).toBe(AcivityTaskEnum.Assigned);
+  });
+
+  it('should clear selected risk engineer user', () => {
+    component.riskEngineerUserCleared();
+    expect(component.selectedUserVal).toBeNull();
+    expect(component.activityTaskPopUpForm.get('AssignedStatusId')?.value).toBe(AcivityTaskEnum.Unassigned);
+  });
+
+  it('should fetch and set risk engineer group data', () => {
+    const mockUsers: RiskEngineerGroupUserResponseModel[] = [{ userId: 1, userName: 'John' }];
+    reToolService.getRiskEngineerGroupUsers.and.returnValue(of(mockUsers));
+
+    const result = component.riskEngineerGroupChange('search');
+    expect(result).toEqual(mockUsers);
+  });
+
+  it('should call onSave and close dialog when valid', () => {
+    reToolService.AddOrEditActivityTask.and.returnValue(of(true));
+    component.activityTaskPopUpForm.patchValue({
+      TypeOfLossEstimateForFire: true,
+      TaskDueDate: new Date()
+    });
+
+    component.onSave();
+    expect(dialogRef.close).toHaveBeenCalled();
+  });
+
+  it('should update reviewer field enabled/disabled based on validation', () => {
+    commonService.isRoleFromEditActivityTaskReviewer.and.returnValue(false);
+    component['isNewReviewAdd'] = false;
+    component.SetDisableValidationOnReviewer();
+
+    expect(component.activityTaskPopUpForm.get('AssignedToName')?.disabled).toBeTrue();
+  });
+});
