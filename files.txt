@@ -1,28 +1,1649 @@
-CoverCompleteReviewEmailComponent > should add a valid CC email
-Expected false to be true.
-    at <Jasmine>
-    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/popup/cover-complete-review-email/cover-complete-review-email.component.spec.ts:73:63)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:158)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:46)
-CoverCompleteReviewEmailComponent > should show validation error if form is invalid
-TypeError: Cannot read properties of undefined (reading 'subscribe')
-    at CoverCompleteReviewEmailComponent.onSave (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/popup/cover-complete-review-email/cover-complete-review-email.component.ts:106:101)
-    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/src/app/features/re-tool/popup/cover-complete-review-email/cover-complete-review-email.component.spec.ts:134:15)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:158)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:46)
-    at Zone.run (http://localhost:9876/_karma_webpack_/polyfills.js:133:35)
-    at runInTestZone (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:555:34)
-    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:570:20)
-    at <Jasmine>
-CoverCompleteReviewEmailComponent > should save and send email when form is valid
-Error: 2 periodic timer(s) still in the queue.
-    at UserContext.fakeAsyncFn (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:1994:27)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:158)
-    at ProxyZoneSpec.onInvoke (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:273:39)
-    at _ZoneDelegate.invoke (http://localhost:9876/_karma_webpack_/polyfills.js:348:46)
-    at Zone.run (http://localhost:9876/_karma_webpack_/polyfills.js:133:35)
-    at runInTestZone (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:555:34)
-    at UserContext.<anonymous> (http://localhost:9876/_karma_webpack_/webpack:/node_modules/zone.js/fesm2015/zone-testing.js:570:20)
-    at <Jasmine>
+-------------------ActivityTaskReviewPopupComponent.ts----------------------------------------
+
+import { Component, ElementRef, Inject, ViewChild } from '@angular/core';
+import { AbstractControl, FormBuilder, FormControl, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
+import { Subscription } from 'rxjs';
+import { PopupResponse } from '../../models/popup-response';
+import { GridRowRecord } from '../../models/grid-row-record';
+import { CommonService } from '../../../../shared/services/common.service';
+import { ReToolService } from '../../service/re-tool.service';
+import { ReToolTabService } from '../../service/re-tool-tab.service';
+import { PopupRequest } from '../../models/popup-request';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { ReToolConstants } from '../../constants/re-tool.constants';
+import { provideMomentDateAdapter } from '@angular/material-moment-adapter';
+import { RiskEngineerGroupUserResponseModel } from '../../models/risk-engineer-group-users-response-model';
+import { AcivityTaskEnum } from '../../models/activity-assigned-enum';
+
+export const MY_FORMATS = {
+  parse: {
+    dateInput: 'DD-MMM-yyyy',
+  },
+  display: {
+    dateInput: 'DD-MMM-yyyy',
+    monthYearLabel: 'MMM YYYY',
+    dateA11yLabel: 'LL',
+    monthYearA11yLabel: 'MMMM YYYY',
+  },
+};
+
+@Component({
+  selector: 'app-activity-task-review-popup',
+  templateUrl: './activity-task-review-popup.component.html',
+  styleUrl: './activity-task-review-popup.component.css',
+  providers: [
+    provideMomentDateAdapter(MY_FORMATS)
+  ],
+})
+export class ActivityTaskReviewPopupComponent {
+
+  @ViewChild('textAreaDescription') textAreaDescription!: ElementRef;
+  subscription: Subscription | undefined = new Subscription();
+  title: string = '';
+  subjectValue: string = null;
+  isNewReviewAdd: boolean = false;
+  activityTaskPopUpForm!: FormGroup;
+  resultResponse: PopupResponse = { action: 0, data: null, gridRecordDetail: {} as GridRowRecord };
+  noOneLossEstimateSelected: boolean = false;
+  submitted: boolean = false;
+  reUsersGroupData: RiskEngineerGroupUserResponseModel[] = [];
+  keywordRgUserGroup = ReToolConstants.keywordUserName;
+  selectedUserVal: number = null;
+  dueDateRequiredMessage: string = ReToolConstants.dueDateErrorMessage;
+  typeOfLossEstimateRequiredMessage: string = ReToolConstants.typeOfLossEstimateErrorMessage;
+
+  constructor(private fb: FormBuilder,
+    public dialogRef: MatDialogRef<ActivityTaskReviewPopupComponent>,
+    @Inject(MAT_DIALOG_DATA) public request: PopupRequest,
+    private reToolTabService: ReToolTabService,
+    private reToolService: ReToolService,
+    private commanService: CommonService) { }
+
+  ngOnInit() {
+    this.title = this.request?.title;
+    this.isNewReviewAdd = this.request?.data?.addNewReview;
+    this.resultResponse.gridRecordDetail = this.request?.gridRecordDetail;
+    this.initializeForm();
+    this.SetDisableValidationOnReviewer();
+  }
+
+  ngAfterViewInit(): void {
+
+    if (this.textAreaDescription) {
+      const event = new Event('input');
+      this.textAreaDescription.nativeElement.dispatchEvent(event);
+    }
+  }
+
+  initializeForm() {
+    this.activityTaskPopUpForm = this.fb.group({
+      PropertyAccountId: new FormControl(this.request?.data?.propertyAccountId),
+      ActivityTaskId: new FormControl(this.request?.data?.activityTaskId),
+      TypeOfLossEstimateForFire: new FormControl({ value: this.setTypeOfLossEstimate(this.request?.data?.typeOfLossEstimate, ReToolConstants.fireElement), disabled: false }),
+      TypeOfLossEstimateForEB: new FormControl({ value: this.setTypeOfLossEstimate(this.request?.data?.typeOfLossEstimate, ReToolConstants.ebElement), disabled: false }),
+      TypeOfLossEstimate: new FormControl({ value: this.request?.data?.typeOfLossEstimate, disabled: false }),
+      Description: new FormControl({ value: this.request?.data?.description, disabled: false }),
+      AssignedStatusId: new FormControl({ value: this.request?.data?.assignedStatusId, disabled: false }),
+      AssignedTo: new FormControl({ value: this.request?.data?.assignedTo, disabled: false }),
+      AssignedToName: new FormControl({ value: this.request?.data?.assignedToName, disabled: false }),
+      RegionId: new FormControl({ value: this.request?.data?.regionId, disabled: false }),
+      CountryId: new FormControl({ value: this.request?.data?.countryId, disabled: false }),
+      TaskDueDate: new FormControl({ value: this.isNewReviewAdd ? null : this.commanService.getDateByTimeZone(new Date(this.request?.data?.taskDueDate), new Date(this.request?.data?.taskDueDate).getTimezoneOffset()), disabled: false }, Validators.required),
+      Subject: new FormControl({ value: this.request?.data?.subject, disabled: false }),
+      StatusId: new FormControl(this.request?.data?.statusId),
+      VerCol: new FormControl(this.request?.data?.verCol),
+      CreatedOnDate: new FormControl(this.request?.data?.createdOnDate),
+      CreatedByUserId: new FormControl(this.request?.data?.createdByUserId),
+    });
+  }
+
+  onClose(result: any): void {
+    this.resultResponse.action = 0;
+    this.dialogRef.close(this.resultResponse);
+  }
+
+  onSave(result: any) {
+    this.submitted = true;
+    this.activityTaskPopUpForm.markAllAsTouched();
+    this.activityTaskPopUpForm.markAsPristine();
+    const formData = this.getActivityTaskPopUpFormData();
+
+    if (!formData.TypeOfLossEstimateForEB && !formData.TypeOfLossEstimateForFire)
+      this.noOneLossEstimateSelected = true;
+    else
+      this.noOneLossEstimateSelected = false;
+
+    if (this.activityTaskPopUpForm.status === ReToolConstants.valid && !this.noOneLossEstimateSelected) {
+      this.noOneLossEstimateSelected = false;
+      const requestModel: any = {
+        PropertyAccountId: formData.PropertyAccountId ? formData.PropertyAccountId : 0,
+        ActivityTaskId: formData.ActivityTaskId,
+        ReviewRequestId: this.reToolTabService.reviewRequestId,
+        Description: formData.Description === ReToolConstants.blank ? null : formData.Description,
+        TypeOfLossEstimate: this.getTypeOfLossEstimate(),
+        Subject: this.subjectValue ? this.subjectValue : formData.Subject,
+        TaskDueDate: this.commanService.getDateByTimeZone(new Date(formData.TaskDueDate), new Date(formData.TaskDueDate).getTimezoneOffset()),
+        StatusId: 1,
+        VerCol: this.isNewReviewAdd ? '' : formData.VerCol,
+        AssignedTo: this.setMflReviewerAssigned(formData.AssignedStatusId),
+        AssignedStatusId: formData.AssignedStatusId,
+        CreatedByUserId: formData.CreatedByUserId,
+        CreatedOnDate: formData.CreatedOnDate
+
+      }
+
+      const objSendMailRequest = this.reToolService.AddOrEditActivityTask(requestModel).subscribe({
+        next: (response) => {
+
+          if (response === true) {
+            this.request.data.propertyAccountId = requestModel.PropertyAccountId;
+            this.request.data.activityTaskId = requestModel.ActivityTaskId;
+            this.request.data.subject = this.subjectValue;
+            this.request.data.taskDueDate = formData.TaskDueDate;
+            this.request.data.assignedTo = formData.AssignedTo;
+            this.request.data.assignedToName = '';
+            this.request.data.assignedStatusId = 1;
+            this.request.data.description = formData.Description;
+            this.request.data.statusId = 1;
+            this.request.data.typeOfLossEstimate = requestModel.TypeOfLossEstimate;
+            this.resultResponse.data = this.request.data;
+            this.resultResponse.action = 1;
+            this.dialogRef.close(this.resultResponse);
+          }
+        },
+        error: (error) => {
+        },
+      });
+      this.subscription?.add(objSendMailRequest);
+    }
+  }
+
+  adjustHeight(event: Event): void {
+    const textarea = event.target as HTMLTextAreaElement;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }
+
+  atLeastOneCheckboxRequired(): ValidatorFn {
+    return (group: AbstractControl): ValidationErrors | null => {
+      const fire = group.get('TypeOfLossEstimateForFire')?.value;
+      const eb = group.get('TypeOfLossEstimateForEB')?.value;
+      return fire || eb ? null : { atLeastOneRequired: true };
+    };
+  }
+
+  getTypeOfLossEstimate(): number {
+    const typeOfLossEstimateForFire = this.activityTaskPopUpForm.get('TypeOfLossEstimateForFire')?.value;
+    const typeOfLossEstimateForEB = this.activityTaskPopUpForm.get('TypeOfLossEstimateForEB')?.value;
+    let subject = this.title;
+
+    if (typeOfLossEstimateForFire && typeOfLossEstimateForEB) {
+      this.subjectValue = subject + '_' + ReToolConstants.fireEstimateLoss + '_' + ReToolConstants.EbEstimateLoss;
+      return 3;
+    }
+    else if (!typeOfLossEstimateForFire && typeOfLossEstimateForEB) {
+      this.subjectValue = subject + '_' + ReToolConstants.EbEstimateLoss;
+      return 2;
+    }
+    else if (typeOfLossEstimateForFire && !typeOfLossEstimateForEB) {
+      this.subjectValue = subject + '_' + ReToolConstants.fireEstimateLoss;
+      return 1;
+    }
+    return 0;
+  }
+
+  get activityTaskFormControls(): { [key: string]: AbstractControl } {
+    return this.activityTaskPopUpForm.controls;
+  }
+
+  private getActivityTaskPopUpFormData(): any {
+    return this.activityTaskPopUpForm.getRawValue();
+  }
+
+  riskEngineerGroupChange(changedvalue: string) {
+    const riskEngineerUsersSubscribe = this.reToolService.getRiskEngineerGroupUsers(changedvalue)
+      .subscribe(result => {
+        this.reUsersGroupData = result;
+      });
+
+    this.subscription?.add(riskEngineerUsersSubscribe);
+    return this.reUsersGroupData;
+  }
+
+  riskEngineerUserSelected(selectedVal: any) {
+    this.selectedUserVal = selectedVal.userId;
+    this.activityTaskPopUpForm.get('AssignedStatusId').setValue(AcivityTaskEnum.Assigned);
+  }
+
+  riskEngineerUserCleared() {
+    this.selectedUserVal = null;
+    this.activityTaskPopUpForm.get('AssignedStatusId').setValue(AcivityTaskEnum.Unassigned);
+  }
+
+  SetDisableValidationOnReviewer() {
+
+    if (!this.isNewReviewAdd) {
+      const loggedUserDetails = this.commanService.userDetails;
+      const isValidUser = this.commanService.isRoleFromEditActivityTaskReviewer(loggedUserDetails?.roleId);
+
+      if (!isValidUser &&
+        (loggedUserDetails?.regionId === this.activityTaskPopUpForm.get('RegionId')?.value
+          || loggedUserDetails.countryId === this.activityTaskPopUpForm.get('CountryId')?.value))
+        this.activityTaskPopUpForm.get('AssignedToName').disable();
+      else
+        this.activityTaskPopUpForm.get('AssignedToName').enable();
+    }
+  }
+
+  setTypeOfLossEstimate(value: number, element: string): boolean {
+    if (value === 3) {
+      return true;
+    }
+    else if (value === 1 && element === ReToolConstants.fireElement) {
+      return true;
+    }
+    else if (value === 2 && element === ReToolConstants.ebElement) {
+      return true;
+    }
+    return false
+  }
+
+  updateReviewerBasedOnStatus(value: string) {
+    if (value === ReToolConstants.unassigned) {
+      this.activityTaskPopUpForm.get('AssignedToName').setValue('');
+    }
+  }
+
+  setMflReviewerAssigned(status: any): any {
+
+    if (JSON.parse(status) === AcivityTaskEnum.Unassigned) {
+      return null;
+    }
+    else if (this.selectedUserVal) {
+      return this.selectedUserVal;
+    }
+
+    return this.getActivityTaskPopUpFormData().assignedTo;
+  }
+}
+-------------------------PopupResponse.ts-----------------------
+
+import { GridRowRecord } from "./grid-row-record";
+
+export interface PopupResponse {
+    action: number;
+    data:any;
+    gridRecordDetail:GridRowRecord;
+}
+
+---------------GridRowRecord.ts-------------
+
+export interface GridRowRecord {
+    rowIndex:number;
+    columnIndex?:number;
+    columnName:string;
+    rowPKId:number,
+    value:any,
+    popup?:string
+}
+
+----------------RiskEngineerGroupUserResponseModel.ts-------------
+
+export interface RiskEngineerGroupUserResponseModel {
+    userId: number;
+    userName: string;
+}
+-----------------ReToolTabService.ts--------------------
+import { Injectable } from '@angular/core';
+import { FormControlStatus, FormGroup } from '@angular/forms';
+import { ToastrService } from 'ngx-toastr';
+import { BehaviorSubject, catchError, filter, map, Observable, of, Subject, Subscription, switchMap } from 'rxjs';
+import { environment } from '../../../../environments/environment';
+import { AppConstants } from '../../../shared/constants/app.constants';
+import { ReToolConstants } from '../constants/re-tool.constants';
+import { ActionEnum } from '../models/action-enum';
+import { Cover } from '../models/cover';
+import { PropertyEquipmentLocation } from '../models/property-equipment-location';
+import { PropertyFireLocation } from '../models/property-fire-location';
+import { PropertyLocation } from '../models/property-location';
+import { PropertyValue } from '../models/property-value';
+import { SavePropertyLocationRequestModel } from '../models/savePropertyRequest';
+import { ReToolService } from './re-tool.service';
+import { OilGasPetrochemical } from '../models/oil-gas-petrochemical';
+
+interface DynamicAccessiblePropertyItem {
+  ULId?: string;
+  Address: string;
+  City?: string;
+  StateProvince: string;
+  LocationAddressMapId?: number;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ReToolTabService {
+  reviewRequestId: number;
+  propertyAccountId: number;
+  private dataSourceSubject$ = new Subject<{ event: string, payload: any }>();
+  public hasFormChange$ = new BehaviorSubject<boolean>(false);
+  public hasFormSavedSuccessfull$ = new BehaviorSubject<boolean>(false);
+  public selectedCurrencyUnitSubject$ = new BehaviorSubject<any>(null);
+  private selectedLocAddressData = new BehaviorSubject<any>(null);
+  selectedLocAddressData$ = this.selectedLocAddressData.asObservable();
+  formStatus: FormControlStatus = ReToolConstants.valid;
+  subscription: Subscription | undefined = new Subscription();
+  propertyLocationForm: FormGroup;
+  tabIndex: number;
+  subTabIndex: number;
+  productLineId: number = 0;
+  currencyUnitValid: boolean = true;
+  allPropertyValuesDeleted: boolean = false;
+  private locAddressPopupClosedSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
+  locAddressPopupClosedSubject$ = this.locAddressPopupClosedSubject.asObservable();
+  isOverAllRatingRequired: boolean;
+
+  public coverLocationsDataSubject: BehaviorSubject<any> = new BehaviorSubject<any>('');
+  coverLocationsDataSubject$ = this.coverLocationsDataSubject.asObservable();
+
+  public overAllRatingACIAQIDataSubject: BehaviorSubject<{}> = new BehaviorSubject<{}>({ overAllRatingACI: null, overAllRatingAQI: null});
+  overAllRatingACIAQIDataSubject$ = this.overAllRatingACIAQIDataSubject.asObservable();
+  
+  propertyLocationColumns: string[] = [
+    "LocationName",
+    "StreetAddress",
+    "CityName",
+    "StateName",
+    "CountryName",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "BusinessInterruptionValue",
+    "BusinessInterruptionOtherValue",
+    "IndemnityPeriod",
+    "PayRollValue",
+    "PayRollDayValue",
+    "TotalTE",
+    "Total",
+    "Delete"
+  ];
+
+  occupancyColumns: string[] = [
+    "LocationName",
+    "StreetAddress",
+    "CountryName",
+    "OccupancyGroup",
+    "OccupancyType",
+    "OccupancyCode",
+    "Hazard",
+    "EquipmentBreakdown",
+    "GroupBuildingArea",
+    "BuildingValuePerSquareFeet",
+    "AutomaticSprinklersPercentage",
+    "AutomaticSprinklersNeededPercentage"
+  ];
+
+  generalPropertyColumns: string[] = [
+    "LocationName",
+    "StreetAddress",
+    "CountryName",
+    "NormalLossExpectancy",
+    "ProbableMaximumLoss",
+    "MaximumForeseeableLoss",
+    "HumanElementCalculated",
+    "ConstructionCalculated",
+    "ConstructionHazards",
+    "DetectionSecurity",
+    "AutomaticSprinklers",
+    "FireWaterSupply",
+    "FireManualResponse",
+    "SpecialHazards",
+    "EquipmentHazards",
+    "ExternalExposures",
+    "BusinessInterruptionCalculated",
+    "PropertyDamageIndexUpdated",
+    "PropertyDamageIndexAdjusted",
+    "BusinessInterruptionIndexCalculated",
+    "LocationQualityIndexCalculated",
+    "ConfidenceIndex",
+    "LossPreventionSource",
+    "LossPreventionDate",
+    "LossPreventionComments"
+  ];
+
+  ogpcColumns: string[] = [
+    "LocationName",
+    "StreetAddress",
+    "CountryName",
+    "NormalLossExpectancy",
+    "ProbableMaximumLoss",
+    "MaximumForeseeableLoss",
+    "PhysicalAttributes",
+    "ProcessAndEquipment",
+    "HydrocarbonStorage",
+    "PlantProtection",
+    "ProcessSafety",
+    "OperationalFactors",
+    "AssetIntegrity",
+    "Maintenance",
+    "BusinessInterruption",
+    "PropertyDamageIndex",
+    "IndexAdjustedBy",
+    "BusinessInterruptionIndex",
+    "LocationQualityIndex",
+    "ConfidenceIndex",
+    "SourceInformation",
+    "Date",
+    "Comments"
+  ];
+
+  normalLossExpectancyColumns: string[] = [
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "NormalLossScenario",
+    "EqualTo",
+    "NormalLossDeficiencyDriven",
+    "NormalLossPropertyDamage",
+    "NormalLossOtherPropertyDamage",
+    "TotalPDNLE",
+    "NormalLossBusinessInterruption",
+    "NormalLossInterBusinessInterruption",
+    "NormalLossOtherTimeElement",
+    "TotalTE",
+    "NLEActual",
+    "NormalLossIndemnityPeriodBI",
+    "IPFactTotal",
+
+  ];
+
+  probableMaximumLossColumns: string[] = [
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "ProbableLossScenario",
+    "EqualTo",
+    "ProbableLossPropertyDamage",
+    "ProbableLossOtherPropertyDamage",
+    "TotalPDPML",
+    "ProbableLossBusinessInterruption",
+    "ProbableLossInterBusinessInterruption",
+    "ProbableLossOtherTimeElement",
+    "TotalTE",
+    "PML",
+    "ProbableLossIndemnityPeriodBI",
+    "IPFactTotal",
+  ];
+
+  maximumForeseeableLossColumns: string[] = [
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "MaximumLossScenario",
+    "EqualTo",
+    "MaximumLossPropertyDamage",
+    "MaximumLossOtherPropertyDamage",
+    "TotalPDMFL",
+    "MaximumLossBusinessInterruption",
+    "MaximumLossInterBusinessInterruption",
+    "MaximumLossOtherTimeElement",
+    "TotalTE",
+    "MFL",
+    "MaximumLossIndemnityPeriodBI",
+    "IPFactTotal",
+  ];
+
+  equipmentProbableMaximumLossColumns: string[] = [
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "ProbableLossScenario",
+    "EqualTo",
+    "ProbableLossPropertyDamage",
+    "ProbableLossOtherPropertyDamage",
+    "TotalPDPML",
+    "ProbableLossBusinessInterruption",
+    "ProbableLossInterBusinessInterruption",
+    "ProbableLossOtherTimeElement",
+    "TotalTE",
+    "EBPML",
+    "ProbableLossIndemnityPeriodBI",
+    "IPFactTotal"
+  ];
+
+  equipmentMaximumForeseeableLossColumns: string[] = [
+    "FullAddress",
+    "StreetAddress",
+    "CountryName",
+    "GroupBuildingArea",
+    "BuildingValue",
+    "EquipmentValue",
+    "InventoryValue",
+    "OtherValue",
+    "TotalPD",
+    "AnnualBusinessInterruptionValue",
+    "IndemnityPeriodMonth",
+    "PayRollValue",
+    "PayRollDayValue",
+    "MaximumLossScenario",
+    "EqualTo",
+    "MaximumLossPropertyDamage",
+    "MaximumLossOtherPropertyDamage",
+    "TotalPDMFL",
+    "MaximumLossBusinessInterruption",
+    "MaximumLossInterBusinessInterruption",
+    "MaximumLossOtherTimeElement",
+    "TotalTE",
+    "EBMFL",
+    "MaximumLossIndemnityPeriodBI",
+    "IPFactTotal"
+  ];
+
+  coverColumns: string[] = [
+    "ReportedBuildingValue",
+    "ReportedContentsValue",
+    "ReportedTotalPD",
+    "ReportedTotalBivalue",
+    "ReportedTIV",
+    "ReviewedBuilding",
+    "ReviewedContents",
+    "ReviewedTotalPD",
+    "ReviewedTotalBI",
+    "ReviewedTIV",
+    "ReviewedPercentageBuilding",
+    "ReviewedPercentageContents",
+    "ReviewedPercentageTotalPD",
+    "ReviewedPercentageTotalBI",
+    "ReviewedPercentageTIV",
+    "TimeElementExcluded",
+    "RecommendedReviewFrequency",
+    "RecommendedAccountPercentageTIV",
+    "OccupancyGroupTIV",
+    "OccupancyTypeTIV",
+    "OccupancyCodeTIV",
+    "HazardTIV",
+    "EquipmentBreakdownTIV",
+    "DeviationTIV",
+    "IsHazardTIVUpdated",
+    "IsEquipmentBreakdownUpdatedTIV",
+    "OccupancyGroupHighestHazardReview",
+    "OccupancyTypeHighestHazardReview",
+    "OccupancyCodeHighestHazardReview",
+    "OccupancyHighestHazardReview",
+    "EquipmentBreakdownHazardReview",
+    "DeviationHighestHazardReview",
+    "IsHighestHazardReviewUpdated",
+    "IsEBRHighestHazardReviewUpdated",
+    "IsHazardUpdated",
+    "IsEquipmentBreakdownUpdated",
+    "Interdependency",
+    "ContingentTimeElement",
+    "QualityOfSupplyChainInfo",
+    "SCRiskMgmt",
+    "SupplyChainConfidence"
+  ];
+
+  activityColumns: string[] = [
+    "Subject",
+    "TaskDueDate",
+    "AssignedTo",
+    "AssignedStatusId",
+    "Description"
+  ];
+
+  constructor(private reToolService: ReToolService, private toastr: ToastrService) { }
+
+  emit(event: string, ds: any) {
+    this.dataSourceSubject$.next({ event: event, payload: ds });
+  }
+
+  on(event: string): Observable<any> {
+    return this.dataSourceSubject$.asObservable().pipe(
+      filter(e => e.event === event),
+      map(e => e.payload)
+    );
+  }
+
+  setUpPropertyValuesData(isGeneralProperty: boolean = false): Observable<any> {
+    return this.reToolService.getLocationProperties(this.reviewRequestId, isGeneralProperty, this.isOverAllRatingRequired);
+  }
+
+  setUpOgpcValuesData(): Observable<any> {
+    return this.reToolService.getOilGasPetrochemicalData(this.reviewRequestId);
+  }
+
+  setUpCoverWithPropertyValuesData(): Observable<any> {
+    return this.reToolService.getCoverWithPropertyValues(this.reviewRequestId);
+  }
+
+  setUpPropertyValueWithDefaultData(): Observable<any> {
+    return of([new PropertyValue(), new PropertyValue()]);
+  }
+
+  setUpPropertyFireLocationData(): Observable<any> {
+    return this.reToolService.getPropertyFireLocations(this.reviewRequestId, this.isOverAllRatingRequired);
+  }
+
+  setUpProbableMaximumLossData(): Observable<any> {
+    return this.reToolService.getProbableMaximumLoss(this.reviewRequestId);
+  }
+
+  setUpMaximumForeseeableLossData(): Observable<any> {
+    return this.reToolService.getMaximumForeseeableLoss(this.reviewRequestId);
+  }
+
+  setUpPropertyEquipmentLocationData(): Observable<any> {
+    return this.reToolService.getPropertyEquipmentBreakdownLocations(this.reviewRequestId, this.isOverAllRatingRequired);
+  }
+
+  // The purpose of this logic is to maintain a parent and sub tab association
+  // which can be used individually as a single value to determine tab relationships
+  encodeTabIndex(parentTabIndex: number, subTabIndex: number): number {
+    if (parentTabIndex === 0) return 1;
+    return ((parentTabIndex << 3) | subTabIndex);
+  }
+
+  // This is to fetch parent and sub tab indexes out of association value
+  // it could be removed if not needed in future
+  decodeTabIndex(encodedTabIndexValue: number): { parentTabIndex: number, subtabIndex: number } {
+    const parentIndex = (encodedTabIndexValue >> 3) & 7;//shift right by 3 bits and mask with 7 (0111)
+    const subIndex = encodedTabIndexValue & 7;
+    return { parentTabIndex: parentIndex, subtabIndex: subIndex } as any;
+  }
+
+  saveUpdateDeleteAndFetchThePropertyValueFormData(data: SavePropertyLocationRequestModel, isTabChange: boolean = false): Observable<any> {
+    const isGeneralProperty = false;
+    const postUrl = `${environment.baseUrl}Property`;
+    const getUrl = `${environment.baseUrl}Property/GetAllProperty/${this.reviewRequestId}/${isGeneralProperty}/${this.isOverAllRatingRequired}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  updatePropertyLocationFormData(data: PropertyLocation[], isTabChange: boolean = false, isGeneralProperty: boolean = false): Observable<any> {
+    const postUrl = `${environment.baseUrl}Property/UpdateOccupancyOrGeneralProperty`;
+    const getUrl = `${environment.baseUrl}Property/GetAllProperty/${this.reviewRequestId}/${isGeneralProperty}/${this.isOverAllRatingRequired}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  updateOilGasPetrochemicalFormData(data: OilGasPetrochemical[], isTabChange: boolean = false, isGeneralProperty: boolean = false): Observable<any> {
+    const postUrl = null;
+    const getUrl = null;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  saveUpdateAndFetchThePropertyFireLocationFormData(data: PropertyFireLocation[], isTabChange: boolean = false): Observable<any> {
+    const postUrl = `${environment.baseUrl}Property/AddOrUpdatePropertyFireLocation`;
+    const getUrl = `${environment.baseUrl}Property/GetPropertyFireLocations?reviewRequestId=${this.reviewRequestId}&isOverAllRatingRequired=${this.isOverAllRatingRequired}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  private saveUpdateAndFetchTheLatestActiveFormData<T>(postUrl: string, data: any, getUrl: string): Observable<T> {
+    return this.reToolService.post(postUrl, data).pipe(
+      switchMap((postResponse) => {
+        if (getUrl) {
+          return this.reToolService.get<T>(getUrl);
+        } else {
+          return of(postResponse as T);
+        }
+      }),
+      catchError(this.reToolService.handleError)
+    )
+  }
+
+  showErrorMessage(message: string, action: string) {
+    this.toastr.error(message, '', {
+      timeOut: AppConstants.snackbarDuration,
+      closeButton: true,
+      progressBar: true,
+      positionClass: "toast-top-right"
+    });
+  }
+
+  showSuccessMessage(message: string, action: string) {
+    this.toastr.success(message, '', {
+      timeOut: AppConstants.snackbarDuration,
+      closeButton: true,
+      progressBar: true,
+      positionClass: "toast-top-right"
+    });
+  }
+
+  actionStateChange(formGroup: FormGroup) {
+    this.subscription?.add(
+      formGroup?.get('Action').valueChanges.subscribe(value => {
+        this.hasFormChange$.next((value != ActionEnum.IsSaved))
+      })
+    );
+  }
+
+  saveUpdateAndFetchThePropertyEquipmentLocationFormData(data: PropertyEquipmentLocation[], isTabChange: boolean = false): Observable<any> {
+    const postUrl = `${environment.baseUrl}Property/UpdatePropertyEquipmentBreakdownLocation`;
+    const getUrl = `${environment.baseUrl}Property/GetPropertyEquipmentBreakdownLocations?reviewRequestId=${this.reviewRequestId}&isOverAllRatingRequired=${this.isOverAllRatingRequired}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  saveUpdateAndFetchTheCoverFormData(data: Cover, isTabChange: boolean = false): Observable<any> {
+    const postUrl = `${environment.baseUrl}Property/SaveOrUpdatePropertyAccountCover`;
+    const getUrl = `${environment.baseUrl}Property/GetPropertyAccountCover/${this.reviewRequestId}`;
+    return this.saveUpdateAndFetchTheLatestActiveFormData(postUrl, data, !isTabChange ? getUrl : null);
+  }
+
+  setUpAcivityTaskDetailValuesData(): Observable<any> {
+    return this.reToolService.getActivityTaskDetails(this.reviewRequestId);
+  }
+
+  mergePropertyValueData<T extends DynamicAccessiblePropertyItem>(data: T[]): T[] {
+    const mergeMap = new Map<string, Partial<T & {
+      StreetAddresses: string[],
+      CityNames: string[],
+      StateProvinces: string[],
+      LocationAddressMapIds: number[]
+    }>>();
+
+    let mergedData: any[] = [];
+    data.forEach(item => {
+      const key = item.ULId;
+
+      if (!mergeMap.has(key)) {
+        mergeMap.set(key, {
+          ...item,
+          StreetAddresses: [],
+          CityNames: [],
+          StateProvinces: [],
+          LocationAddressMapIds: []
+        });
+      }
+
+      const existing = mergeMap.get(key);
+      existing.StreetAddresses.push(item.Address);
+      existing.CityNames.push(item.City);
+      existing.StateProvinces.push(item.StateProvince);
+      if (item instanceof PropertyValue)
+        existing.LocationAddressMapIds.push(item.LocationAddressMapId);
+    });
+
+    mergedData = Array.from(mergeMap.values());
+    mergedData.forEach(x => this.setAddressAndToolTip(x));
+    return mergedData;
+  }
+
+  // handle tooltip and final grid values
+  setAddressAndToolTip(data: any) {
+    if (data.Action === ActionEnum.IsDeleted) return;
+    
+    if (Array.from(new Set(data.StreetAddresses)).length > 1
+      || Array.from(new Set(data.CityNames)).length > 1
+      || Array.from(new Set(data.StateProvinces)).length > 1) {
+      data.Address = ReToolConstants.multiple;
+    } else {
+      data.Address = data.StreetAddresses[0];
+    }
+
+    if (Array.from(new Set(data.CityNames)).length > 1) {
+      data.City = ReToolConstants.multiple;
+    } else {
+      data.City = data.CityNames[0];
+    }
+
+    if (Array.from(new Set(data.StateProvinces)).length > 1) {
+      data.StateProvince = ReToolConstants.multiple;
+    } else {
+      data.StateProvince = data.StateProvinces[0];
+    }
+
+    const streetAddressToolTip = [];
+    streetAddressToolTip.push(data.StreetAddresses.map((address, index) => {
+      const city = data.CityNames[index] ? `${data.CityNames[index]}, ` : '';
+      const state = data.StateProvinces[index] ? `${data.StateProvinces[index]}, ` : '';
+
+      return `${address}, ${city} ${state}`.trim().replace(/.$/,"");
+    }));
+
+    data.StreetAddressToolTip = [...new Set(streetAddressToolTip[0])].join('\n');
+  }
+
+  SetLocAddressSelectedData(data: any[]) {
+    this.selectedLocAddressData.next(data);
+  }
+  
+  setLocAddressPopupClosedSubject(status: boolean): void {
+    this.locAddressPopupClosedSubject.next(status);
+  }
+  
+  getSupplyChainUpdatedValue(supplyChainControlValue : any) : number {
+    if(supplyChainControlValue == 1){
+      return 1;
+    }
+    else if(supplyChainControlValue == 2){
+      return 3;
+    }
+    else if(supplyChainControlValue == 3 || supplyChainControlValue == 4){
+      return 5;
+    }
+    else{
+      return null;
+    }
+  }
+}
+---------------------------PopupRequest.ts-------------
+import { GridRowRecord } from "./grid-row-record";
+
+export interface PopupRequest {
+    title: string;
+    data:any;
+    gridRecordDetail?:GridRowRecord;
+}
+
+-------------------ReToolService.ts-----------------------
+
+import { Injectable } from '@angular/core';
+import { PropertyValue } from '../models/property-value';
+import { catchError, Observable, Subject, tap, throwError } from 'rxjs';
+import { ReToolConstants } from '../constants/re-tool.constants';
+import { environment } from '../../../../environments/environment';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { NormalLossExpectancy } from '../models/normal-loss-expectancy';
+import { ProbableMaximumLoss } from '../models/probable-maximum-loss';
+import { MaximumForeseeableLoss } from '../models/maximum-foreseeable-loss';
+import { EquipmentProbableMaximumLoss } from '../models/equipment-probable-maximum-loss';
+import { PropertyMasterDataTypeEnum } from '../models/property-master-data-type-enum';
+import { GeneralPropertyWeightResponse } from '../models/general-property-weight-response';
+import { Cover } from '../models/cover';
+import { PropertyLocationImportRequest } from '../models/property-location-import-request';
+import { LocationFilterModel } from '../../loc-address/models/location-name-address';
+import { OilGasPetrochemical } from '../models/oil-gas-petrochemical';
+import { Activity } from '../models/activity';
+
+const httpOptions = {
+  headers: new HttpHeaders({
+    'Content-Type': 'application/json'
+  })
+};
+
+@Injectable({
+  providedIn: 'root'
+})
+
+export class ReToolService {
+  public addNewLocationSubject = new Subject<void>();
+  addNewLocation$ = this.addNewLocationSubject.asObservable();
+  public currencyUnitSubject = new Subject<any>();
+  currencyUnit$ = this.currencyUnitSubject.asObservable();
+  public locationApiDataSubscribe$ = new Subject<any>();
+  public countrySearchSubject$ = new Subject<any>();
+  public emailSearchSubject$ = new Subject<any>();
+  public humanElementRiskFactorSubject = new Subject<any>();
+  humanElementRiskFactor$ = this.humanElementRiskFactorSubject.asObservable();
+  private importDataSubject = new Subject<{ locationData: any, propertyValueData: any }>();
+  importData$ = this.importDataSubject.asObservable();
+  public emptyPropertyLocationSubject$ = new Subject<any>();
+
+  private readonly httpOptions = {
+    headers: new HttpHeaders({
+      'Content-Type': 'application/json'
+    })
+  };
+
+  constructor(private http: HttpClient) { }
+
+  getLocationProperties(reviewRequestId: number, isGeneralProperty: boolean, isOverAllRatingRequired: boolean): Observable<PropertyValue[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetAllProperty/${reviewRequestId}/${isGeneralProperty}/${isOverAllRatingRequired}`);
+  }
+
+  getCoverWithPropertyValues(reviewRequestId: number): Observable<Cover> {
+    return this.get<any>(`${environment.baseUrl}Property/GetPropertyAccountCover/${reviewRequestId}`);
+  }
+
+  generateFormElementIdAttribute(rowIndex: number, dataId: number, columnName: string, popUp?: string): string {
+    return `row-${rowIndex}_dataKey-${dataId}_${columnName}_${popUp}`;
+  }
+
+  getLocationByAddress(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Location/GetAddressSearch/${query}`, httpOptions);
+  }
+
+  getLocationByGeoCode(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Location/GetGeoCode/${query}`, httpOptions);
+  }
+
+  getPropertyMaster(type: PropertyMasterDataTypeEnum): Observable<any> {
+    let params = new HttpParams();
+    if (type == PropertyMasterDataTypeEnum.HumanElementRiskFactor) {
+      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
+    }
+
+    if (type == PropertyMasterDataTypeEnum.BIRiskFactor) {
+      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
+    }
+
+    if (type == PropertyMasterDataTypeEnum.Cover) {
+      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
+    }
+
+    const options = {
+      ...this.httpOptions,
+      params
+    }
+
+    if (type === PropertyMasterDataTypeEnum.CurrencyAndUnit) {
+      return this.http.get<any>(`${environment.baseUrl}Property`, options)
+        .pipe(
+          tap(data => this.currencyUnitSubject.next(data)),
+          catchError(error => {
+            return throwError(() => new Error(error.message));
+          })
+        );
+    }
+    else
+      return this.http.get<any>(`${environment.baseUrl}Property`, options);
+  };
+
+  getEnumPropertyName = (value: number): string => {
+    return PropertyMasterDataTypeEnum[value];
+  };
+
+  getOccupancyGroup(productLine: any) {
+    return this.http.get<any>(`${environment.baseUrl}Master/GetRequestCompleteMaster/?productLine=${productLine}`, httpOptions);
+  }
+
+  getOccupancyType(occupancyGroupId: any) {
+    return this.http.get<any>(`${environment.baseUrl}Master/GetOccupancyType/?occupancyGroupId=${occupancyGroupId}`, httpOptions);
+  }
+
+  // Generic POST request for submitting the data to the api
+  // could update once backend API ready
+  post<T>(url: string, body: any): Observable<T> {
+    return this.http.post<any>(url, body, this.httpOptions).pipe(catchError(this.handleError));
+  }
+
+  //Generic GET request for api calling
+  // could update once backend API ready
+  get<T>(url: string): Observable<T> {
+    return this.http.get<T>(url, this.httpOptions).pipe(
+      tap((response) => response),
+      catchError(this.handleError)
+    );
+  }
+
+  handleError(error: any): Observable<never> {
+    throw new Error(error.message);
+  }
+
+  getPropertyFireLocations(reviewRequestId: number, isOverAllRatingRequired: boolean = false): Observable<NormalLossExpectancy[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetPropertyFireLocations?reviewRequestId=${reviewRequestId}&isOverAllRatingRequired=${isOverAllRatingRequired}`);
+  }
+
+  getProbableMaximumLoss(reviewRequestId: number): Observable<ProbableMaximumLoss[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetNormalLossExpectancy?reviewRequestId=${reviewRequestId}`);
+  }
+
+  getOilGasPetrochemicalData(reviewRequestId: number): Observable<OilGasPetrochemical[]> {
+    return this.get<any>(`${environment.baseUrl}OilGasPetrochemical/${reviewRequestId}`);
+  }
+
+  getMaximumForeseeableLoss(reviewRequestId: number): Observable<MaximumForeseeableLoss[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetNormalLossExpectancy?reviewRequestId=${reviewRequestId}`);
+  }
+
+  getPropertyEquipmentBreakdownLocations(reviewRequestId: number, isOverAllRatingRequired: boolean = false): Observable<EquipmentProbableMaximumLoss[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetPropertyEquipmentBreakdownLocations?reviewRequestId=${reviewRequestId}&isOverAllRatingRequired=${isOverAllRatingRequired}`);
+  }
+
+  getGeneralPropertyWeight(occupancyCodes: any): Observable<GeneralPropertyWeightResponse[]> {
+    return this.post<GeneralPropertyWeightResponse[]>(`${environment.baseUrl}Master/GetGeneralPropertyWeight`, occupancyCodes);
+  }
+
+  importData(data: any, propertyValueData: any) {
+    this.importDataSubject.next({ locationData: data, propertyValueData: propertyValueData });
+  }
+
+  importPropertyLocations(data: PropertyLocationImportRequest[]): any {
+    const apiURL = `${environment.baseUrl}Property/PropertyLocationImport`;
+    return this.http.post(apiURL, data);
+  }
+
+  searchLocationByName(locationFilter: LocationFilterModel) {
+    const body = JSON.stringify(locationFilter);
+    return this.http.post<any>(`${environment.baseUrl}Property/GetLocationSuggestionByName`, body, httpOptions);
+  }
+
+  searchCountryName(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Property/GetCountrySuggestionByName/${query}`, httpOptions);
+  }
+
+  getActivityTaskDetails(reviewRequestId: number): Observable<Activity[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetActivityTaskDetails/${reviewRequestId}`);
+  }
+
+  getAllRequestReviewDetails(reviewRequestId: number) {
+    return this.http.get<any>(`${environment.baseUrl}ReviewRequest/GetReviewRequestById/${reviewRequestId}`, httpOptions);
+  }
+
+  GetCoverCompleteReviewMailIds(propertyAccountId: any) {
+    return this.http.get<any>(`${environment.baseUrl}Property/GetCoverCompleteReviewMailIds/${propertyAccountId}`, httpOptions);
+  }
+
+  sendCoverCompleteMailRequest(requestModel: any): Observable<any> {
+    const body = JSON.stringify(requestModel);
+    return this.http.post<any>(`${environment.baseUrl}Property/SendCoverCompleteMailRequest`, body, httpOptions);
+  }
+
+  getFxRate(fromCurrency: string, pricingDate: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Master/${fromCurrency}/${pricingDate}`, httpOptions);
+  }
+
+  getActiveUserNameAndEmail(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Property/GetActiveUserNameAndEmail/${query}`, httpOptions);
+  }
+
+  AddOrEditActivityTask(requestModel: any): Observable<any> {
+    const body = JSON.stringify(requestModel);
+    return this.http.post<any>(`${environment.baseUrl}Property/UpsertActivityTask`, body, httpOptions);
+  }
+
+  getRiskEngineerGroupUsers(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Property/GetRiskEngineerGroupUsers/${query}`, httpOptions);
+  }
+}
+
+------------------CommonService.ts----------------------------------------------
+
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Subject } from 'rxjs';
+import { RoleNameEnum } from '../enums/rolename.enum';
+import { UserDetailsModel } from '../../core/models/user-details-model';
+import { MatSnackBar } from '@angular/material/snack-bar'
+import { AppConstants } from '../constants/app.constants';
+import { ProductLineEnum } from '../enums/productline.enum';
+import { FormGroup } from '@angular/forms';
+import { RequestStatusCount } from '../../features/dashboard/models/request-status-count';
+import { UserFeatureEnum } from '../enums/userfeature.enum';
+import { DatePipe } from '@angular/common';
+import { AppMaintenanceModel } from '../../core/models/app-maintenance';
+
+@Injectable({
+  providedIn: 'root'
+})
+
+export class CommonService {
+  private subjectToggleView = new Subject<boolean>();
+  subjectToggleView$ = this.subjectToggleView.asObservable();
+  userDetails: UserDetailsModel | undefined;
+  private subjectRequestStatusCountSub = new Subject<RequestStatusCount>();
+  subjectRequestStatusCountSub$ = this.subjectRequestStatusCountSub.asObservable();
+  private subjectAccountClearedSource = new Subject<void>();
+  subjectAccountClearedSub$ = this.subjectAccountClearedSource.asObservable();
+  private loadSavedFiltersSource = new Subject<void>();
+  loadSavedFiltersSub$ = this.loadSavedFiltersSource.asObservable();
+  appMaintainenanceDetails: AppMaintenanceModel | undefined;
+  private appMaintainenaceSub = new BehaviorSubject<boolean>(false);
+  appMaintainenaceSub$ = this.appMaintainenaceSub.asObservable();
+  private headerVisible = new Subject<boolean>();
+  headerVisible$ = this.headerVisible.asObservable();
+
+  constructor(private snackBar: MatSnackBar, private datePipe: DatePipe) { }
+
+  loadSavedFilters() {
+    this.loadSavedFiltersSource.next();
+  }
+
+  snackbarSuccessMessage(message: string, Title: string = "", _horizontalPosition: any = AppConstants.snackbarHorizontalPosition, _verticalPosition: any = AppConstants.snackbarVerticalPosition) {
+    this.snackBar.open(message, Title, {
+      duration: AppConstants.snackbarDuration,
+      horizontalPosition: _horizontalPosition,
+      verticalPosition: _verticalPosition,
+      panelClass: [AppConstants.snackbarSuccessStyle],
+    });
+  }
+
+  snackbarErrorMessage(message: string, Title: string = "", _horizontalPosition: any = AppConstants.snackbarHorizontalPosition, _verticalPosition: any = AppConstants.snackbarVerticalPosition) {
+    this.snackBar.open(message, Title, {
+      duration: AppConstants.snackbarDuration,
+      horizontalPosition: _horizontalPosition,
+      verticalPosition: _verticalPosition,
+      panelClass: [AppConstants.snackbarErrorStyle],
+    });
+  }
+
+  getDateByTimeZone(date, minutes) {
+    if (minutes < 0) {
+      date.setMinutes(date.getMinutes() + (minutes * -1));
+    }
+    else if (minutes > 0) {
+      date.setMinutes(date.getMinutes() - (minutes * +1));
+    }
+    return date;
+  }
+
+  isUserFromUnderwriterGroup() {
+    return this.userDetails?.roleId == RoleNameEnum.Underwriter || this.userDetails?.roleId == RoleNameEnum.UnderwriterTechnician || this.userDetails?.roleId == RoleNameEnum.UnderwriterManager;
+  }
+
+  isUserFromRiskEngineerGroup() {
+    return this.userDetails?.roleId == RoleNameEnum.RiskEngineer || this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader || this.userDetails?.roleId == RoleNameEnum.GlobalLeader;
+  }
+
+  isUserFromValuationGroup() {
+    return this.userDetails?.roleId == RoleNameEnum.ValuationLeader || this.userDetails?.roleId == RoleNameEnum.ValuationSpecialist;
+  }
+
+  isUserFromRiskEngineerGroupByToggleView(iSToggleShow: boolean) {
+    return iSToggleShow ? this.userDetails?.roleId == RoleNameEnum.RiskEngineer || this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader : this.userDetails?.roleId == RoleNameEnum.RiskEngineer || this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader || this.userDetails?.roleId == RoleNameEnum.GlobalLeader;
+  }
+
+  isUserFromRiskEngineerGroupExceptGlobalLeader() {
+    return this.userDetails?.roleId == RoleNameEnum.RiskEngineer || this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader;
+  }
+
+  isRoleFromRiskEngineerGroupExceptGlobalLeader(roleId) {
+    return roleId == RoleNameEnum.RiskEngineer || roleId == RoleNameEnum.CountryLeader || roleId == RoleNameEnum.RegionalLeader;
+  }
+
+  isRoleFromValuationGroup(roleId) {
+    return roleId == RoleNameEnum.ValuationLeader || roleId == RoleNameEnum.ValuationSpecialist;
+  }
+
+  isRoleFromUnderwriterGroup(roleId) {
+    return roleId == RoleNameEnum.Underwriter || roleId == RoleNameEnum.UnderwriterTechnician || roleId == RoleNameEnum.UnderwriterManager;
+  }
+
+  isUserFromLeaderRole() {
+    return this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader || this.userDetails?.roleId == RoleNameEnum.ValuationLeader;
+  }
+
+  isUserFromUWGroupOrRiskEngineer() {
+    return this.userDetails?.roleId == RoleNameEnum.Underwriter || this.userDetails?.roleId == RoleNameEnum.UnderwriterTechnician || this.userDetails?.roleId == RoleNameEnum.UnderwriterManager || this.userDetails?.roleId == RoleNameEnum.RiskEngineer;
+  }
+
+  isUserAssociatedwithBuiderRiskOrMarine() {
+    return (this.userDetails?.productLineId == ProductLineEnum.BuildersRisk || this.userDetails?.productLineId == ProductLineEnum.Marine)
+  }
+
+  isRoleFromEditActivityTaskReviewer(roleId) {
+    return roleId == RoleNameEnum.RegionalLeader || roleId == RoleNameEnum.CountryLeader;
+  }
+
+  addValidators(formGroup: FormGroup, validator: any) {
+    for (const key in formGroup.controls) {
+      formGroup.get(key).setValidators(validator[key]);
+      formGroup.get(key).updateValueAndValidity();
+    }
+  }
+
+  removeValidators(formGroup: FormGroup,) {
+    formGroup.clearValidators();
+    formGroup.updateValueAndValidity();
+  }
+
+  checkNullValue(value: any): any {
+    return value == "" || value == undefined || value == null ? null : value
+  }
+
+  isValueEmpty(value: any): any {
+    return value == "" || value == undefined || value == null || value.length <= 0 || value == 'null'
+  }
+
+  isValueEmptyAndNotLessThanZero(value: any): any {
+    return value === "" || value === undefined || value === null || value === 'null'
+  }
+
+  checkNullOrBlank(value: any): any {
+    return value == null || value == '' || value == undefined ? '-' : value
+  }
+
+  checkNullOrZero(value: any): any {
+    return value == "" || value == "0" || value == undefined || value == null ? null : value
+  }
+
+  sendRequestStatusCount(requestStatusCount: RequestStatusCount) {
+    this.subjectRequestStatusCountSub.next(requestStatusCount);
+  }
+
+  getPermissionStatus(featureId: number): boolean {
+    const userPermission = this.userDetails?.userPermission
+      .find(
+        permission => permission.userFeatureId == featureId
+      );
+
+    return userPermission != null && userPermission != undefined;
+  }
+
+  triggerAccountCleared() {
+    this.subjectAccountClearedSource.next();
+  }
+
+  snackbarErrorMessageforAlert(message: string, Title: string = "", _horizontalPosition: any = AppConstants.snackbarHorizontalPosition, _verticalPosition: any = AppConstants.snackbarVerticalPosition) {
+    this.snackBar.open(message, Title, {
+      duration: AppConstants.snackbarDurationforAlert,
+      horizontalPosition: _horizontalPosition,
+      verticalPosition: _verticalPosition,
+      panelClass: [AppConstants.snackbarErrorStyleForAlert],
+    });
+  }
+
+  removeYearSubFolder(filepath: string): string {
+    //split the filepath by '\\'
+    const parts = filepath.split('\\');
+
+    //find index of year part
+    const yearIndex = parts.findIndex(part => /^\d{4}$/.test(part));
+
+    //keep the parts upto and including the year
+    const newParts = yearIndex !== -1 ? parts.slice(0, yearIndex) : parts;
+
+    const newFilepath = newParts.join('/');
+    return newFilepath;
+  }
+
+  isUserFromRiskEngineerGroupExceptRiskEngineer() {
+    return this.userDetails?.roleId == RoleNameEnum.CountryLeader || this.userDetails?.roleId == RoleNameEnum.RegionalLeader || this.userDetails?.roleId == RoleNameEnum.GlobalLeader;
+  }
+
+  isUserAdmin() {
+    const admin = this.userDetails?.userPermission.find(permission =>
+      permission.userFeatureId == UserFeatureEnum.userAdmin
+    );
+    return admin != null && admin != undefined;
+  }
+
+  getDropdownSelectValue(value: any): any {
+    return (value == "" || value == undefined || value == null || value == 0) ? AppConstants.defaultDropDownValue : value.toString()
+  }
+
+  convertToMediumDateFromat(value: Date): any {
+    return (value == null || value == undefined) ? '-' : this.datePipe.transform(value, 'mediumDate')
+  }
+
+  setAppMaintainenance(status: boolean) {
+    this.appMaintainenaceSub.next(status);
+  }
+
+  showHeader() {
+    this.headerVisible.next(true);
+  }
+
+  hideHeader() {
+    this.headerVisible.next(false);
+  }
+
+  getProductLineParameterForEdW(productLineId) {
+    switch (productLineId.toString()) {
+
+      case ProductLineEnum.GeneralCorporateProperty.toString():
+      case ProductLineEnum.Mining.toString():
+      case ProductLineEnum.PowerGeneration.toString():
+      case ProductLineEnum.OilGasAndPetrochemical.toString():
+      case ProductLineEnum.BuildersRisk.toString():
+      case ProductLineEnum.MidMarketMittelstandProperty.toString():
+        return AppConstants.productLineProperty;
+
+      case ProductLineEnum.Marine.toString():
+        return AppConstants.productLineMarine;
+
+      case ProductLineEnum.Programs.toString():
+        return AppConstants.productLinePrograms;
+
+      case ProductLineEnum.Other.toString():
+      default:
+        return null;
+    }
+  }
+
+  formatToDate(date: string | Date): any {
+    if (!date) return '-';
+    const parsedDate = new Date(date);
+    return isNaN(parsedDate.getTime()) ? '-' : parsedDate.setHours(0,0,0,0);
+  }
+  
+  convertExcelDate(cell: any): void {
+    if (cell && typeof cell.v === 'number') {
+      const excelDate = new Date(cell.v); //Directly used JS Date object, we are getting in milliseconds no need of further conversion
+      excelDate.setHours(0, 0, 0, 0);
+      
+      // check if excel date is invalid
+      if(isNaN(excelDate.getTime())){
+        return;
+      }
+
+      let serialDate = (excelDate.getTime() - new Date(1900, 0, 1).getTime()) / (1000 * 60 * 60 * 24) + 3;
+      serialDate = Math.floor(serialDate);
+      cell.v = serialDate;
+      cell.t = 'n';
+      cell.z = 'DD-MMM-YYYY';
+    }
+  }
+}
+
+
+--------ActivityComponent.ts-----------------------
+import { Component } from '@angular/core';
+import { AbstractControl, FormArray, FormBuilder, FormControl, FormControlStatus, FormGroup } from '@angular/forms';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { SubTabEncodedEnum } from '../../../models/re-tool-tabs-enum';
+import { ReToolConstants } from '../../../constants/re-tool.constants';
+import { FormDataSource } from '../../../models/form-data-source';
+import { Subscription } from 'rxjs';
+import { Activity } from '../../../models/activity';
+import { ActionEnum } from '../../../models/action-enum';
+import { MatTableDataSource } from '@angular/material/table';
+import { ReToolService } from '../../../service/re-tool.service';
+import { CommonService } from '../../../../../shared/services/common.service';
+import { AcivityTaskEnum } from '../../../models/activity-assigned-enum';
+import { ActivityTaskReview } from '../../../models/activity-task-review';
+import { MatDialog, MatDialogConfig } from '@angular/material/dialog';
+import { PopupRequest } from '../../../models/popup-request';
+import { ActivityTaskReviewPopupComponent } from '../../../popup/activity-task-review-popup/activity-task-review-popup.component';
+import { PopupResponse } from '../../../models/popup-response';
+import { GridRowRecord } from '../../../models/grid-row-record';
+
+@Component({
+  selector: 're-tool-activity',
+  templateUrl: './activity.component.html',
+  styleUrl: './activity.component.css'
+})
+export class ActivityComponent {
+  activityForm!: FormGroup;
+  activityDisplayedColumns: string[] = [];
+  isDisableControlEmpty: boolean = false;
+  subscription: Subscription = new Subscription();
+  activityData: Activity[] = [];
+  activityTask: ActivityTaskReview = null;
+  activityDataSource: MatTableDataSource<AbstractControl>;
+  expandedRows: { [key: number]: boolean } = {};
+  private previousFormStatus: FormControlStatus = ReToolConstants.valid;
+  title: string = '';
+
+  constructor(private fb: FormBuilder,
+    private reToolTabService: ReToolTabService,
+    private reToolService: ReToolService,
+    private commonService: CommonService,
+    private dialog: MatDialog) { }
+
+  ngOnInit(): void {
+    this.initializeForm();
+    this.reToolTabService.emit('onFormComponentInit', { encodedTabIndex: SubTabEncodedEnum.Activity });
+  }
+
+  initializeForm() {
+    const onInitializeActivityData = this.reToolTabService.on('onInitializeActivityData').subscribe({
+      next: (event: FormDataSource) => {
+        if (event.data) {
+          this.activityDisplayedColumns = event.columns;
+          this.activityData = event.data;
+          this.activityForm = this.fb.group({
+            rows: this.fb.array([])
+          });
+          this.initializeDataSource();
+          this.activityDataSource = new MatTableDataSource(this.tableRowsControls);
+        }
+      },
+      error: (error) => {
+        throw new Error(error);
+      }
+    });
+    this.subscription.add(onInitializeActivityData);
+
+    this.subscription.add(
+      this.reToolTabService.on('onProcessingSave').subscribe((event) => {
+        if (this.activityForm) {
+          this.activityForm.markAllAsTouched();
+          this.activityForm.markAsPristine();
+          this.activityForm.updateValueAndValidity();
+          this.reToolTabService.formStatus = this.activityForm.status;
+
+          const hasFormError = this.activityForm.status === ReToolConstants.invalid;
+
+          if (hasFormError || this.isDisableControlEmpty) {
+            this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+          } else {
+            this.reToolTabService.emit('onSaveFormData', { formData: this.getActivityFormData, subTabIndex: 0, tabInfo: event.tabInfo, isTabChange: event.isTabChange });
+          }
+        }
+      })
+    );
+
+    this.subscription.add(
+      this.activityForm?.statusChanges.subscribe((status) => {
+        if (status !== this.previousFormStatus) {
+          this.previousFormStatus = this.activityForm.status;
+          this.reToolTabService.formStatus = this.activityForm.status;
+        }
+      })
+    );
+  }
+
+  initializeDataSource() {
+    const rows = this.getFormArray();
+    this.activityData?.forEach(data => {
+      const row = this.createRow(data);
+      rows.push(row);
+      this.reToolTabService.actionStateChange(row);
+    });
+  }
+
+  createRow(data: Activity): FormGroup {
+    return this.fb.group({
+      ActivityTaskId: new FormControl(data != undefined ? data.ActivityTaskId || 0 : 0),
+      PropertyAccountId: new FormControl(data != undefined ? data.PropertyAccountId || 0 : 0),
+      Subject: new FormControl(data.Subject || ''),
+      TaskDueDate: new FormControl({ value: this.setDueDate(data.TaskDueDate) || null, disabled: false }),
+      AssignedTo: new FormControl(data.AssignedTo || null),
+      AssignedToName: new FormControl({ value: data.AssignedToName || '', disabled: false }),
+      AssignedStatusId: new FormControl(data.AssignedStatusId),
+      TypeOfLossEstimate: new FormControl(data.TypeOfLossEstimate),
+      Status: new FormControl({ value: AcivityTaskEnum[data.AssignedStatusId] || '', disabled: true }),
+      Description: new FormControl({ value: data.Description || null, disabled: false }),
+      RegionId: new FormControl(data != undefined ? data.RegionId || 0 : 0),
+      CountryId: new FormControl(data != undefined ? data.CountryId || null : null),
+      StatusId: new FormControl(data.StatusId),
+      VerCol: new FormControl(data.VerCol),
+      CreatedByUserId: new FormControl(data.CreatedByUserId),
+      CreatedOnDate: new FormControl(data.CreatedOnDate),
+      Action: new FormControl(data.Action || ActionEnum.IsSaved)
+    });
+  }
+
+  generateFormElementIdAttribute(rowIndex: number, dataId: number, columnName: string, popUp?: string): string {
+    return this.reToolService.generateFormElementIdAttribute(rowIndex, dataId, columnName);
+  }
+
+  toggleReadMode(rowId: number): void {
+    this.expandedRows[rowId] = !this.expandedRows[rowId];
+  }
+
+  get tableRowsControls() {
+    return this.getFormArray().controls;
+  }
+
+  private get getActivityFormData(): Activity[] {
+    return this.getFormArray()?.getRawValue() as Activity[];
+  }
+
+  private getFormArray(): FormArray {
+    return (this.activityForm.get('rows') as FormArray);
+  }
+
+  private setDueDate(dueDate: any) {
+    if (dueDate != null) {
+      const date = new Date(dueDate);
+      const adjustDate = this.commonService.getDateByTimeZone(new Date(date), new Date(date).getTimezoneOffset());
+      return this.formateDate(adjustDate);
+    }
+    else
+      return null;
+  }
+
+  private formateDate(date: Date): any {
+    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  }
+
+  openActivityTaskReviewPopUp(ElementName: string) {
+    const response: ActivityTaskReview = {
+      Title: ElementName,
+      PropertyAccountId: this.getActivityFormData[0]?.PropertyAccountId,
+      ActivityTaskId: 0,
+      Subject: this.getActivityFormData[0]?.Subject,
+      AssignedTo: this.getActivityFormData[0]?.AssignedTo,
+      TaskDueDate: null,
+      StatusId: this.getActivityFormData[0]?.StatusId,
+      TypeOfLossEstimate: 0,
+      Description: null,
+      VerCol: this.getActivityFormData[0]?.VerCol
+    }
+
+    this.openAcivityTaskDialog(response, true);
+  }
+
+  private openAcivityTaskDialog(request: any, isNewReview: boolean) {
+    const matDialogConfig = new MatDialogConfig();
+
+    const popupRequest: PopupRequest = {
+      title: isNewReview ? request.Title : this.title,
+      gridRecordDetail: isNewReview ? null : request,
+      data: {
+        propertyAccountId: isNewReview ? request.PropertyAccountId : request.value.PropertyAccountId,
+        activityTaskId: isNewReview ? request.ActivityTaskId : request.value.ActivityTaskId,
+        description: isNewReview ? request.Description : request.value.Description,
+        regionId: isNewReview ? 0 : request.value.RegionId,
+        countryId: isNewReview ? 0 : request.value.CountryId,
+        addNewReview: isNewReview,
+        taskDueDate: isNewReview ? request.TaskDueDate : request.value.TaskDueDate,
+        typeOfLossEstimate: isNewReview ? request.TypeOfLossEstimate : request.value.TypeOfLossEstimate,
+        assignedStatusId: isNewReview ? 1 : request.value.AssignedStatusId,
+        assignedTo: isNewReview ? null : request.value.AssignedTo,
+        assignedToName: isNewReview ? null : request.value.AssignedToName,
+        subject: isNewReview ? request.Title : request.value.Subject,
+        statusId: isNewReview ? request.StatusId : request.value.StatusId,
+        verCol: isNewReview ? null : request.value.VerCol,
+        createdOnDate: isNewReview ? new Date() : request.value.CreatedOnDate,
+        createdByUserId: isNewReview ? 0 : request.value.CreatedByUserId,
+      }
+    };
+    
+    matDialogConfig.data = popupRequest;
+    const dialogRef = this.dialog.open(ActivityTaskReviewPopupComponent, matDialogConfig);
+    dialogRef.afterClosed().subscribe((result: PopupResponse) => {
+
+      if (result.action === 1) {
+        this.initializeForm();
+        this.reToolTabService.emit('onFormComponentInit', { encodedTabIndex: SubTabEncodedEnum.Activity });
+      }
+    });
+  }
+
+  openPopupOnCellClick(event: MouseEvent, element: any, column: string) {
+    const cellElement = event.target as HTMLElement;
+    const sourceTitle = cellElement.innerText;
+    const rargetTitle = ReToolConstants.mflCertification;
+    const startIndex = sourceTitle.indexOf(rargetTitle);
+
+    if (startIndex !== -1) {
+      this.title = sourceTitle.substring(startIndex, startIndex + rargetTitle.length);
+    }
+    else {
+      this.title = sourceTitle;
+    }
+
+    const response: GridRowRecord = this.getGidRowRecordDetail(cellElement?.id);
+    response.value = element.value;
+    this.openAcivityTaskDialog(response, false);
+  }
+
+  private getGidRowRecordDetail(input: string): GridRowRecord {
+    const [rowPart, idPart, column, popup] = input.split('_');
+    const record: GridRowRecord = {
+      rowIndex: parseInt(rowPart.split('-')[1]),
+      columnName: column,
+      rowPKId: parseInt(idPart.split('-')[1]),
+      value: '',
+      popup: popup
+    };
+    return record;
+  }
+
+  ngOnDestroy() {
+    if (this.subscription) {
+      this.subscription?.unsubscribe();
+    }
+  }
+}
+
+----------------------------Activity.ts-----------------------
+
+import { ActionEnum } from "./action-enum"
+
+export class Activity {
+    ActivityTaskId: number = 0;
+    PropertyAccountId: number = 0;
+    Subject: string = '';
+    AssignedTo: number = 0;
+    AssignedToName: string = '';
+    TaskDueDate?: Date;
+    AssignedStatusId: number;
+    Status: string = ''
+    Description?: string = null;
+    RegionId: number = 0;
+    CountryId: number | null;
+    StatusId: number = 1;
+    VerCol: string = '';
+    Action: ActionEnum = ActionEnum.IsNewRecord;
+    TypeOfLossEstimate: number = 0;
+    CreatedOnDate: Date;
+    CreatedByUserId: number;
+}
+
+------------------ActivityTaskReview.ts------------------------
+export class ActivityTaskReview {
+    Title: string = '';
+    PropertyAccountId: number = 0;
+    ActivityTaskId: number = 0;
+    Subject: string = '';
+    AssignedTo: number = 0;
+    TaskDueDate?: Date;
+    Description: string = '';
+    TypeOfLossEstimate: number;
+    VerCol: string = '';
+    StatusId: number = 1
+}
