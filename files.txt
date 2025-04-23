@@ -1,18 +1,28 @@
-  expandedRows: { [key: number]: boolean } = {};
-   
-                                       toggleReadMode(rowId: number): void {
-                                      this.expandedRows[rowId] = !this.expandedRows[rowId];
-                                    }
-											
-											
-									  <td mat-cell class="p-0"
-                                        *matCellDef="let row;let rowIndex=index; let colIndex=columnIndex"
-                                        [formGroup]="row">
-                                        {{expandedRows[rowIndex] ? row.get('Description').value:
-                                        (row.get('Description').value | slice: 0: 120)}}
-                                        <a *ngIf="(row.get('Description').value !== null && row.get('Description').value).length > 120"
-                                            [id]="generateFormElementIdAttribute(rowIndex, row.get('ActivityTaskId').value, 'Description')"
-                                            class="color-task no-wrap">
-                                            {{expandedRows[rowIndex] ? 'Read Less' : 'Read More'}}
-                                        </a>
-                                    </td>
+<td mat-cell class="p-0"
+    *matCellDef="let row; let rowIndex=index; let colIndex=columnIndex"
+    [formGroup]="row"
+    tabindex="0"  <!-- Makes the td focusable -->
+    (focusout)="collapseReadMode(rowIndex)"> <!-- Collapses when focus leaves -->
+
+  {{ expandedRows[rowIndex] 
+      ? row.get('Description').value 
+      : (row.get('Description').value | slice: 0:120) }}
+
+  <a *ngIf="(row.get('Description').value !== null && row.get('Description').value).length > 120"
+     [id]="generateFormElementIdAttribute(rowIndex, row.get('ActivityTaskId').value, 'Description')"
+     (click)="toggleReadMode(rowIndex)"
+     class="color-task no-wrap">
+     {{ expandedRows[rowIndex] ? 'Read Less' : 'Read More' }}
+  </a>
+</td>
+expandedRows: { [key: number]: boolean } = {};
+
+/** Toggle read mode for a row */
+toggleReadMode(rowId: number): void {
+  this.expandedRows[rowId] = !this.expandedRows[rowId];
+}
+
+/** Collapse on blur or focusout from row */
+collapseReadMode(rowId: number): void {
+  this.expandedRows[rowId] = false;
+}
