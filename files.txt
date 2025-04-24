@@ -1,18 +1,130 @@
- let component: ActivityTaskReviewPopupComponent;
-  let fixture: ComponentFixture<ActivityTaskReviewPopupComponent>;
-  let dialogRef: jasmine.SpyObj<MatDialogRef<ActivityTaskReviewPopupComponent>>;
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ActivityComponent } from './activity.component';
+import { FormBuilder, ReactiveFormsModule, FormArray, FormGroup, FormControl } from '@angular/forms';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { ReToolService } from '../../../service/re-tool.service';
+import { CommonService } from '../../../../../shared/services/common.service';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatTableDataSource } from '@angular/material/table';
+import { of } from 'rxjs';
+
+describe('ActivityComponent', () => {
+  let component: ActivityComponent;
+  let fixture: ComponentFixture<ActivityComponent>;
+  let dialogRef: jasmine.SpyObj<MatDialogRef<any>>;
   let reToolService: jasmine.SpyObj<ReToolService>;
   let reToolTabService: ReToolTabService;
   let commonService: jasmine.SpyObj<CommonService>;
-  
-   beforeEach(async () => {
+
+  beforeEach(async () => {
     dialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
-    reToolService = jasmine.createSpyObj('ReToolService', ['AddOrEditActivityTask', 'getRiskEngineerGroupUsers']);
-    reToolTabService = { reviewRequestId: 10 } as ReToolTabService;
+    reToolService = jasmine.createSpyObj('ReToolService', ['generateFormElementIdAttribute']);
+    reToolTabService = { emit: jasmine.createSpy('emit'), on: jasmine.createSpy('on').and.returnValue(of({ columns: ['Subject'], data: [] })), showErrorMessage: jasmine.createSpy('showErrorMessage'), formStatus: 'VALID', actionStateChange: jasmine.createSpy('actionStateChange'), reviewRequestId: 10 } as unknown as ReToolTabService;
     commonService = jasmine.createSpyObj('CommonService', ['getDateByTimeZone', 'isRoleFromEditActivityTaskReviewer'], {
       userDetails: { roleId: 1, regionId: 101, countryId: 102 }
     });
     commonService.getDateByTimeZone.and.callFake(date => new Date(date));
-	
-	
-	define like this in unit test case please provide again with correct the code
+    reToolService.generateFormElementIdAttribute.and.returnValue('row-0_dataKey-1_Column_popup');
+
+    await TestBed.configureTestingModule({
+      declarations: [ActivityComponent],
+      imports: [ReactiveFormsModule, MatDialogModule],
+      providers: [
+        FormBuilder,
+        { provide: ReToolTabService, useValue: reToolTabService },
+        { provide: ReToolService, useValue: reToolService },
+        { provide: CommonService, useValue: commonService },
+        { provide: MatDialog, useValue: { open: () => ({ afterClosed: () => of({ action: 1 }) }) } }
+      ]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ActivityComponent);
+    component = fixture.componentInstance;
+  });
+
+  it('should create the component', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should initialize form and emit init event on ngOnInit', () => {
+    spyOn<any>(component, 'initializeForm').and.callThrough();
+    component.ngOnInit();
+    expect(reToolTabService.emit).toHaveBeenCalled();
+  });
+
+  it('should populate form and datasource on initializeForm', () => {
+    component['initializeForm']();
+    expect(component.activityForm instanceof FormGroup).toBeTrue();
+  });
+
+  it('should return form array using getFormArray', () => {
+    component.activityForm = new FormGroup({ rows: new FormArray([]) });
+    expect(component['getFormArray']() instanceof FormArray).toBeTrue();
+  });
+
+  it('should toggle read mode', () => {
+    component.toggleReadMode(1);
+    expect(component.expandedRows[1]).toBeTrue();
+  });
+
+  it('should collapse read mode', () => {
+    component.expandedRows[1] = true;
+    component.collapseReadMode(1);
+    expect(component.expandedRows[1]).toBeFalse();
+  });
+
+  it('should generate form element id', () => {
+    const id = component.generateFormElementIdAttribute(0, 1, 'Column');
+    expect(id).toContain('row-0_dataKey-1_Column_popup');
+  });
+
+  it('should return correct formatted date using setDueDate', () => {
+    const date = new Date('2023-01-01');
+    spyOn<any>(component, 'formateDate').and.callFake(() => 'January 1, 2023');
+    const result = component['setDueDate'](date);
+    expect(result).toBe('January 1, 2023');
+  });
+
+  it('should return activity form data from getter', () => {
+    const row = new FormGroup({ Subject: new FormControl('Test') });
+    component.activityForm = new FormGroup({ rows: new FormArray([row]) });
+    expect(component['getActivityFormData']).toEqual([{ Subject: 'Test' }]);
+  });
+
+  it('should open activity task review popup', () => {
+    component.activityForm = new FormGroup({
+      rows: new FormArray([
+        new FormGroup({
+          PropertyAccountId: new FormControl(1),
+          Subject: new FormControl('Test Subject'),
+          AssignedTo: new FormControl(2),
+          StatusId: new FormControl(3),
+          VerCol: new FormControl('abc')
+        })
+      ])
+    });
+    spyOn<any>(component, 'openAcivityTaskDialog');
+    component.openActivityTaskReviewPopUp('Review');
+    expect(component['openAcivityTaskDialog']).toHaveBeenCalled();
+  });
+
+  it('should parse grid record detail from id string', () => {
+    const input = 'row-0_dataKey-1_Subject_popup';
+    const result = component['getGidRowRecordDetail'](input);
+    expect(result.rowIndex).toBe(0);
+    expect(result.columnName).toBe('Subject');
+  });
+
+  it('should open popup on cell click', () => {
+    const event = { target: { innerText: 'Some text MFL Certification', id: 'row-0_dataKey-1_Subject_popup' } } as unknown as MouseEvent;
+    spyOn<any>(component, 'openAcivityTaskDialog');
+    component.openPopupOnCellClick(event, { value: {} }, 'Subject');
+    expect(component['openAcivityTaskDialog']).toHaveBeenCalled();
+  });
+
+  it('should unsubscribe on destroy', () => {
+    const spy = spyOn(component['subscription'], 'unsubscribe');
+    component.ngOnDestroy();
+    expect(spy).toHaveBeenCalled();
+  });
+});
