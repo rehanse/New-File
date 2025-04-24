@@ -1,28 +1,257 @@
-<td mat-cell class="p-0"
-    *matCellDef="let row; let rowIndex=index; let colIndex=columnIndex"
-    [formGroup]="row"
-    tabindex="0"  <!-- Makes the td focusable -->
-    (focusout)="collapseReadMode(rowIndex)"> <!-- Collapses when focus leaves -->
+import { Component } from '@angular/core';
+import { AbstractControl, FormArray, FormBuilder, FormControl, FormControlStatus, FormGroup } from '@angular/forms';
+import { ReToolTabService } from '../../../service/re-tool-tab.service';
+import { SubTabEncodedEnum } from '../../../models/re-tool-tabs-enum';
+import { ReToolConstants } from '../../../constants/re-tool.constants';
+import { FormDataSource } from '../../../models/form-data-source';
+import { Subscription } from 'rxjs';
+import { Activity } from '../../../models/activity';
+import { ActionEnum } from '../../../models/action-enum';
+import { MatTableDataSource } from '@angular/material/table';
+import { ReToolService } from '../../../service/re-tool.service';
+import { CommonService } from '../../../../../shared/services/common.service';
+import { AcivityTaskEnum } from '../../../models/activity-assigned-enum';
+import { ActivityTaskReview } from '../../../models/activity-task-review';
+import { MatDialog, MatDialogConfig } from '@angular/material/dialog';
+import { PopupRequest } from '../../../models/popup-request';
+import { ActivityTaskReviewPopupComponent } from '../../../popup/activity-task-review-popup/activity-task-review-popup.component';
+import { PopupResponse } from '../../../models/popup-response';
+import { GridRowRecord } from '../../../models/grid-row-record';
 
-  {{ expandedRows[rowIndex] 
-      ? row.get('Description').value 
-      : (row.get('Description').value | slice: 0:120) }}
+@Component({
+  selector: 're-tool-activity',
+  templateUrl: './activity.component.html',
+  styleUrl: './activity.component.css'
+})
+export class ActivityComponent {
+  activityForm!: FormGroup;
+  activityDisplayedColumns: string[] = [];
+  isDisableControlEmpty: boolean = false;
+  subscription: Subscription = new Subscription();
+  activityData: Activity[] = [];
+  activityTask: ActivityTaskReview = null;
+  activityDataSource: MatTableDataSource<AbstractControl>;
+  expandedRows: { [key: number]: boolean } = {};
+  private previousFormStatus: FormControlStatus = ReToolConstants.valid;
+  title: string = '';
+  mflCertification: string = ReToolConstants.mflCertification;
 
-  <a *ngIf="(row.get('Description').value !== null && row.get('Description').value).length > 120"
-     [id]="generateFormElementIdAttribute(rowIndex, row.get('ActivityTaskId').value, 'Description')"
-     (click)="toggleReadMode(rowIndex)"
-     class="color-task no-wrap">
-     {{ expandedRows[rowIndex] ? 'Read Less' : 'Read More' }}
-  </a>
-</td>
-expandedRows: { [key: number]: boolean } = {};
+  constructor(private fb: FormBuilder,
+    private reToolTabService: ReToolTabService,
+    private reToolService: ReToolService,
+    private commonService: CommonService,
+    private dialog: MatDialog) { }
 
-/** Toggle read mode for a row */
-toggleReadMode(rowId: number): void {
-  this.expandedRows[rowId] = !this.expandedRows[rowId];
-}
+  ngOnInit(): void {
+    this.initializeForm();
+    this.reToolTabService.emit('onFormComponentInit', { encodedTabIndex: SubTabEncodedEnum.Activity });
+  }
 
-/** Collapse on blur or focusout from row */
-collapseReadMode(rowId: number): void {
-  this.expandedRows[rowId] = false;
+  initializeForm() {
+    const onInitializeActivityData = this.reToolTabService.on('onInitializeActivityData').subscribe({
+      next: (event: FormDataSource) => {
+        if (event.data) {
+          this.activityDisplayedColumns = event.columns;
+          this.activityData = event.data;
+          this.activityForm = this.fb.group({
+            rows: this.fb.array([])
+          });
+          this.initializeDataSource();
+          this.activityDataSource = new MatTableDataSource(this.tableRowsControls);
+        }
+      },
+      error: (error) => {
+        throw new Error(error);
+      }
+    });
+    this.subscription.add(onInitializeActivityData);
+
+    this.subscription.add(
+      this.reToolTabService.on('onProcessingSave').subscribe((event) => {
+        if (this.activityForm) {
+          this.activityForm.markAllAsTouched();
+          this.activityForm.markAsPristine();
+          this.activityForm.updateValueAndValidity();
+          this.reToolTabService.formStatus = this.activityForm.status;
+
+          const hasFormError = this.activityForm.status === ReToolConstants.invalid;
+
+          if (hasFormError || this.isDisableControlEmpty) {
+            this.reToolTabService.showErrorMessage(ReToolConstants.requiredFieldsValidationMessage, '');
+          } else {
+            this.reToolTabService.emit('onSaveFormData', { formData: this.getActivityFormData, subTabIndex: 0, tabInfo: event.tabInfo, isTabChange: event.isTabChange });
+          }
+        }
+      })
+    );
+
+    this.subscription.add(
+      this.activityForm?.statusChanges.subscribe((status) => {
+        if (status !== this.previousFormStatus) {
+          this.previousFormStatus = this.activityForm.status;
+          this.reToolTabService.formStatus = this.activityForm.status;
+        }
+      })
+    );
+  }
+
+  initializeDataSource() {
+    const rows = this.getFormArray();
+    this.activityData?.forEach(data => {
+      const row = this.createRow(data);
+      rows.push(row);
+      this.reToolTabService.actionStateChange(row);
+    });
+  }
+
+  createRow(data: Activity): FormGroup {
+    return this.fb.group({
+      ActivityTaskId: new FormControl(data != undefined ? data.ActivityTaskId || 0 : 0),
+      PropertyAccountId: new FormControl(data != undefined ? data.PropertyAccountId || 0 : 0),
+      Subject: new FormControl(data.Subject || ''),
+      TaskDueDate: new FormControl({ value: this.setDueDate(data.TaskDueDate) || null, disabled: false }),
+      AssignedTo: new FormControl(data.AssignedTo || null),
+      AssignedToName: new FormControl({ value: data.AssignedToName || '', disabled: false }),
+      AssignedStatusId: new FormControl(data.AssignedStatusId),
+      TypeOfLossEstimate: new FormControl(data.TypeOfLossEstimate),
+      Status: new FormControl({ value: AcivityTaskEnum[data.AssignedStatusId] || '', disabled: true }),
+      Description: new FormControl({ value: data.Description || null, disabled: false }),
+      RegionId: new FormControl(data != undefined ? data.RegionId || 0 : 0),
+      CountryId: new FormControl(data != undefined ? data.CountryId || null : null),
+      StatusId: new FormControl(data.StatusId),
+      VerCol: new FormControl(data.VerCol),
+      CreatedByUserId: new FormControl(data.CreatedByUserId),
+      CreatedOnDate: new FormControl(data.CreatedOnDate),
+      Action: new FormControl(data.Action || ActionEnum.IsSaved)
+    });
+  }
+
+  generateFormElementIdAttribute(rowIndex: number, dataId: number, columnName: string, popUp?: string): string {
+    return this.reToolService.generateFormElementIdAttribute(rowIndex, dataId, columnName);
+  }
+
+  toggleReadMode(rowId: number): void {
+    this.expandedRows[rowId] = !this.expandedRows[rowId];
+  }
+
+  collapseReadMode(rowId: number): void {
+    this.expandedRows[rowId] = false;
+  }
+
+  get tableRowsControls() {
+    return this.getFormArray().controls;
+  }
+
+  private get getActivityFormData(): Activity[] {
+    return this.getFormArray()?.getRawValue() as Activity[];
+  }
+
+  private getFormArray(): FormArray {
+    return (this.activityForm.get('rows') as FormArray);
+  }
+
+  private setDueDate(dueDate: any) {
+    if (dueDate != null) {
+      const date = new Date(dueDate);
+      const adjustDate = this.commonService.getDateByTimeZone(new Date(date), new Date(date).getTimezoneOffset());
+      return this.formateDate(adjustDate);
+    }
+    else
+      return null;
+  }
+
+  private formateDate(date: Date): any {
+    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  }
+
+  openActivityTaskReviewPopUp(ElementName: string) {
+    const response: ActivityTaskReview = {
+      Title: ElementName,
+      PropertyAccountId: this.getActivityFormData[0]?.PropertyAccountId,
+      ActivityTaskId: 0,
+      Subject: this.getActivityFormData[0]?.Subject,
+      AssignedTo: this.getActivityFormData[0]?.AssignedTo,
+      TaskDueDate: null,
+      StatusId: this.getActivityFormData[0]?.StatusId,
+      TypeOfLossEstimate: 0,
+      Description: null,
+      VerCol: this.getActivityFormData[0]?.VerCol
+    }
+
+    this.openAcivityTaskDialog(response, true);
+  }
+
+  private openAcivityTaskDialog(request: any, isNewReview: boolean) {
+    const matDialogConfig = new MatDialogConfig();
+
+    const popupRequest: PopupRequest = {
+      title: isNewReview ? request.Title : this.title,
+      gridRecordDetail: isNewReview ? null : request,
+      data: {
+        propertyAccountId: isNewReview ? request.PropertyAccountId : request.value.PropertyAccountId,
+        activityTaskId: isNewReview ? request.ActivityTaskId : request.value.ActivityTaskId,
+        description: isNewReview ? request.Description : request.value.Description,
+        regionId: isNewReview ? 0 : request.value.RegionId,
+        countryId: isNewReview ? 0 : request.value.CountryId,
+        addNewReview: isNewReview,
+        taskDueDate: isNewReview ? request.TaskDueDate : request.value.TaskDueDate,
+        typeOfLossEstimate: isNewReview ? request.TypeOfLossEstimate : request.value.TypeOfLossEstimate,
+        assignedStatusId: isNewReview ? 1 : request.value.AssignedStatusId,
+        assignedTo: isNewReview ? null : request.value.AssignedTo,
+        assignedToName: isNewReview ? null : request.value.AssignedToName,
+        subject: isNewReview ? request.Title : request.value.Subject,
+        statusId: isNewReview ? request.StatusId : request.value.StatusId,
+        verCol: isNewReview ? null : request.value.VerCol,
+        createdOnDate: isNewReview ? new Date() : request.value.CreatedOnDate,
+        createdByUserId: isNewReview ? 0 : request.value.CreatedByUserId,
+      }
+    };
+    
+    matDialogConfig.data = popupRequest;
+    const dialogRef = this.dialog.open(ActivityTaskReviewPopupComponent, matDialogConfig);
+    dialogRef.afterClosed().subscribe((result: PopupResponse) => {
+
+      if (result.action === 1) {
+        this.initializeForm();
+        this.reToolTabService.emit('onFormComponentInit', { encodedTabIndex: SubTabEncodedEnum.Activity });
+      }
+    });
+  }
+
+  openPopupOnCellClick(event: MouseEvent, element: any, column: string) {
+    const cellElement = event.target as HTMLElement;
+    const sourceTitle = cellElement.innerText;
+    const rargetTitle = ReToolConstants.mflCertification;
+    const startIndex = sourceTitle.indexOf(rargetTitle);
+
+    if (startIndex !== -1) {
+      this.title = sourceTitle.substring(startIndex, startIndex + rargetTitle.length);
+    }
+    else {
+      this.title = sourceTitle;
+    }
+
+    const response: GridRowRecord = this.getGidRowRecordDetail(cellElement?.id);
+    response.value = element.value;
+    this.openAcivityTaskDialog(response, false);
+  }
+
+  private getGidRowRecordDetail(input: string): GridRowRecord {
+    const [rowPart, idPart, column, popup] = input.split('_');
+    const record: GridRowRecord = {
+      rowIndex: parseInt(rowPart.split('-')[1]),
+      columnName: column,
+      rowPKId: parseInt(idPart.split('-')[1]),
+      value: '',
+      popup: popup
+    };
+    return record;
+  }
+
+  ngOnDestroy() {
+    if (this.subscription) {
+      this.subscription?.unsubscribe();
+    }
+  }
 }
