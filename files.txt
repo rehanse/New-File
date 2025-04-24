@@ -1,3 +1,5 @@
+-----------------------ActivityComponent.ts----------------------------------------
+
 import { Component } from '@angular/core';
 import { AbstractControl, FormArray, FormBuilder, FormControl, FormControlStatus, FormGroup } from '@angular/forms';
 import { ReToolTabService } from '../../../service/re-tool-tab.service';
@@ -255,3 +257,39 @@ export class ActivityComponent {
     }
   }
 }
+---------------------------------Activity.ts------------------------
+import { ActionEnum } from "./action-enum"
+
+export class Activity {
+    ActivityTaskId: number = 0;
+    PropertyAccountId: number = 0;
+    Subject: string = '';
+    AssignedTo: number = 0;
+    AssignedToName: string = '';
+    TaskDueDate?: Date;
+    AssignedStatusId: number;
+    Status: string = ''
+    Description?: string = null;
+    RegionId: number = 0;
+    CountryId: number | null;
+    StatusId: number = 1;
+    VerCol: string = '';
+    Action: ActionEnum = ActionEnum.IsNewRecord;
+    TypeOfLossEstimate: number = 0;
+    CreatedOnDate: Date;
+    CreatedByUserId: number;
+}
+---------------------ActivityTaskReview.ts--------------------------
+export class ActivityTaskReview {
+    Title: string = '';
+    PropertyAccountId: number = 0;
+    ActivityTaskId: number = 0;
+    Subject: string = '';
+    AssignedTo: number = 0;
+    TaskDueDate?: Date;
+    Description: string = '';
+    TypeOfLossEstimate: number;
+    VerCol: string = '';
+    StatusId: number = 1
+}
+-----------------------
