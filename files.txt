@@ -1,130 +1,127 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivityComponent } from './activity.component';
-import { FormBuilder, ReactiveFormsModule, FormArray, FormGroup, FormControl } from '@angular/forms';
-import { ReToolTabService } from '../../../service/re-tool-tab.service';
-import { ReToolService } from '../../../service/re-tool.service';
-import { CommonService } from '../../../../../shared/services/common.service';
-import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { MatTableDataSource } from '@angular/material/table';
-import { of } from 'rxjs';
+✅ Step 1: Add an anchor tag to open the app in read-only mode
 
-describe('ActivityComponent', () => {
-  let component: ActivityComponent;
-  let fixture: ComponentFixture<ActivityComponent>;
-  let dialogRef: jasmine.SpyObj<MatDialogRef<any>>;
-  let reToolService: jasmine.SpyObj<ReToolService>;
-  let reToolTabService: ReToolTabService;
-  let commonService: jasmine.SpyObj<CommonService>;
+In your component HTML (e.g., app.component.html):
 
-  beforeEach(async () => {
-    dialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
-    reToolService = jasmine.createSpyObj('ReToolService', ['generateFormElementIdAttribute']);
-    reToolTabService = { emit: jasmine.createSpy('emit'), on: jasmine.createSpy('on').and.returnValue(of({ columns: ['Subject'], data: [] })), showErrorMessage: jasmine.createSpy('showErrorMessage'), formStatus: 'VALID', actionStateChange: jasmine.createSpy('actionStateChange'), reviewRequestId: 10 } as unknown as ReToolTabService;
-    commonService = jasmine.createSpyObj('CommonService', ['getDateByTimeZone', 'isRoleFromEditActivityTaskReviewer'], {
-      userDetails: { roleId: 1, regionId: 101, countryId: 102 }
-    });
-    commonService.getDateByTimeZone.and.callFake(date => new Date(date));
-    reToolService.generateFormElementIdAttribute.and.returnValue('row-0_dataKey-1_Column_popup');
+html <a [routerLink]="['/']" [queryParams]="{ readonly: true }" target="_blank"> Open in Read-Only Mode </a>
 
-    await TestBed.configureTestingModule({
-      declarations: [ActivityComponent],
-      imports: [ReactiveFormsModule, MatDialogModule],
-      providers: [
-        FormBuilder,
-        { provide: ReToolTabService, useValue: reToolTabService },
-        { provide: ReToolService, useValue: reToolService },
-        { provide: CommonService, useValue: commonService },
-        { provide: MatDialog, useValue: { open: () => ({ afterClosed: () => of({ action: 1 }) }) } }
-      ]
-    }).compileComponents();
+This opens the same route with a query param readonly=true in a new tab.
 
-    fixture = TestBed.createComponent(ActivityComponent);
-    component = fixture.componentInstance;
-  });
+ 
 
-  it('should create the component', () => {
-    expect(component).toBeTruthy();
-  });
+✅ Step 2: Create ReadonlyModeService
 
-  it('should initialize form and emit init event on ngOnInit', () => {
-    spyOn<any>(component, 'initializeForm').and.callThrough();
-    component.ngOnInit();
-    expect(reToolTabService.emit).toHaveBeenCalled();
-  });
+Generate a service that tracks whether the app is in readonly mode.
 
-  it('should populate form and datasource on initializeForm', () => {
-    component['initializeForm']();
-    expect(component.activityForm instanceof FormGroup).toBeTrue();
-  });
+readonly-mode.service.ts
 
-  it('should return form array using getFormArray', () => {
-    component.activityForm = new FormGroup({ rows: new FormArray([]) });
-    expect(component['getFormArray']() instanceof FormArray).toBeTrue();
-  });
+typescript import { Injectable } from '@angular/core';
 
-  it('should toggle read mode', () => {
-    component.toggleReadMode(1);
-    expect(component.expandedRows[1]).toBeTrue();
-  });
+@Injectable({ providedIn: 'root' }) export class ReadonlyModeService { private readonlyMode = false;
 
-  it('should collapse read mode', () => {
-    component.expandedRows[1] = true;
-    component.collapseReadMode(1);
-    expect(component.expandedRows[1]).toBeFalse();
-  });
+setReadonlyMode(value: boolean): void { this.readonlyMode = value; }
 
-  it('should generate form element id', () => {
-    const id = component.generateFormElementIdAttribute(0, 1, 'Column');
-    expect(id).toContain('row-0_dataKey-1_Column_popup');
-  });
+isReadonlyMode(): boolean { return this.readonlyMode; } }
 
-  it('should return correct formatted date using setDueDate', () => {
-    const date = new Date('2023-01-01');
-    spyOn<any>(component, 'formateDate').and.callFake(() => 'January 1, 2023');
-    const result = component['setDueDate'](date);
-    expect(result).toBe('January 1, 2023');
-  });
+ 
 
-  it('should return activity form data from getter', () => {
-    const row = new FormGroup({ Subject: new FormControl('Test') });
-    component.activityForm = new FormGroup({ rows: new FormArray([row]) });
-    expect(component['getActivityFormData']).toEqual([{ Subject: 'Test' }]);
-  });
+✅ Step 3: Detect readonly mode from query params
 
-  it('should open activity task review popup', () => {
-    component.activityForm = new FormGroup({
-      rows: new FormArray([
-        new FormGroup({
-          PropertyAccountId: new FormControl(1),
-          Subject: new FormControl('Test Subject'),
-          AssignedTo: new FormControl(2),
-          StatusId: new FormControl(3),
-          VerCol: new FormControl('abc')
-        })
-      ])
-    });
-    spyOn<any>(component, 'openAcivityTaskDialog');
-    component.openActivityTaskReviewPopUp('Review');
-    expect(component['openAcivityTaskDialog']).toHaveBeenCalled();
-  });
+Update your app.component.ts (or a global layout component) to read the readonly=true param:
 
-  it('should parse grid record detail from id string', () => {
-    const input = 'row-0_dataKey-1_Subject_popup';
-    const result = component['getGidRowRecordDetail'](input);
-    expect(result.rowIndex).toBe(0);
-    expect(result.columnName).toBe('Subject');
-  });
+typescript import { Component } from '@angular/core'; import { ActivatedRoute } from '@angular/router'; import { ReadonlyModeService } from './readonly-mode.service';
 
-  it('should open popup on cell click', () => {
-    const event = { target: { innerText: 'Some text MFL Certification', id: 'row-0_dataKey-1_Subject_popup' } } as unknown as MouseEvent;
-    spyOn<any>(component, 'openAcivityTaskDialog');
-    component.openPopupOnCellClick(event, { value: {} }, 'Subject');
-    expect(component['openAcivityTaskDialog']).toHaveBeenCalled();
-  });
+@Component({ selector: 'app-root', templateUrl: './app.component.html' }) export class AppComponent { constructor( private route: ActivatedRoute, private readonlyService: ReadonlyModeService ) { this.route.queryParams.subscribe(params => { const isReadonly = params['readonly'] === 'true'; this.readonlyService.setReadonlyMode(isReadonly); }); } }
 
-  it('should unsubscribe on destroy', () => {
-    const spy = spyOn(component['subscription'], 'unsubscribe');
-    component.ngOnDestroy();
-    expect(spy).toHaveBeenCalled();
-  });
+ 
+
+✅ Step 4: Create the Global ReadOnly Directive
+
+Create a directive to disable/readonly relevant elements globally.
+
+global-readonly.directive.ts
+
+typescript import { Directive, ElementRef, Renderer2, AfterViewInit } from '@angular/core'; import { ReadonlyModeService } from './readonly-mode.service';
+
+@Directive({ selector: '[appGlobalReadonly]' }) export class GlobalReadonlyDirective implements AfterViewInit { constructor( private el: ElementRef, private renderer: Renderer2, private readonlyService: ReadonlyModeService ) {}
+
+ngAfterViewInit() { if (!this.readonlyService.isReadonlyMode()) return;
+
+typescript
+Copy
+Edit
+const elements = this.el.nativeElement.querySelectorAll(
+  `
+  input,
+  textarea,
+  select,
+  button,
+  a,
+  [matInput],
+  mat-select,
+  mat-slide-toggle,
+  mat-checkbox
+  `
+);
+
+elements.forEach((el: any) => {
+  const tag = el.tagName?.toLowerCase();
+
+  if (['input', 'textarea', 'select'].includes(tag) || el.hasAttribute('matinput')) {
+    el.setAttribute('readonly', 'true');
+    el.setAttribute('disabled', 'true');
+  }
+
+  if (['button', 'a'].includes(tag) || el.hasAttribute('mat-button') || el.hasAttribute('mat-icon-button')) {
+    el.setAttribute('disabled', 'true');
+  }
+
+  if (el.tagName === 'MAT-SELECT' || el.tagName === 'MAT-SLIDE-TOGGLE' || el.tagName === 'MAT-CHECKBOX') {
+    const ngContext = el.__ngContext__ || [];
+    const componentInstance = ngContext.find((ctx: any) => typeof ctx === 'object' && 'disabled' in ctx);
+    if (componentInstance) componentInstance.disabled = true;
+  }
+
+  this.renderer.addClass(el, 'readonly-disabled');
 });
+} }
+
+ 
+
+✅ Step 5: Apply the Directive Globally
+
+In app.component.html or a parent layout component:
+
+html
+
+<div appGlobalReadonly> <router-outlet></router-outlet> </div>
+ 
+
+✅ Step 6: Optional CSS styling
+
+styles.css
+
+css .readonly-disabled { pointer-events: none; opacity: 0.6; }
+
+ 
+
+✅ Step 7: Add the directive to your declarations
+
+In app.module.ts:
+
+typescript import { NgModule } from '@angular/core'; import { BrowserModule } from '@angular/platform-browser'; import { AppComponent } from './app.component'; import { GlobalReadonlyDirective } from './global-readonly.directive';
+
+@NgModule({ declarations: [ AppComponent, GlobalReadonlyDirective ], imports: [ BrowserModule ], bootstrap: [AppComponent] }) export class AppModule {}
+
+ 
+
+✅ Step 8: Test the Feature
+
+Run your app and:
+
+Click the “Open in Read-Only Mode” link.
+
+It should open a new tab with ?readonly=true.
+
+All form fields, buttons, and Angular Material components inside <div appGlobalReadonly> will be disabled or readonly.
+
+You can still navigate between tabs/pages.
