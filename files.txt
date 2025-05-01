@@ -1,3 +1,57 @@
-<div _ngcontent-ng-c3938745665="" appreadonly="" class="scrollbar aqi-pv-table-h mx-auto"><re-tool-property-value _ngcontent-ng-c3938745665="" _nghost-ng-c2214178518=""><form _ngcontent-ng-c2214178518="" novalidate=""><table _ngcontent-ng-c2214178518="" mat-table="" matsort="" class="mat-mdc-table mdc-data-table__table cdk-table mat-sort table table-hover work-item-table table-fixed pv-table" role="table"><!--container--><thead role="rowgroup"><tr _ngcontent-ng-c2214178518="" role="row" mat-header-row="" class="mat-mdc-header-row mdc-data-table__header-row cdk-header-row head-1 header-white-blue"><th _ngcontent-ng-c2214178518="" role="columnheader" mat-header-cell="" class="mat-mdc-header-cell mdc-data-table__header-cell cdk-header-cell cdk-column-header-row-second-group mat-column-header-row-second-group" style="text-align: center;" colspan="5"> Location Details </th><th _ngcontent-ng-c2214178518="" role="columnheader" mat-header-cell="" class="mat-mdc-header-cell mdc-data-table__header-cell cdk-header-cell cdk-column-header-row-third-group mat-column-header-row-third-group mat-th-bg-dark" style="text-align: center;" ng-reflect-ng-class="[object Object]" colspan="5"> Property (Enter All Values in Millions)</th><th _ngcontent-ng-c2214178518="" role="columnheader" mat-header-cell="" class="mat-mdc-header-cell mdc-data-table__header-cell cdk-header-cell cdk-column-header-row-fourth-group mat-column-header-row-fourth-group" style="text-align: center;" colspan="6"> Time Element (Enter All Values in Millions)</th><th _ngcontent-ng-c2214178518="" role="columnheader" mat-header-cell="" class="mat-mdc-header-cell mdc-data-table__header-cell cdk-header-cell cdk-column-header-row-fifth-group mat-column-header-row-fifth-group" style="text-align: center;" colspan="2"></th><!--ng-container--></tr><tr _ngcontent-ng-c2214178518="" role="row" mat-header-row="" class="mat-mdc-header-row mdc-data-table__header-row cdk-header-row head-2"><!--ng-container--></tr><!--ng-container--></thead><tbody role="rowgroup" class="mdc-data-table__content"><!--ng-container--><!--ng-container--></tbody><tfoot role="rowgroup" style="display: none;"><!--ng-container--></tfoot><!--container--><!--container--></table></form></re-tool-property-value><!--bindings={
-  "ng-reflect-ng-if": "true"
-}--></div>
+import {
+  Directive,
+  ElementRef,
+  Renderer2,
+  AfterViewInit
+} from '@angular/core';
+import { ReadonlyModeService } from './readonly-mode.service';
+
+@Directive({
+  selector: '[appReadonly]'
+})
+export class GlobalReadonlyDirective implements AfterViewInit {
+  constructor(
+    private el: ElementRef,
+    private renderer: Renderer2,
+    private readonlyService: ReadonlyModeService
+  ) {}
+
+  ngAfterViewInit(): void {
+    // Only apply readonly behavior if flag is set
+    if (this.readonlyService.isReadonlyMode()) {
+      // Wait for one Angular render cycle
+      setTimeout(() => {
+        this.applyReadonly(this.el.nativeElement);
+      }, 0);
+    }
+  }
+
+  private applyReadonly(container: HTMLElement): void {
+    const elements = container.querySelectorAll(
+      'input, textarea, select, button, a, [mat-button], [mat-icon-button], mat-select, mat-form-field'
+    );
+
+    elements.forEach((el: HTMLElement) => {
+      const tag = el.tagName;
+
+      // Make input, textarea, and select readonly
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        this.renderer.setAttribute(el, 'readonly', 'true');
+      }
+
+      // Disable all interactive elements
+      this.renderer.setAttribute(el, 'disabled', 'true');
+
+      // Visually show disabled state
+      this.renderer.setStyle(el, 'pointer-events', 'none');
+      this.renderer.setStyle(el, 'opacity', '0.6');
+    });
+
+    // Optional: Disable table interactions (mat-table, etc.)
+    const tables = container.querySelectorAll('table, mat-table');
+    tables.forEach((table: HTMLElement) => {
+      this.renderer.setStyle(table, 'pointer-events', 'none');
+      this.renderer.setStyle(table, 'opacity', '0.6');
+    });
+  }
+}
