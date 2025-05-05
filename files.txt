@@ -1,57 +1,7 @@
-import {
-  Directive,
-  ElementRef,
-  Renderer2,
-  AfterViewInit
-} from '@angular/core';
-import { ReadonlyModeService } from './readonly-mode.service';
+ Add a URL parameter to indicate read-only mode
+<a [routerLink]="[]" [queryParams]="{ readonly: true }" target="_blank">Open Read-Only</a>
+Add two methods in the common service to detect read-only mode
 
-@Directive({
-  selector: '[appReadonly]'
-})
-export class GlobalReadonlyDirective implements AfterViewInit {
-  constructor(
-    private el: ElementRef,
-    private renderer: Renderer2,
-    private readonlyService: ReadonlyModeService
-  ) {}
-
-  ngAfterViewInit(): void {
-    // Only apply readonly behavior if flag is set
-    if (this.readonlyService.isReadonlyMode()) {
-      // Wait for one Angular render cycle
-      setTimeout(() => {
-        this.applyReadonly(this.el.nativeElement);
-      }, 0);
-    }
-  }
-
-  private applyReadonly(container: HTMLElement): void {
-    const elements = container.querySelectorAll(
-      'input, textarea, select, button, a, [mat-button], [mat-icon-button], mat-select, mat-form-field'
-    );
-
-    elements.forEach((el: HTMLElement) => {
-      const tag = el.tagName;
-
-      // Make input, textarea, and select readonly
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-        this.renderer.setAttribute(el, 'readonly', 'true');
-      }
-
-      // Disable all interactive elements
-      this.renderer.setAttribute(el, 'disabled', 'true');
-
-      // Visually show disabled state
-      this.renderer.setStyle(el, 'pointer-events', 'none');
-      this.renderer.setStyle(el, 'opacity', '0.6');
-    });
-
-    // Optional: Disable table interactions (mat-table, etc.)
-    const tables = container.querySelectorAll('table, mat-table');
-    tables.forEach((table: HTMLElement) => {
-      this.renderer.setStyle(table, 'pointer-events', 'none');
-      this.renderer.setStyle(table, 'opacity', '0.6');
-    });
-  }
-}
+Initialize the read-only mode in the retool component
+create a readonly directive
+Use the directive in a wrapper element
