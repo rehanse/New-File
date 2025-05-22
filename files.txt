@@ -1,61 +1,261 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using System.IO;
-using System.Threading.Tasks;
+import { Injectable } from '@angular/core';
+import { PropertyValue } from '../models/property-value';
+import { catchError, Observable, Subject, tap, throwError } from 'rxjs';
+import { ReToolConstants } from '../constants/re-tool.constants';
+import { environment } from '../../../../environments/environment';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { NormalLossExpectancy } from '../models/normal-loss-expectancy';
+import { ProbableMaximumLoss } from '../models/probable-maximum-loss';
+import { MaximumForeseeableLoss } from '../models/maximum-foreseeable-loss';
+import { EquipmentProbableMaximumLoss } from '../models/equipment-probable-maximum-loss';
+import { PropertyMasterDataTypeEnum } from '../models/property-master-data-type-enum';
+import { GeneralPropertyWeightResponse } from '../models/general-property-weight-response';
+import { Cover } from '../models/cover';
+import { PropertyLocationImportRequest } from '../models/property-location-import-request';
+import { LocationFilterModel } from '../../loc-address/models/location-name-address';
+import { OilGasPetrochemical } from '../models/oil-gas-petrochemical';
+import { Activity } from '../models/activity';
+import { OgpcMasterDataTypeEnum } from '../models/oil-gas-petrochemical-master-data-type-enum';
+import { PowerGenerationMasterDataTypeEnum } from '../models/power-generation-master-data-model';
+import { PowerGeneration } from '../models/power-generation';
 
-namespace YourNamespace.Controllers
-{
-    [Route("api/froala")]
-    [ApiController]
-    public class FroalaController : ControllerBase
-    {
-        private readonly IWebHostEnvironment _env;
-
-        public FroalaController(IWebHostEnvironment env)
-        {
-            _env = env;
-        }
-
-        [HttpPost("upload-image")]
-        [Authorize] // Require JWT auth
-        public async Task<IActionResult> UploadImage(IFormFile file)
-        {
-            if (file == null || file.Length == 0)
-                return BadRequest("No file uploaded.");
-
-            var uploadsFolder = Path.Combine(_env.WebRootPath, "uploads");
-
-            if (!Directory.Exists(uploadsFolder))
-                Directory.CreateDirectory(uploadsFolder);
-
-            var fileName = Path.GetRandomFileName() + Path.GetExtension(file.FileName);
-            var filePath = Path.Combine(uploadsFolder, fileName);
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var fileUrl = $"{Request.Scheme}://{Request.Host}/uploads/{fileName}";
-
-            return Ok(new { link = fileUrl }); // Froala expects { link: 'url' }
-        }
-    }
-}
-
-
-
-
-public editorOptions: Object = {
-  key: this.licenseKey,
-  attribution: false,
-  toolbarButtons: ['insertTable', 'insertImage', 'specialCharacters'],
-  useClasses: false,
-  imageAllowedTypes: ['jpeg', 'jpg', 'png'],
-  imageUploadURL: 'https://your-domain.com/api/froala/upload-image', // <-- API endpoint
-  imageUploadMethod: 'POST',
-  requestHeaders: {
-    Authorization: 'Bearer YOUR_JWT_TOKEN_HERE'
-  }
+const httpOptions = {
+  headers: new HttpHeaders({
+    'Content-Type': 'application/json'
+  })
 };
+
+@Injectable({
+  providedIn: 'root'
+})
+
+export class ReToolService {
+  public addNewLocationSubject = new Subject<void>();
+  addNewLocation$ = this.addNewLocationSubject.asObservable();
+  public currencyUnitSubject = new Subject<any>();
+  currencyUnit$ = this.currencyUnitSubject.asObservable();
+  public locationApiDataSubscribe$ = new Subject<any>();
+  public countrySearchSubject$ = new Subject<any>();
+  public emailSearchSubject$ = new Subject<any>();
+  public humanElementRiskFactorSubject = new Subject<any>();
+  humanElementRiskFactor$ = this.humanElementRiskFactorSubject.asObservable();
+  private importDataSubject = new Subject<{ locationData: any, propertyValueData: any }>();
+  importData$ = this.importDataSubject.asObservable();
+  public emptyPropertyLocationSubject$ = new Subject<any>();
+
+  private readonly httpOptions = {
+    headers: new HttpHeaders({
+      'Content-Type': 'application/json'
+    })
+  };
+
+  constructor(private http: HttpClient) { }
+
+  getLocationProperties(reviewRequestId: number, isGeneralProperty: boolean, isOverAllRatingRequired: boolean): Observable<PropertyValue[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetAllProperty/${reviewRequestId}/${isGeneralProperty}/${isOverAllRatingRequired}`);
+  }
+
+  getCoverWithPropertyValues(reviewRequestId: number, isOverAllRatingRequired: boolean): Observable<Cover> {
+    return this.get<any>(`${environment.baseUrl}Property/GetPropertyAccountCover/${reviewRequestId}/${isOverAllRatingRequired}`);
+  }
+
+  generateFormElementIdAttribute(rowIndex: number, dataId: number, columnName: string, popUp?: string): string {
+    return `row-${rowIndex}_dataKey-${dataId}_${columnName}_${popUp}`;
+  }
+
+  getLocationByAddress(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Location/GetAddressSearch/${query}`, httpOptions);
+  }
+
+  getLocationByGeoCode(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Location/GetGeoCode/${query}`, httpOptions);
+  }
+
+  getPropertyMaster(type: PropertyMasterDataTypeEnum): Observable<any> {
+    let params = new HttpParams();
+    if (type == PropertyMasterDataTypeEnum.HumanElementRiskFactor) {
+      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
+    }
+
+    if (type == PropertyMasterDataTypeEnum.BIRiskFactor) {
+      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
+    }
+
+    if (type == PropertyMasterDataTypeEnum.Cover) {
+      params = params.set(ReToolConstants.propertyMasterType, this.getEnumPropertyName(type)); // add query parameter if provided by user
+    }
+
+    const options = {
+      ...this.httpOptions,
+      params
+    }
+
+    if (type === PropertyMasterDataTypeEnum.CurrencyAndUnit) {
+      return this.http.get<any>(`${environment.baseUrl}Property`, options)
+        .pipe(
+          tap(data => this.currencyUnitSubject.next(data)),
+          catchError(error => {
+            return throwError(() => new Error(error.message));
+          })
+        );
+    }
+    else
+      return this.http.get<any>(`${environment.baseUrl}Property`, options);
+  };
+
+  getOilGasPetrochemicalMaster(type: OgpcMasterDataTypeEnum): Observable<any> {
+    let params = new HttpParams();
+    
+    if (type == OgpcMasterDataTypeEnum.BIRiskFactor || type == OgpcMasterDataTypeEnum.BIBusinessContinuity) {
+      params = params.set(ReToolConstants.ogpcMasterType, this.getOgpcEnumPropertyName(type));
+    }
+
+    const options = {
+      ...this.httpOptions,
+      params
+    }
+
+    return this.http.get<any>(`${environment.baseUrl}OilGasPetrochemical`, options);
+  };
+
+  getPowerGenerationMaster(type: PowerGenerationMasterDataTypeEnum): Observable<any> {
+    let params = new HttpParams();
+    
+    if (type == PowerGenerationMasterDataTypeEnum.BIRiskFactor || type == PowerGenerationMasterDataTypeEnum.BIBusinessContinuity) {
+      params = params.set(ReToolConstants.ogpcMasterType, PowerGenerationMasterDataTypeEnum[type]);
+    }
+
+    const options = {
+      ...this.httpOptions,
+      params
+    }
+
+    return this.http.get<any>(`${environment.baseUrl}PowerGeneration`, options);
+  }
+
+  getEnumPropertyName = (value: number): string => {
+    return PropertyMasterDataTypeEnum[value];
+  };
+
+  getOgpcEnumPropertyName = (value: number): string => {
+    return OgpcMasterDataTypeEnum[value];
+  };
+
+  getOccupancyGroup(productLine: any) {
+    return this.http.get<any>(`${environment.baseUrl}Master/GetRequestCompleteMaster/?productLine=${productLine}`, httpOptions);
+  }
+
+  getOccupancyType(occupancyGroupId: any) {
+    return this.http.get<any>(`${environment.baseUrl}Master/GetOccupancyType/?occupancyGroupId=${occupancyGroupId}`, httpOptions);
+  }
+
+  // Generic POST request for submitting the data to the api
+  // could update once backend API ready
+  post<T>(url: string, body: any): Observable<T> {
+    return this.http.post<any>(url, body, this.httpOptions).pipe(catchError(this.handleError));
+  }
+
+  //Generic GET request for api calling
+  // could update once backend API ready
+  get<T>(url: string): Observable<T> {
+    return this.http.get<T>(url, this.httpOptions).pipe(
+      tap((response) => response),
+      catchError(this.handleError)
+    );
+  }
+
+  handleError(error: any): Observable<never> {
+    throw new Error(error.message);
+  }
+
+  getPropertyFireLocations(reviewRequestId: number, isOverAllRatingRequired: boolean = false): Observable<NormalLossExpectancy[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetPropertyFireLocations?reviewRequestId=${reviewRequestId}&isOverAllRatingRequired=${isOverAllRatingRequired}`);
+  }
+
+  getProbableMaximumLoss(reviewRequestId: number): Observable<ProbableMaximumLoss[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetNormalLossExpectancy?reviewRequestId=${reviewRequestId}`);
+  }
+
+  getOilGasPetrochemicalData(reviewRequestId: number): Observable<OilGasPetrochemical[]> {
+    return this.get<any>(`${environment.baseUrl}OilGasPetrochemical/${reviewRequestId}`);
+  }
+
+  getPowerGenerationData(reviewRequestId: number): Observable<PowerGeneration[]> {
+    return this.get<any>(`${environment.baseUrl}PowerGeneration/${reviewRequestId}`);
+  }
+
+  getMaximumForeseeableLoss(reviewRequestId: number): Observable<MaximumForeseeableLoss[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetNormalLossExpectancy?reviewRequestId=${reviewRequestId}`);
+  }
+
+  getPropertyEquipmentBreakdownLocations(reviewRequestId: number, isOverAllRatingRequired: boolean = false): Observable<EquipmentProbableMaximumLoss[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetPropertyEquipmentBreakdownLocations?reviewRequestId=${reviewRequestId}&isOverAllRatingRequired=${isOverAllRatingRequired}`);
+  }
+
+  getGeneralPropertyWeight(occupancyCodes: any): Observable<GeneralPropertyWeightResponse[]> {
+    return this.post<GeneralPropertyWeightResponse[]>(`${environment.baseUrl}Master/GetGeneralPropertyWeight`, occupancyCodes);
+  }
+
+  importData(data: any, propertyValueData: any) {
+    this.importDataSubject.next({ locationData: data, propertyValueData: propertyValueData });
+  }
+
+  importPropertyLocations(data: PropertyLocationImportRequest[]): any {
+    const apiURL = `${environment.baseUrl}Property/PropertyLocationImport`;
+    return this.http.post(apiURL, data);
+  }
+
+  searchLocationByName(locationFilter: LocationFilterModel) {
+    const body = JSON.stringify(locationFilter);
+    return this.http.post<any>(`${environment.baseUrl}Property/GetLocationSuggestionByName`, body, httpOptions);
+  }
+
+  searchCountryName(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Property/GetCountrySuggestionByName/${query}`, httpOptions);
+  }
+
+  getActivityTaskDetails(reviewRequestId: number): Observable<Activity[]> {
+    return this.get<any>(`${environment.baseUrl}Property/GetActivityTaskDetails/${reviewRequestId}`);
+  }
+
+  getAllRequestReviewDetails(reviewRequestId: number) {
+    return this.http.get<any>(`${environment.baseUrl}ReviewRequest/GetReviewRequestById/${reviewRequestId}`, httpOptions);
+  }
+
+  GetCoverCompleteReviewMailIds(propertyAccountId: any) {
+    return this.http.get<any>(`${environment.baseUrl}Property/GetCoverCompleteReviewMailIds/${propertyAccountId}`, httpOptions);
+  }
+
+  sendCoverCompleteMailRequest(requestModel: any): Observable<any> {
+    const body = JSON.stringify(requestModel);
+    return this.http.post<any>(`${environment.baseUrl}Property/SendCoverCompleteMailRequest`, body, httpOptions);
+  }
+
+  getFxRate(fromCurrency: string, pricingDate: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Master/${fromCurrency}/${pricingDate}`, httpOptions);
+  }
+
+  getActiveUserNameAndEmail(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Property/GetActiveUserNameAndEmail/${query}`, httpOptions);
+  }
+
+  AddOrEditActivityTask(requestModel: any): Observable<any> {
+    const body = JSON.stringify(requestModel);
+    return this.http.post<any>(`${environment.baseUrl}Property/UpsertActivityTask`, body, httpOptions);
+  }
+
+  getRiskEngineerGroupUsers(query: string): Observable<any> {
+    return this.http.get<any>(`${environment.baseUrl}Property/GetRiskEngineerGroupUsers/${query}`, httpOptions);
+  }
+
+   GetReviewRequestStatus(): Observable<any> {
+    const isFromActivityTask = true;
+      return this.http.get<any>(`${environment.baseUrl}Master/GetReviewRequestMaster/?isFromActivityTask=${isFromActivityTask}`, httpOptions);
+  }
+
+   UploadImage(data: any): any {
+    const apiURL = `${environment.baseUrl}Property/uploadImage`;
+    return this.http.post(apiURL, data);
+  }
+    
+}
