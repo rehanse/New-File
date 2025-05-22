@@ -1,7 +1,61 @@
- Add a URL parameter to indicate read-only mode
-<a [routerLink]="[]" [queryParams]="{ readonly: true }" target="_blank">Open Read-Only</a>
-Add two methods in the common service to detect read-only mode
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using System.IO;
+using System.Threading.Tasks;
 
-Initialize the read-only mode in the retool component
-create a readonly directive
-Use the directive in a wrapper element
+namespace YourNamespace.Controllers
+{
+    [Route("api/froala")]
+    [ApiController]
+    public class FroalaController : ControllerBase
+    {
+        private readonly IWebHostEnvironment _env;
+
+        public FroalaController(IWebHostEnvironment env)
+        {
+            _env = env;
+        }
+
+        [HttpPost("upload-image")]
+        [Authorize] // Require JWT auth
+        public async Task<IActionResult> UploadImage(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded.");
+
+            var uploadsFolder = Path.Combine(_env.WebRootPath, "uploads");
+
+            if (!Directory.Exists(uploadsFolder))
+                Directory.CreateDirectory(uploadsFolder);
+
+            var fileName = Path.GetRandomFileName() + Path.GetExtension(file.FileName);
+            var filePath = Path.Combine(uploadsFolder, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var fileUrl = $"{Request.Scheme}://{Request.Host}/uploads/{fileName}";
+
+            return Ok(new { link = fileUrl }); // Froala expects { link: 'url' }
+        }
+    }
+}
+
+
+
+
+public editorOptions: Object = {
+  key: this.licenseKey,
+  attribution: false,
+  toolbarButtons: ['insertTable', 'insertImage', 'specialCharacters'],
+  useClasses: false,
+  imageAllowedTypes: ['jpeg', 'jpg', 'png'],
+  imageUploadURL: 'https://your-domain.com/api/froala/upload-image', // <-- API endpoint
+  imageUploadMethod: 'POST',
+  requestHeaders: {
+    Authorization: 'Bearer YOUR_JWT_TOKEN_HERE'
+  }
+};
