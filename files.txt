@@ -1,33 +1,43 @@
-  public editorOptions: Object = {
-    key: this.licenseKey,
-    attribution: false,
-    toolbarButtons: [
-      // 1. Text Formatting
-      'bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript',
-      'fontFamily', 'fontSize', 'textColor', 'backgroundColor',
-      'outdent', 'indent', 'clearFormatting',
-      // 2. Content Insertion
-      'insertTable', 'insertImage', 'specialCharacters',
-      // 3. List and Bullets
-      'formatUL', 'formatOL',
-      // 4. Paragraph and Text Positioning
-      'lineHeight', 'paragraphFormat', 'paragraphStyle',
-      'alignLeft', 'alignCenter', 'alignRight', 'alignJustify',
-      'quote',
-      // 5. Undo/Redo
-      'undo', 'redo',
-      // 6. Hyperlink
-      'insertLink',
-      // 7. File/Image Upload
-      'insertFile',
-      // 8. Other useful buttons
-      'insertHR', 'inlineStyle', 'selectAll',
-    ],
-    useClasses: false,
-    imageAllowedTypes: ['jpeg', 'jpg', 'png'],
-    imageUploadURL: 'https://localhost:7292/api/v1/Property/uploadImage', // <-- API endpoint
-    imageUploadMethod: 'POST',
-    requestHeaders: {
-      Authorization: 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6IkNOdjBPSTNSd3FsSEZFVm5hb01Bc2hDSDJYRSIsImtpZCI6IkNOdjBPSTNSd3FsSEZFVm5hb01Bc2hDSDJYRSJ9.eyJhdWQiOiJhcGk6Ly8wYTZkZDAxMS0wYmY3LTRhNzItOTMwMy03ZWMyZGMwY2E4Y2QiLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC8yZDcxY2M1NC1iYzllLTQ1MTgtYWViYy02MThjNmFhNjNmOWEvIiwiaWF0IjoxNzQ3ODk1ODY1LCJuYmYiOjE3NDc4OTU4NjUsImV4cCI6MTc0NzkwMDc4NywiYWNyIjoiMSIsImFpbyI6IkFYUUFpLzhaQUFBQWhGeHgyRTBxNE1nejUxTjBZcUhCaHE3ZmUyaTRQS0w1UWhKdS92NHVQMWg2djVjaFRQUnZrUUdTb2p0M1B6OVNPSkoxKzhUOVhxUUQrU0x2N0p6c215T0NYK0M4SnBPcEQ5L3h6NVZ6SkF6YzFqZHRPSmduVFM3WGpaRHFHcWFhVmFSL0tqOWhMME1zNzJMQ0VoT3JSQT09IiwiYW1yIjpbInB3ZCIsInJzYSIsIm1mYSJdLCJhcHBpZCI6IjBhNmRkMDExLTBiZjctNGE3Mi05MzAzLTdlYzJkYzBjYThjZCIsImFwcGlkYWNyIjoiMCIsImRldmljZWlkIjoiYzYxZDBmNzMtNDY3Yi00Yjk5LTllZDItY2E3OGU1NmJkZDMyIiwiZW1haWwiOiJtZHJlaGFuLmhhc2htaUBiaHNwZWNpYWx0eS5jb20iLCJmYW1pbHlfbmFtZSI6Ikhhc2htaSIsImdpdmVuX25hbWUiOiJNZCBSZWhhbiIsImlwYWRkciI6IjE4Mi42OC4xNDUuMTcxIiwibmFtZSI6Ikhhc2htaSwgTWQgUmVoYW4gKEluZm9ybWF0aW9uIFRlY2hub2xvZ3kpIiwib2lkIjoiMDkwY2Y4ZTctYWU5OS00MGFiLWE0ZGYtY2U1MDllZGZjMDUyIiwib25wcmVtX3NpZCI6IlMtMS01LTIxLTM4ODIxMTgyMjAtMjg5MzQ4NDQzNS0yNzkzNjAwMTMyLTExODYwNCIsInJoIjoiMS5BVzRBVk14eExaNjhHRVd1dkdHTWFxWV9taEhRYlFyM0MzSktrd04td3R3TXFNMXVBSUZ1QUEuIiwic2NwIjoiYXBpLWFjY2VzcyIsInNpZCI6IjAwMjBkNjU5LTMxN2MtODVjMS1jZGRkLTA3ZjJiNGQ5NWE2NSIsInN1YiI6ImFsVDRnU0xZelo3eEl5d0dPTF9BRGhCRmg4ZElBZkIwck1fS0ZNUnBNUGciLCJ0aWQiOiIyZDcxY2M1NC1iYzllLTQ1MTgtYWViYy02MThjNmFhNjNmOWEiLCJ1bmlxdWVfbmFtZSI6Im1kcmVoYW4uaGFzaG1pQGJoc3BlY2lhbHR5LmNvbSIsInVwbiI6Im1kcmVoYW4uaGFzaG1pQGJoc3BlY2lhbHR5LmNvbSIsInV0aSI6Ijg2VllrTC1JeTBLWXdTVnhYZ2FsQUEiLCJ2ZXIiOiIxLjAiLCJ4bXNfZnRkIjoiR0MxNjY0MkNSMWh6NVkxNmRBSmFTU1NPQ2Ytak9kek56czNVcWZUQXpRRUJkWE51YjNKMGFDMWtjMjF6In0.QaIggiAgG3sj1M6Ez7sg8BNvhAbo5ss8d8a7mo8M2mUyFVN7OLZ9eSiCsUwuAq6wHHZ-rpX_ow4854dNE1abMEaOfWBf6MPcVtLTEQTUM60qrHO43YhgEmrLFtlbGt2Yb667tPrqyRbPO1B9V0RrH0Mu02ffITrZJNFxcPM5zm_xNg0i3fcQwn5mByvuL_iIOjUNMmTxNdZS44zGTOVTgse1Zvwj_JWOR1bX0hT7RTD8s14Xp-mWgjfq3yfjSOqPJmqgybCEt0KaPChhkXuh0d9oRqCAZ2S5AE7dEd7zHyJ7IL7k1_PyrynXUy76dYp80WX51d1v-xp0F6K8oVCyOQ'
-    }
-  };
+import { Component } from '@angular/core';
+import { ReToolService } from './services/re-tool.service'; // Adjust path
+import { HttpEventType } from '@angular/common/http';
+
+@Component({
+  selector: 'app-my-editor',
+  templateUrl: './my-editor.component.html'
+})
+export class MyEditorComponent {
+  public editorContent = '';
+  public editorOptions: Object;
+
+  constructor(private reToolService: ReToolService) {
+    this.editorOptions = {
+      attribution: false,
+      toolbarButtons: ['insertImage', 'insertTable', 'specialCharacters'],
+      imageAllowedTypes: ['jpeg', 'jpg', 'png'],
+      events: {
+        'image.beforeUpload': this.customImageUpload.bind(this)
+      }
+    };
+  }
+
+  customImageUpload(files: File[]) {
+    if (files.length === 0) return;
+
+    const file = files[0];
+    const formData = new FormData();
+    formData.append('file', file); // Adjust the key if your backend expects something else
+
+    this.reToolService.UploadImage(formData).subscribe({
+      next: (response: any) => {
+        // Assuming the API returns the image URL
+        const imageUrl = response.imageUrl || response.url || response; // adapt to your API
+        // Insert image into Froala
+        (window as any).FroalaEditor.INSTANCES[0].image.insert(imageUrl, true, null, this.editorOptions);
+      },
+      error: (error) => {
+        console.error('Image upload failed:', error);
+      }
+    });
+  }
+}
