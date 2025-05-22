@@ -7,108 +7,92 @@ import { ReToolService } from '../../service/re-tool.service';
 @Component({
   selector: 'app-smart-editor',
   templateUrl: './smart-editor.component.html',
-  styleUrl: './smart-editor.component.css'
+  styleUrls: ['./smart-editor.component.css']
 })
-export class SmartEditorComponent {
-
+export class SmartEditorComponent implements OnInit {
   @Input() content: string = 'Test content';
   licenseKey: string = '';
   editorInstance: any;
-  imageURL: string = '';
+
+  public editorOptions: Object = {};
 
   constructor(
     private commonService: CommonService,
     private loginService: LoginService,
-    private reToolService: ReToolService,
-  ) {
+    private reToolService: ReToolService
+  ) {}
+
+  ngOnInit(): void {
     const userDetails = this.commonService.userDetails;
-    this.licenseKey = userDetails && userDetails.licenseKey ? userDetails.licenseKey : '';
-    this.editorOptions = {
-      ...this.editorOptions,
-      key: this.licenseKey
-    };
-    this.content = 'Test content';
+    this.licenseKey = userDetails?.licenseKey || '';
     if (!this.licenseKey) {
       this.getCurrentUserDetails();
     }
+
+    this.initEditorOptions();
   }
 
-  public editorOptions: Object = {
-    key: this.licenseKey,
-    attribution: false,
-    toolbarButtons: [
-      // 1. Text Formatting
-      'bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript',
-      'fontFamily', 'fontSize', 'textColor', 'backgroundColor',
-      'outdent', 'indent', 'clearFormatting',
-      // 2. Content Insertion
-      'insertTable', 'insertImage', 'specialCharacters',
-      // 3. List and Bullets
-      'formatUL', 'formatOL',
-      // 4. Paragraph and Text Positioning
-      'lineHeight', 'paragraphFormat', 'paragraphStyle',
-      'alignLeft', 'alignCenter', 'alignRight', 'alignJustify',
-      'quote',
-      // 5. Undo/Redo
-      'undo', 'redo',
-      // 6. Hyperlink
-      'insertLink',
-      // 7. File/Image Upload
-      'insertFile',
-      // 8. Other useful buttons
-      'insertHR', 'inlineStyle', 'selectAll',
-    ],
-    useClasses: false,
-    imageAllowedTypes: ['jpeg', 'jpg', 'png'],
-    imageUploadURL: 'https://localhost:7292/api/v1/Property/uploadImage', // <-- API endpoint
-    imageUploadMethod: 'POST',
-    requestHeaders: {
-      Authorization: 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6IkNOdjBPSTNSd3FsSEZFVm5hb01Bc2hDSDJYRSIsImtpZCI6IkNOdjBPSTNSd3FsSEZFVm5hb01Bc2hDSDJYRSJ9.eyJhdWQiOiJhcGk6Ly8wYTZkZDAxMS0wYmY3LTRhNzItOTMwMy03ZWMyZGMwY2E4Y2QiLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC8yZDcxY2M1NC1iYzllLTQ1MTgtYWViYy02MThjNmFhNjNmOWEvIiwiaWF0IjoxNzQ3ODk1ODY1LCJuYmYiOjE3NDc4OTU4NjUsImV4cCI6MTc0NzkwMDc4NywiYWNyIjoiMSIsImFpbyI6IkFYUUFpLzhaQUFBQWhGeHgyRTBxNE1nejUxTjBZcUhCaHE3ZmUyaTRQS0w1UWhKdS92NHVQMWg2djVjaFRQUnZrUUdTb2p0M1B6OVNPSkoxKzhUOVhxUUQrU0x2N0p6c215T0NYK0M4SnBPcEQ5L3h6NVZ6SkF6YzFqZHRPSmduVFM3WGpaRHFHcWFhVmFSL0tqOWhMME1zNzJMQ0VoT3JSQT09IiwiYW1yIjpbInB3ZCIsInJzYSIsIm1mYSJdLCJhcHBpZCI6IjBhNmRkMDExLTBiZjctNGE3Mi05MzAzLTdlYzJkYzBjYThjZCIsImFwcGlkYWNyIjoiMCIsImRldmljZWlkIjoiYzYxZDBmNzMtNDY3Yi00Yjk5LTllZDItY2E3OGU1NmJkZDMyIiwiZW1haWwiOiJtZHJlaGFuLmhhc2htaUBiaHNwZWNpYWx0eS5jb20iLCJmYW1pbHlfbmFtZSI6Ikhhc2htaSIsImdpdmVuX25hbWUiOiJNZCBSZWhhbiIsImlwYWRkciI6IjE4Mi42OC4xNDUuMTcxIiwibmFtZSI6Ikhhc2htaSwgTWQgUmVoYW4gKEluZm9ybWF0aW9uIFRlY2hub2xvZ3kpIiwib2lkIjoiMDkwY2Y4ZTctYWU5OS00MGFiLWE0ZGYtY2U1MDllZGZjMDUyIiwib25wcmVtX3NpZCI6IlMtMS01LTIxLTM4ODIxMTgyMjAtMjg5MzQ4NDQzNS0yNzkzNjAwMTMyLTExODYwNCIsInJoIjoiMS5BVzRBVk14eExaNjhHRVd1dkdHTWFxWV9taEhRYlFyM0MzSktrd04td3R3TXFNMXVBSUZ1QUEuIiwic2NwIjoiYXBpLWFjY2VzcyIsInNpZCI6IjAwMjBkNjU5LTMxN2MtODVjMS1jZGRkLTA3ZjJiNGQ5NWE2NSIsInN1YiI6ImFsVDRnU0xZelo3eEl5d0dPTF9BRGhCRmg4ZElBZkIwck1fS0ZNUnBNUGciLCJ0aWQiOiIyZDcxY2M1NC1iYzllLTQ1MTgtYWViYy02MThjNmFhNjNmOWEiLCJ1bmlxdWVfbmFtZSI6Im1kcmVoYW4uaGFzaG1pQGJoc3BlY2lhbHR5LmNvbSIsInVwbiI6Im1kcmVoYW4uaGFzaG1pQGJoc3BlY2lhbHR5LmNvbSIsInV0aSI6Ijg2VllrTC1JeTBLWXdTVnhYZ2FsQUEiLCJ2ZXIiOiIxLjAiLCJ4bXNfZnRkIjoiR0MxNjY0MkNSMWh6NVkxNmRBSmFTU1NPQ2Ytak9kek56czNVcWZUQXpRRUJkWE51YjNKMGFDMWtjMjF6In0.QaIggiAgG3sj1M6Ez7sg8BNvhAbo5ss8d8a7mo8M2mUyFVN7OLZ9eSiCsUwuAq6wHHZ-rpX_ow4854dNE1abMEaOfWBf6MPcVtLTEQTUM60qrHO43YhgEmrLFtlbGt2Yb667tPrqyRbPO1B9V0RrH0Mu02ffITrZJNFxcPM5zm_xNg0i3fcQwn5mByvuL_iIOjUNMmTxNdZS44zGTOVTgse1Zvwj_JWOR1bX0hT7RTD8s14Xp-mWgjfq3yfjSOqPJmqgybCEt0KaPChhkXuh0d9oRqCAZ2S5AE7dEd7zHyJ7IL7k1_PyrynXUy76dYp80WX51d1v-xp0F6K8oVCyOQ'
-    }
-  };
+  initEditorOptions() {
+    this.editorOptions = {
+      key: this.licenseKey,
+      attribution: false,
+      toolbarButtons: [
+        'bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript',
+        'fontFamily', 'fontSize', 'textColor', 'backgroundColor',
+        'outdent', 'indent', 'clearFormatting',
+        'insertTable', 'insertImage', 'specialCharacters',
+        'formatUL', 'formatOL',
+        'lineHeight', 'paragraphFormat', 'paragraphStyle',
+        'alignLeft', 'alignCenter', 'alignRight', 'alignJustify',
+        'quote', 'undo', 'redo',
+        'insertLink', 'insertFile',
+        'insertHR', 'inlineStyle', 'selectAll',
+      ],
+      useClasses: false,
+      imageAllowedTypes: ['jpeg', 'jpg', 'png'],
+      events: {
+        'image.beforeUpload': this.customImageUpload.bind(this)
+      }
+    };
+  }
 
-  uploadImage(event: any) {
-    const file = event.target.files[0];
+  customImageUpload(files: File[]) {
+    if (!files || files.length === 0) return false;
+
+    const file = files[0];
     const formData = new FormData();
     formData.append('file', file);
+
     this.reToolService.UploadImage(formData).subscribe({
-      next: (response) => {
-        if (response && response.filePath) {
-          const imageUrl = response.filePath;
-          this.editorOptions = {
-            ...this.editorOptions,
-            imageUploadURL: imageUrl
-          };          
-        } else {
-          
+      next: (response: any) => {
+        const imageUrl = response?.filePath || response?.url || null;
+
+        if (imageUrl) {
+          // Insert the uploaded image into the editor manually
+          const editorInstance = (window as any).FroalaEditor.INSTANCES[0]; // Or get from a ref
+          editorInstance.image.insert(imageUrl, true, null, editorInstance.image.get(), null);
         }
       },
-      error: (error) => {
-        
+      error: (err) => {
+        console.error('Image upload failed:', err);
       }
     });
+
+    // Prevent Froala's default upload
+    return false;
   }
 
   getCurrentUserDetails() {
-    let userDetails: any = null;
     this.loginService.GetUserDetails().subscribe({
       next: (response) => {
-        userDetails = response;
-        if (userDetails && userDetails.licenseKey) {
-          this.licenseKey = userDetails.licenseKey;
-          this.editorOptions = {
-            ...this.editorOptions,
-            key: this.licenseKey
-          };
+        if (response?.licenseKey) {
+          this.licenseKey = response.licenseKey;
+          this.initEditorOptions(); // Reinitialize with new license key
         }
       },
       error: (error) => {
-        // Handle error
+        console.error('Failed to fetch user details:', error);
       }
     });
   }
 }
-
-
-
-
