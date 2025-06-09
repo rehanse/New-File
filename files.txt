@@ -1,98 +1,27 @@
-import { Component, Input, OnInit } from '@angular/core';
-import { CommonService } from '../../../../shared/services/common.service';
-import { LoginService } from '../../../../core/services/login.service';
-import 'froala-editor/js/plugins.pkgd.min.js';
-import { ReToolService } from '../../service/re-tool.service';
 
-@Component({
-  selector: 'app-smart-editor',
-  templateUrl: './smart-editor.component.html',
-  styleUrls: ['./smart-editor.component.css']
-})
-export class SmartEditorComponent implements OnInit {
-  @Input() content: string = 'Test content';
-  licenseKey: string = '';
-  editorInstance: any;
 
-  public editorOptions: Object = {};
+ChatGPT
+You said:
+Do you feel that your colleagues are dependable? What is the perfect answer? 
+ChatGPT said:
+A strong and balanced answer to the question "Do you feel that your colleagues are dependable?" should reflect honesty, professionalism, and teamwork. Here’s a "perfect" sample answer for most work settings:
 
-  constructor(
-    private commonService: CommonService,
-    private loginService: LoginService,
-    private reToolService: ReToolService
-  ) {}
+"Yes, I find my colleagues dependable. We support each other well and communicate effectively to meet our goals. Of course, like in any team, there are occasional challenges, but overall, I can trust them to deliver on their responsibilities and step in when needed. That mutual reliability helps us work more efficiently and create a positive environment."
 
-  ngOnInit(): void {
-    const userDetails = this.commonService.userDetails;
-    this.licenseKey = userDetails?.licenseKey || '';
-    if (!this.licenseKey) {
-      this.getCurrentUserDetails();
-    }
+Tips for a great answer:
+✅ Be honest but diplomatic – don’t sugarcoat, but don’t criticize harshly.
 
-    this.initEditorOptions();
-  }
+✅ Highlight teamwork and collaboration.
 
-  initEditorOptions() {
-    this.editorOptions = {
-      key: this.licenseKey,
-      attribution: false,
-      toolbarButtons: [
-        'bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript',
-        'fontFamily', 'fontSize', 'textColor', 'backgroundColor',
-        'outdent', 'indent', 'clearFormatting',
-        'insertTable', 'insertImage', 'specialCharacters',
-        'formatUL', 'formatOL',
-        'lineHeight', 'paragraphFormat', 'paragraphStyle',
-        'alignLeft', 'alignCenter', 'alignRight', 'alignJustify',
-        'quote', 'undo', 'redo',
-        'insertLink', 'insertFile',
-        'insertHR', 'inlineStyle', 'selectAll',
-      ],
-      useClasses: false,
-      imageAllowedTypes: ['jpeg', 'jpg', 'png'],
-      events: {
-        'image.beforeUpload': this.customImageUpload.bind(this)
-      }
-    };
-  }
+✅ Mention trust and communication.
 
-  customImageUpload(files: File[]) {
-    if (!files || files.length === 0) return false;
+✅ If your team isn't always dependable, say it tactfully and focus on how you manage and contribute positively.
 
-    const file = files[0];
-    const formData = new FormData();
-    formData.append('file', file);
+Want a custom version based on your actual team experience? Just tell me a bit about how your team works together.
 
-    this.reToolService.UploadImage(formData).subscribe({
-      next: (response: any) => {
-        const imageUrl = response?.filePath || response?.url || null;
+You said:
+How can we make the work environment at xceedence more engaging? 
+ChatGPT said:
+To answer "How can we make the work environment at Xceedence more engaging?", your response should show you're thoughtful, positive, and invested in making the workplace better. Here's a well-rounded answer:
 
-        if (imageUrl) {
-          // Insert the uploaded image into the editor manually
-          const editorInstance = (window as any).FroalaEditor.INSTANCES[0]; // Or get from a ref
-          editorInstance.image.insert(imageUrl, true, null, editorInstance.image.get(), null);
-        }
-      },
-      error: (err) => {
-        console.error('Image upload failed:', err);
-      }
-    });
-
-    // Prevent Froala's default upload
-    return false;
-  }
-
-  getCurrentUserDetails() {
-    this.loginService.GetUserDetails().subscribe({
-      next: (response) => {
-        if (response?.licenseKey) {
-          this.licenseKey = response.licenseKey;
-          this.initEditorOptions(); // Reinitialize with new license key
-        }
-      },
-      error: (error) => {
-        console.error('Failed to fetch user details:', error);
-      }
-    });
-  }
-}
+"To make the work environment at Xceedence more engaging, we could focus on enhancing collaboration and recognition. For example, more team-building activities—both in-person and virtual—can strengthen relationships across departments. Regular recognition programs, even small wins being celebrated, would boost morale. Also, creating opportunities for upskilling, like internal knowledge-sharing sessions or learning days, can keep people motivated. Lastly, encouraging open feedback and involving employees in decision-making can make everyone feel more valued and connected to the company’s goals."
