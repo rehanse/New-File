@@ -1,88 +1,18 @@
 
-Here’s a warm and professional **appreciation email message to a new colleague**:
 
----
+openPdfInNewTab(pdfBase64: string, customTitle: string) {
+  const html = `
+    <html>
+      <head>
+        <title>${customTitle}</title>
+      </head>
+      <body style="margin:0">
+        <embed width="100%" height="100%" src="data:application/pdf;base64,${pdfBase64}" type="application/pdf">
+      </body>
+    </html>
+  `;
 
-**Subject:** Great Start – Thank You!
-
-Dear \[Colleague’s Name],
-
-I just wanted to take a moment to appreciate the great start you’ve had with the team. It’s not always easy stepping into a new environment, but you’ve adapted quickly and have already made a positive impact.
-
-Your enthusiasm, willingness to learn, and fresh perspective have been truly valuable. It’s been a pleasure working with you, and I’m confident you’ll continue to do great things here.
-
-Welcome again, and thank you for bringing your best from day one. Looking forward to more collaboration ahead!
-
-Best regards,
-\[Your Name]
-
----
-
-Let me know if you’d like to make this more casual, or personalize it for a specific project or contribution they’ve made.
-
-
-Here’s a thoughtful and professional **appreciation email to a colleague**:
-
----
-
-**Subject:** Thank You for Your Support and Collaboration
-
-Dear \[Colleague’s Name],
-
-I just wanted to take a moment to sincerely thank you for your support and teamwork. Your dedication, attention to detail, and willingness to step in whenever needed made a real difference.
-
-Working with you has been a pleasure—you bring not only strong technical skills but also a positive attitude that uplifts the entire team. Your collaboration on \[mention specific task/project if needed] truly helped us move forward smoothly.
-
-Thanks again for being such a dependable and collaborative colleague. Looking forward to working together on more successful projects!
-
-Best regards,
-\[Your Name]
-
----
-
-Let me know if you'd like to make this more casual, detailed, or tailored to a specific achievement.
-
-
-Here’s a professional and impactful **appreciation email to your manager** that you can use:
-
----
-
-**Subject:** Sincere Thanks for Your Support and Guidance
-
-Dear \[Manager’s Name],
-
-I want to express my heartfelt appreciation for your continuous support, guidance, and trust in me. Your leadership has been instrumental in creating a positive and motivating work environment where I feel encouraged to grow and contribute.
-
-Your ability to lead with clarity, fairness, and empathy is truly inspiring. I’ve learned a lot under your management and feel more confident in my role because of your consistent encouragement and feedback.
-
-Thank you once again for being such a supportive and approachable manager. I look forward to continuing to learn and contribute under your leadership.
-
-Warm regards,
-\[Your Name]
-
----
-
-Let me know if you want to tailor it for a specific achievement, project, or occasion.
-
-
-
-ChatGPT
-
-You said:
-
-Best appreciation mail message to team lead
-
-ChatGPT said:
-
-Here’s a professional and warm appreciation mail message you can send to your Team Lead:
-
-Subject: Thank You for Your Outstanding Leadership
-
-Dear [Team Lead's Name],
-
-I wanted to take a moment to sincerely thank you for your continued guidance and support. Your leadership, encouragement, and clear vision have made a significant difference in our progress and my personal growth.
-
-I truly appreciate the way you empower the team, listen to our concerns, and consistently motivate us to do our best. Working under your leadership has been both inspiring and rewarding.
-
-Thank you once again for your exceptional support and dedication. Looking forward to continuing to learn and grow with your guidance.
-
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+}
