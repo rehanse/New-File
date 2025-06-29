@@ -1,18 +1,35 @@
+public async Task<List<CombinedResponse>> GetCombinedDataAsync(List<string> typeCodes)
+{
+    // Project typeCodes into queryable
+    var typeCodeQuery = typeCodes.AsQueryable();
 
+    // Get data from all three tables, filtered by input
+    var tableAData = _context.TableA.Where(a => typeCodes.Contains(a.TypeCode));
+    var tableBData = _context.TableB.Where(b => typeCodes.Contains(b.TypeCode));
+    var tableCData = _context.TableC.Where(c => typeCodes.Contains(c.TypeCode));
 
-openPdfInNewTab(pdfBase64: string, customTitle: string) {
-  const html = `
-    <html>
-      <head>
-        <title>${customTitle}</title>
-      </head>
-      <body style="margin:0">
-        <embed width="100%" height="100%" src="data:application/pdf;base64,${pdfBase64}" type="application/pdf">
-      </body>
-    </html>
-  `;
+    // Build query from typeCodes LEFT JOINed to A, B, and C
+    var resultQuery = from typeCode in typeCodeQuery
 
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
+                      join a in tableAData on typeCode equals a.TypeCode into aJoin
+                      from a in aJoin.DefaultIfEmpty()
+
+                      join b in tableBData on typeCode equals b.TypeCode into bJoin
+                      from b in bJoin.DefaultIfEmpty()
+
+                      join c in tableCData on typeCode equals c.TypeCode into cJoin
+                      from c in cJoin.DefaultIfEmpty()
+
+                      select new CombinedResponse
+                      {
+                          TypeCode = typeCode,
+                          AName = a != null ? a.AName : null,
+                          BName = b != null ? b.BName : null,
+                          CName = c != null ? c.CName : null,
+                          IsFromTableA = a != null,
+                          IsFromTableB = b != null,
+                          IsFromTableC = c != null
+                      };
+
+    return await resultQuery.ToListAsync();
 }
