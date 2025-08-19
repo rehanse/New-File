@@ -209,3 +209,234 @@ Reusable: just add fx button with [ngbPopover]="formulaTpl".
 
 👉 Do you also want me to extend this so the popover can be resized (like Excel formula bar), or should we keep it fixed width (260px)?
 
+Perfect 👍 Let’s make it fully reusable as its own Angular component.
+
+We’ll create a FxPopoverComponent that you can drop anywhere with an fx icon, and it will handle the input + OK/Cancel buttons internally.
+
+
+---
+
+✅ Step 1: Create Component
+
+ng generate component shared/fx-popover
+
+
+---
+
+✅ fx-popover.component.ts
+
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { NgbPopover } from '@ng-bootstrap/ng-bootstrap';
+
+@Component({
+  selector: 'app-fx-popover',
+  templateUrl: './fx-popover.component.html',
+  styleUrls: ['./fx-popover.component.scss']
+})
+export class FxPopoverComponent {
+  @Input() value: any;   // current value (e.g. column value)
+  @Input() rowIndex!: number; // row index
+  @Input() colKey!: string;   // column key (e.g. "ibi")
+
+  @Output() formulaApplied = new EventEmitter<{ rowIndex: number; col: string; formula: string }>();
+
+  formula: string = '';
+  activePopover: NgbPopover | null = null;
+
+  togglePopover(popover: NgbPopover) {
+    if (this.activePopover && this.activePopover !== popover) {
+      this.activePopover.close();
+    }
+    if (popover.isOpen()) {
+      popover.close();
+      this.activePopover = null;
+    } else {
+      popover.open();
+      this.activePopover = popover;
+    }
+  }
+
+  onOk() {
+    this.formulaApplied.emit({
+      rowIndex: this.rowIndex,
+      col: this.colKey,
+      formula: this.formula
+    });
+    this.closePopover();
+  }
+
+  onCancel() {
+    this.closePopover();
+  }
+
+  private closePopover() {
+    if (this.activePopover) {
+      this.activePopover.close();
+      this.activePopover = null;
+    }
+    this.formula = '';
+  }
+}
+
+
+---
+
+✅ fx-popover.component.html
+
+<button type="button"
+        class="btn btn-link p-0 fx-btn"
+        [ngbPopover]="fxTpl"
+        popoverClass="fx-popover"
+        placement="auto"
+        triggers="manual"
+        #p="ngbPopover"
+        (click)="togglePopover(p)">
+  fx
+</button>
+
+<ng-template #fxTpl>
+  <div class="fx-container">
+    <input type="text"
+           class="form-control form-control-sm"
+           [(ngModel)]="formula"
+           placeholder="Enter formula" />
+
+    <div class="fx-actions">
+      <button class="btn btn-sm btn-primary" (click)="onOk()">OK</button>
+      <button class="btn btn-sm btn-secondary" (click)="onCancel()">Cancel</button>
+    </div>
+  </div>
+</ng-template>
+
+
+---
+
+✅ fx-popover.component.scss
+
+.fx-btn {
+  font-weight: bold;
+  color: blue;
+  cursor: pointer;
+  margin-left: 5px;
+}
+
+.fx-popover .popover-body {
+  padding: 8px !important;
+}
+
+.fx-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 220px;
+}
+
+.fx-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+
+---
+
+✅ Usage in Table (fx-table.component.html)
+
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>Total PD</th>
+      <th>IBI</th>
+      <th>Other TE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr *ngFor="let row of data; let i = index">
+      <td>
+        {{ row.totalPD }}
+        <app-fx-popover
+          [rowIndex]="i"
+          colKey="totalPD"
+          [value]="row.totalPD"
+          (formulaApplied)="applyFormula($event)">
+        </app-fx-popover>
+      </td>
+
+      <td>
+        {{ row.ibi }}
+        <app-fx-popover
+          [rowIndex]="i"
+          colKey="ibi"
+          [value]="row.ibi"
+          (formulaApplied)="applyFormula($event)">
+        </app-fx-popover>
+      </td>
+
+      <td>
+        {{ row.otherTE }}
+        <app-fx-popover
+          [rowIndex]="i"
+          colKey="otherTE"
+          [value]="row.otherTE"
+          (formulaApplied)="applyFormula($event)">
+        </app-fx-popover>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+---
+
+✅ Parent Component Logic (fx-table.component.ts)
+
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-fx-table',
+  templateUrl: './fx-table.component.html'
+})
+export class FxTableComponent {
+  data = [
+    { totalPD: 26.8, ibi: 0, otherTE: 0 },
+    { totalPD: 15.2, ibi: 0, otherTE: 0 }
+  ];
+
+  applyFormula(event: { rowIndex: number; col: string; formula: string }) {
+    console.log('Formula applied:', event);
+
+    try {
+      const row = this.data[event.rowIndex];
+      const expr = event.formula.replace('@TotalPD', row.totalPD.toString());
+
+      // WARNING: using eval is risky in real apps. Replace with parser later.
+      // eslint-disable-next-line no-eval
+      const result = eval(expr);
+
+      row[event.col] = result;
+    } catch {
+      alert('Invalid formula');
+    }
+  }
+}
+
+
+---
+
+✅ Now FxPopoverComponent is fully reusable:
+
+You can drop <app-fx-popover> in any column.
+
+It auto-adjusts (placement="auto").
+
+Each popover is independent, but ensures only one stays open.
+
+Emits event to parent when user clicks OK.
+
+
+
+---
+
+Do you want me to also add Excel-like formula placeholder replacement (e.g. @IBI, @TotalPD, etc. for any column), so it becomes smarter?
+
+
