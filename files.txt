@@ -1,73 +1,18 @@
-Got it ✅ — since you are on Angular 17, the ng-bootstrap popover I showed before won’t work because that’s a separate Bootstrap library.
-
-For Angular Material you can achieve the same popover design using the MatMenu or MatPopoverEdit (CDK Overlay).
-
-👉 The closest built-in option is MatMenu (with custom content) — it behaves like a popover, auto-positions, and is fully Angular Material.
-👉 If you want Excel-like “inline popovers” anchored to a cell, then CDK Overlay (used under the hood by Angular Material) is the more flexible way.
-
-
----
-
-✅ Angular Material Popover with Input + Buttons
-
-1. Import Modules
-
-import { MatMenuModule } from '@angular/material/menu';
-import { MatButtonModule } from '@angular/material/button';
-import { MatInputModule } from '@angular/material/input';
-import { FormsModule } from '@angular/forms';
-
-Add these to your imports in the standalone component or NgModule.
-
-
----
-
-2. Reusable FxPopoverComponent
-
-import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
-import { MatMenuTrigger } from '@angular/material/menu';
-
-@Component({
-  selector: 'app-fx-popover',
-  templateUrl: './fx-popover.component.html',
-  styleUrls: ['./fx-popover.component.scss'],
-  standalone: true,
-  imports: [MatMenuModule, MatButtonModule, MatInputModule, FormsModule]
-})
-export class FxPopoverComponent {
-  @Input() rowIndex!: number;
-  @Input() colKey!: string;
-  @Input() value: any;
-
-  @Output() formulaApplied = new EventEmitter<{ rowIndex: number; col: string; formula: string }>();
-
-  formula = '';
-
-  @ViewChild(MatMenuTrigger) menuTrigger!: MatMenuTrigger;
-
-  onOk() {
-    this.formulaApplied.emit({ rowIndex: this.rowIndex, col: this.colKey, formula: this.formula });
-    this.menuTrigger.closeMenu();
-    this.formula = '';
-  }
-
-  onCancel() {
-    this.menuTrigger.closeMenu();
-    this.formula = '';
-  }
-}
-
-
----
-
-3. fx-popover.component.html
 
 <button mat-icon-button [matMenuTriggerFor]="fxMenu" #trigger="matMenuTrigger">
   fx
 </button>
 
-<mat-menu #fxMenu="matMenu" class="fx-popover-menu" yPosition="below" xPosition="after">
-  <div class="fx-container">
+<mat-menu 
+  #fxMenu="matMenu" 
+  class="fx-popover-menu"
+  yPosition="below" 
+  xPosition="after"
+  [overlapTrigger]="false"
+  [hasBackdrop]="true"
+  (closed)="onCancel()"> <!-- optional safety -->
+  
+  <div class="fx-container" (click)="$event.stopPropagation()">
     <mat-form-field appearance="outline" class="fx-input">
       <input matInput [(ngModel)]="formula" placeholder="Enter formula">
     </mat-form-field>
@@ -79,60 +24,13 @@ export class FxPopoverComponent {
   </div>
 </mat-menu>
 
-
----
-
-4. fx-popover.component.scss
-
-.fx-container {
-  padding: 8px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 220px;
+onOk() {
+  this.formulaApplied.emit({ rowIndex: this.rowIndex, col: this.colKey, formula: this.formula });
+  this.menuTrigger.closeMenu(); // close only when OK
+  this.formula = '';
 }
 
-.fx-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+onCancel() {
+  this.menuTrigger.closeMenu(); // close only when Cancel
+  this.formula = '';
 }
-
-.fx-input {
-  width: 100%;
-}
-
-
----
-
-5. Usage in Table
-
-<td>
-  {{ row.ibi }}
-  <app-fx-popover
-    [rowIndex]="i"
-    colKey="ibi"
-    [value]="row.ibi"
-    (formulaApplied)="applyFormula($event)">
-  </app-fx-popover>
-</td>
-
-
----
-
-✅ This gives you:
-
-A popover anchored to the fx icon.
-
-Inside it: input + OK + Cancel.
-
-Auto-adjusts left/right/up/down via Angular Material menu positioning.
-
-100% compatible with Angular 17.
-
-
-
----
-
-Would you like me to also show the CDK Overlay version (gives more fine-grained control like an arrow pointing to the column, Excel-style), or do you prefer keeping it simple with Angular Material mat-menu?
-
