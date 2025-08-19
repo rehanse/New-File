@@ -1,19 +1,1066 @@
+Got it 👍 You want a small inline formula editor popup inside a table cell (like your screenshot) that opens when clicking the fx icon, and closes only on OK/Cancel.
+We’ll make this in Angular, with Angular Material (easy, clean, and no CSS clashes).
+
+Here’s a working example code:
 
 
-[(local variable) IEnumerable <General Property WeightResponse>? resultQuery
+---
 
-Marender Sehgal ync Task<
+1. Install Angular Material (if not already)
 
-'resultQuery' is not null here.
+ng add @angular/material
 
-neral Prope
 
-Describe with Copilot
+---
 
-CS1061: "Enumerable <General PropertyWeightResponse>* does not contain a definition for 'GetAwaiter' and no accessible extension method 'GetAwaiter' accepting a first argument of type 'IEnumerable <GeneralPropertyWeight Response>' could be found (are you missing a using directive or an assembly reference?)
+2. Component HTML
 
-await
+<table mat-table [dataSource]="data" class="custom-table">
 
-^
+  <!-- Total PD Column -->
+  <ng-container matColumnDef="totalPD">
+    <th mat-header-cell *matHeaderCellDef> Total PD </th>
+    <td mat-cell *matCellDef="let element">
+      {{ element.totalPD }}
+    </td>
+  </ng-container>
 
-Show potential fixes (Alt+Enter or Ctrl+.)
+  <!-- IBI Column with fx button -->
+  <ng-container matColumnDef="ibi">
+    <th mat-header-cell *matHeaderCellDef> IBI </th>
+    <td mat-cell *matCellDef="let element">
+      {{ element.ibi }}
+      <button mat-icon-button color="primary" (click)="openFormulaDialog(element)">
+        fx
+      </button>
+    </td>
+  </ng-container>
+
+  <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+  <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+</table>
+
+
+---
+
+3. Component TS
+
+import { Component } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { FormulaDialogComponent } from './formula-dialog/formula-dialog.component';
+
+@Component({
+  selector: 'app-my-table',
+  templateUrl: './my-table.component.html',
+  styleUrls: ['./my-table.component.scss']
+})
+export class MyTableComponent {
+  displayedColumns: string[] = ['totalPD', 'ibi'];
+  data = [
+    { totalPD: 26.8, ibi: 0 },
+    { totalPD: 15.2, ibi: 0 }
+  ];
+
+  constructor(private dialog: MatDialog) {}
+
+  openFormulaDialog(element: any) {
+    const dialogRef = this.dialog.open(FormulaDialogComponent, {
+      width: '400px',
+      data: { value: element.ibi, totalPD: element.totalPD }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result !== undefined) {
+        element.ibi = result; // update the cell value with formula result
+      }
+    });
+  }
+}
+
+
+---
+
+4. Formula Dialog Component
+
+(formula-dialog.component.ts)
+
+import { Component, Inject } from '@angular/core';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+
+@Component({
+  selector: 'app-formula-dialog',
+  template: `
+    <h3>Enter Formula</h3>
+    <mat-form-field appearance="outline" class="full-width">
+      <input matInput [(ngModel)]="formula" placeholder="e.g. @TotalPD*0.25-0.1">
+    </mat-form-field>
+
+    <div class="btns">
+      <button mat-raised-button color="primary" (click)="onOk()">Ok</button>
+      <button mat-raised-button color="warn" (click)="onCancel()">Cancel</button>
+    </div>
+  `,
+  styles: [`
+    .full-width { width: 100%; }
+    .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+    h3 { margin-bottom: 10px; }
+  `]
+})
+export class FormulaDialogComponent {
+  formula: string = '';
+
+  constructor(
+    public dialogRef: MatDialogRef<FormulaDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: any
+  ) {}
+
+  onOk(): void {
+    // simple eval just for demo (better: write your own parser)
+    let result = this.formula
+      .replace('@TotalPD', this.data.totalPD)
+      .replace('@value', this.data.value);
+
+    try {
+      // eslint-disable-next-line no-eval
+      const evaluated = eval(result);
+      this.dialogRef.close(evaluated);
+    } catch (e) {
+      alert('Invalid formula');
+    }
+  }
+
+  onCancel(): void {
+    this.dialogRef.close(undefined);
+  }
+}
+
+
+---
+
+5. SCSS (safe scoped styles, won’t leak)
+
+my-table.component.scss
+
+.custom-table {
+  width: 100%;
+  th, td {
+    padding: 8px;
+    text-align: center;
+  }
+}
+
+
+---
+
+✅ This design:
+
+Uses Angular Material Dialog (clean, no CSS conflicts).
+
+Opens popup only on fx click.
+
+Closes only on OK/Cancel.
+
+Formula text supports @TotalPD replacement.
+
+
+
+---
+
+Would you like me to also show you a Bootstrap-only (no Angular Material) version with a small inline popup (like Excel-style)?
+
+Perfect 👍 Let’s build the Bootstrap-only version (no Angular Material) so you get an inline formula editor popup like in your screenshot.
+
+
+---
+
+🔹 Bootstrap-Only Inline Popup Design
+
+1. HTML (table with fx button & popup)
+
+<table class="table table-bordered custom-table">
+  <thead>
+    <tr>
+      <th>Total PD</th>
+      <th>IBI</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr *ngFor="let row of data; let i = index">
+      <td>{{ row.totalPD }}</td>
+      <td>
+        {{ row.ibi }}
+        <button class="btn btn-link btn-sm p-0 fx-btn" (click)="openPopup(i)">
+          fx
+        </button>
+
+        <!-- Popup (inline inside the cell) -->
+        <div class="formula-popup" *ngIf="activeRow === i">
+          <input type="text"
+                 class="form-control form-control-sm"
+                 [(ngModel)]="formula"
+                 placeholder="@TotalPD*0.25-0.1" />
+
+          <div class="popup-actions">
+            <button class="btn btn-primary btn-sm" (click)="applyFormula(i)">Ok</button>
+            <button class="btn btn-secondary btn-sm" (click)="closePopup()">Cancel</button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+---
+
+2. Component TS
+
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-my-bootstrap-table',
+  templateUrl: './my-bootstrap-table.component.html',
+  styleUrls: ['./my-bootstrap-table.component.scss']
+})
+export class MyBootstrapTableComponent {
+  data = [
+    { totalPD: 26.8, ibi: 0 },
+    { totalPD: 15.2, ibi: 0 }
+  ];
+
+  activeRow: number | null = null;
+  formula: string = '';
+
+  openPopup(rowIndex: number) {
+    this.activeRow = rowIndex;
+    this.formula = '';
+  }
+
+  closePopup() {
+    this.activeRow = null;
+    this.formula = '';
+  }
+
+  applyFormula(rowIndex: number) {
+    let expression = this.formula.replace('@TotalPD', this.data[rowIndex].totalPD.toString());
+
+    try {
+      // simple eval for demo (⚠️ better: write your own parser for security)
+      // eslint-disable-next-line no-eval
+      const result = eval(expression);
+      this.data[rowIndex].ibi = result;
+      this.closePopup();
+    } catch (e) {
+      alert('Invalid formula');
+    }
+  }
+}
+
+
+---
+
+3. Scoped CSS (won’t leak to existing styles)
+
+my-bootstrap-table.component.scss
+
+.custom-table {
+  width: 100%;
+  th, td {
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .fx-btn {
+    font-weight: bold;
+    color: blue;
+    cursor: pointer;
+    margin-left: 5px;
+  }
+
+  .formula-popup {
+    position: absolute;
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 8px;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    z-index: 1000;
+    width: 250px;
+    margin-top: 5px;
+  }
+
+  .popup-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 6px;
+  }
+}
+
+
+---
+
+✅ This Bootstrap version:
+
+Works without Angular Material.
+
+Popup appears inline below the fx button.
+
+Popup closes only on OK/Cancel.
+
+CSS is scoped to component (so it won’t impact other pages).
+
+
+
+---
+
+👉 Do you want me to also make this popup draggable (like Excel-style formula editor) so you can move it around inside the page?
+
+Thanks for clarifying 🙏
+I understand now — you don’t want a centered modal dialog (like Angular Material MatDialog) or a background-blocking popup, but exactly like your screenshot:
+
+The formula box opens inline, attached to the clicked cell.
+
+Shows a small arrow/tooltip style pointer pointing to the column.
+
+Doesn’t block the rest of the screen.
+
+Only closes on OK / Cancel.
+
+
+This behavior is closer to Angular Material Popover/CDK Overlay or a Bootstrap popover style div — not a blocking dialog.
+
+
+---
+
+✅ Solution 1: Angular Material (using MatMenu / CDK Overlay)
+
+<!-- Table -->
+<table mat-table [dataSource]="data" class="custom-table">
+
+  <!-- Total PD Column -->
+  <ng-container matColumnDef="totalPD">
+    <th mat-header-cell *matHeaderCellDef> Total PD </th>
+    <td mat-cell *matCellDef="let element">{{ element.totalPD }}</td>
+  </ng-container>
+
+  <!-- IBI Column -->
+  <ng-container matColumnDef="ibi">
+    <th mat-header-cell *matHeaderCellDef> IBI </th>
+    <td mat-cell *matCellDef="let element; let i = index">
+      {{ element.ibi }}
+      <button mat-icon-button [matMenuTriggerFor]="formulaMenu" (click)="setActiveRow(i)">
+        fx
+      </button>
+    </td>
+  </ng-container>
+
+  <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+  <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+</table>
+
+<!-- Formula Popup -->
+<mat-menu #formulaMenu="matMenu" class="formula-menu">
+  <div class="formula-popup">
+    <input matInput [(ngModel)]="formula" placeholder="@TotalPD*0.25-0.1" />
+    <div class="actions">
+      <button mat-raised-button color="primary" (click)="applyFormula()">Ok</button>
+      <button mat-raised-button color="warn" (click)="cancelFormula()">Cancel</button>
+    </div>
+  </div>
+</mat-menu>
+
+TS
+
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-inline-popup',
+  templateUrl: './inline-popup.component.html',
+  styleUrls: ['./inline-popup.component.scss']
+})
+export class InlinePopupComponent {
+  displayedColumns = ['totalPD', 'ibi'];
+  data = [{ totalPD: 26.8, ibi: 0 }];
+  
+  activeRow: number | null = null;
+  formula = '';
+
+  setActiveRow(i: number) {
+    this.activeRow = i;
+    this.formula = '';
+  }
+
+  applyFormula() {
+    if (this.activeRow !== null) {
+      const expr = this.formula.replace('@TotalPD', this.data[this.activeRow].totalPD.toString());
+      try {
+        // eslint-disable-next-line no-eval
+        this.data[this.activeRow].ibi = eval(expr);
+      } catch {
+        alert('Invalid formula');
+      }
+    }
+  }
+
+  cancelFormula() {
+    this.activeRow = null;
+  }
+}
+
+CSS (arrow style popup like your screenshot)
+
+::ng-deep .mat-menu-panel.formula-menu {
+  padding: 8px !important;
+  overflow: visible !important;
+}
+
+.formula-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 260px;
+  position: relative;
+}
+
+.formula-popup::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 20px;
+  border-width: 8px;
+  border-style: solid;
+  border-color: transparent transparent white transparent;
+  filter: drop-shadow(0 -1px 1px rgba(0,0,0,0.2));
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+
+---
+
+✅ Solution 2: Bootstrap (popover-like custom div)
+
+If you prefer Bootstrap only, we can mimic the same arrow box:
+
+<td>
+  {{ row.ibi }}
+  <button class="btn btn-link p-0 fx-btn" (click)="openPopup(i, $event)">fx</button>
+
+  <div *ngIf="activeRow === i" class="formula-popup">
+    <input type="text" class="form-control form-control-sm" [(ngModel)]="formula">
+    <div class="popup-actions">
+      <button class="btn btn-sm btn-primary" (click)="applyFormula(i)">Ok</button>
+      <button class="btn btn-sm btn-secondary" (click)="closePopup()">Cancel</button>
+    </div>
+  </div>
+</td>
+
+.formula-popup {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px;
+  width: 250px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  z-index: 1000;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 20px;
+    border-width: 8px;
+    border-style: solid;
+    border-color: transparent transparent #fff transparent;
+    filter: drop-shadow(0 -1px 1px rgba(0,0,0,0.2));
+  }
+}
+
+.popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+
+---
+
+👉 So now you’ll get the same style popup with arrow pointing to the column (like your image) instead of a modal.
+
+Would you like me to finalize only one version (Angular Material popover OR Bootstrap arrow-popup) for you, so you can directly plug into your project?
+
+Got it 👍
+Since you want the popup exactly like your screenshot (small arrow popup attached to the column, not a blocking modal), the Bootstrap inline popup with arrow is the best fit — lightweight and looks exactly like Excel-style.
+
+Here’s the final code for you:
+
+
+---
+
+✅ Angular + Bootstrap Inline Formula Popup (with Arrow)
+
+1. HTML (table + fx button + popup)
+
+<table class="table table-bordered custom-table">
+  <thead>
+    <tr>
+      <th>Total PD</th>
+      <th>IBI</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr *ngFor="let row of data; let i = index">
+      <td>{{ row.totalPD }}</td>
+      <td class="position-relative">
+        {{ row.ibi }}
+        <button class="btn btn-link btn-sm p-0 fx-btn" (click)="openPopup(i)">
+          fx
+        </button>
+
+        <!-- Inline popup -->
+        <div *ngIf="activeRow === i" class="formula-popup">
+          <input type="text"
+                 class="form-control form-control-sm"
+                 [(ngModel)]="formula"
+                 placeholder="@TotalPD*0.25-0.1" />
+
+          <div class="popup-actions">
+            <button class="btn btn-primary btn-sm" (click)="applyFormula(i)">Ok</button>
+            <button class="btn btn-secondary btn-sm" (click)="closePopup()">Cancel</button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+---
+
+2. TS Component
+
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-my-table',
+  templateUrl: './my-table.component.html',
+  styleUrls: ['./my-table.component.scss']
+})
+export class MyTableComponent {
+  data = [
+    { totalPD: 26.8, ibi: 0 },
+    { totalPD: 15.2, ibi: 0 }
+  ];
+
+  activeRow: number | null = null;
+  formula: string = '';
+
+  openPopup(rowIndex: number) {
+    this.activeRow = rowIndex;
+    this.formula = '';
+  }
+
+  closePopup() {
+    this.activeRow = null;
+    this.formula = '';
+  }
+
+  applyFormula(rowIndex: number) {
+    const expr = this.formula.replace('@TotalPD', this.data[rowIndex].totalPD.toString());
+    try {
+      // ⚠️ Simple eval for demo only (for production, use a parser for security)
+      // eslint-disable-next-line no-eval
+      const result = eval(expr);
+      this.data[rowIndex].ibi = result;
+      this.closePopup();
+    } catch {
+      alert('Invalid formula');
+    }
+  }
+}
+
+
+---
+
+3. Scoped CSS (with arrow pointer 🎯)
+
+my-table.component.scss
+
+.custom-table {
+  width: 100%;
+  th, td {
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .fx-btn {
+    font-weight: bold;
+    color: blue;
+    cursor: pointer;
+    margin-left: 5px;
+  }
+
+  .formula-popup {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 6px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px;
+    width: 260px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    z-index: 1000;
+
+    &::before {
+      content: "";
+      position: absolute;
+      top: -8px;
+      left: 20px;
+      border-width: 8px;
+      border-style: solid;
+      border-color: transparent transparent #fff transparent;
+      filter: drop-shadow(0 -1px 1px rgba(0,0,0,0.2));
+    }
+  }
+
+  .popup-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 6px;
+  }
+}
+
+
+---
+
+✅ Features:
+
+Popup attaches directly under the fx button (like your image).
+
+Arrow points to the column.
+
+Popup closes only on OK / Cancel.
+
+Safe scoped CSS so it won’t break your existing app.
+
+
+
+---
+
+👉 Do you also want me to make this reusable for multiple columns (so you can add the fx popup to any column, not just IBI)?
+
+Perfect 👍 Let’s make this reusable Angular component so you can drop an fx popup into any table column (not just IBI).
+
+
+---
+
+✅ Step 1 – Create a Reusable Component
+
+formula-popup.component.ts
+
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+
+@Component({
+  selector: 'app-formula-popup',
+  templateUrl: './formula-popup.component.html',
+  styleUrls: ['./formula-popup.component.scss']
+})
+export class FormulaPopupComponent {
+  @Input() show = false;                 // whether popup is visible
+  @Input() context: any = {};            // row data (ex: { totalPD: 26.8 })
+  @Output() closed = new EventEmitter<void>();
+  @Output() applied = new EventEmitter<number>();
+
+  formula = '';
+
+  onOk() {
+    if (!this.formula) {
+      this.closed.emit();
+      return;
+    }
+
+    try {
+      let expr = this.formula;
+      // Replace tokens with context values (e.g. @TotalPD)
+      Object.keys(this.context).forEach(key => {
+        expr = expr.replace(new RegExp(`@${key}`, 'g'), this.context[key]);
+      });
+
+      // ⚠️ Demo only: eval is unsafe in production!
+      // In production use a formula parser
+      // eslint-disable-next-line no-eval
+      const result = eval(expr);
+      this.applied.emit(result);
+    } catch {
+      alert('Invalid formula');
+    }
+    this.closed.emit();
+  }
+
+  onCancel() {
+    this.closed.emit();
+  }
+}
+
+
+---
+
+formula-popup.component.html
+
+<div *ngIf="show" class="formula-popup">
+  <input type="text"
+         class="form-control form-control-sm"
+         [(ngModel)]="formula"
+         placeholder="@TotalPD*0.25-0.1" />
+
+  <div class="popup-actions">
+    <button class="btn btn-primary btn-sm" (click)="onOk()">Ok</button>
+    <button class="btn btn-secondary btn-sm" (click)="onCancel()">Cancel</button>
+  </div>
+</div>
+
+
+---
+
+formula-popup.component.scss
+
+.formula-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px;
+  width: 260px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  z-index: 1000;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 20px;
+    border-width: 8px;
+    border-style: solid;
+    border-color: transparent transparent #fff transparent;
+    filter: drop-shadow(0 -1px 1px rgba(0,0,0,0.2));
+  }
+}
+
+.popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+
+---
+
+✅ Step 2 – Use in Your Table Anywhere
+
+my-table.component.html
+
+<table class="table table-bordered custom-table">
+  <thead>
+    <tr>
+      <th>Total PD</th>
+      <th>IBI</th>
+      <th>Other TE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr *ngFor="let row of data; let i = index">
+      <td>{{ row.totalPD }}</td>
+
+      <!-- Example 1: IBI column -->
+      <td class="position-relative">
+        {{ row.ibi }}
+        <button class="btn btn-link btn-sm p-0 fx-btn" (click)="togglePopup(i, 'ibi')">fx</button>
+
+        <app-formula-popup
+          [show]="activeCell?.row === i && activeCell?.col === 'ibi'"
+          [context]="row"
+          (applied)="onFormulaApplied(i, 'ibi', $event)"
+          (closed)="closePopup()">
+        </app-formula-popup>
+      </td>
+
+      <!-- Example 2: Other TE column -->
+      <td class="position-relative">
+        {{ row.otherTE }}
+        <button class="btn btn-link btn-sm p-0 fx-btn" (click)="togglePopup(i, 'otherTE')">fx</button>
+
+        <app-formula-popup
+          [show]="activeCell?.row === i && activeCell?.col === 'otherTE'"
+          [context]="row"
+          (applied)="onFormulaApplied(i, 'otherTE', $event)"
+          (closed)="closePopup()">
+        </app-formula-popup>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+---
+
+✅ Step 3 – Table Component Logic
+
+my-table.component.ts
+
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-my-table',
+  templateUrl: './my-table.component.html',
+  styleUrls: ['./my-table.component.scss']
+})
+export class MyTableComponent {
+  data = [
+    { totalPD: 26.8, ibi: 0, otherTE: 0 },
+    { totalPD: 15.2, ibi: 0, otherTE: 0 }
+  ];
+
+  activeCell: { row: number, col: string } | null = null;
+
+  togglePopup(rowIndex: number, col: string) {
+    if (this.activeCell?.row === rowIndex && this.activeCell?.col === col) {
+      this.activeCell = null; // close if clicking same again
+    } else {
+      this.activeCell = { row: rowIndex, col };
+    }
+  }
+
+  closePopup() {
+    this.activeCell = null;
+  }
+
+  onFormulaApplied(rowIndex: number, col: string, result: number) {
+    this.data[rowIndex][col] = result;
+  }
+}
+
+
+---
+
+✅ Benefits of This Design
+
+app-formula-popup is fully reusable.
+
+You can drop it into any column with just:
+
+<app-formula-popup [show]="..." [context]="row"></app-formula-popup>
+
+Formula tokens (like @TotalPD) automatically map from the row object keys.
+
+Popup attaches inline with arrow under the fx button, just like your screenshot.
+
+Controlled by activeCell (row + column tracking).
+
+
+
+---
+
+👉 Do you also want me to extend this so the popup position auto-adjusts (e.g., if the table cell is near the bottom, the popup opens above instead of below)?
+
+Perfect 👌 you’re absolutely right — if the popup is on the last row or right-side column, it may get cut off.
+We can fix this by auto-adjusting popup position (above or to the left) depending on screen space.
+
+We’ll achieve this with a directive that measures the element and viewport, then applies a CSS class (popup-top / popup-left) to reposition the popup.
+
+
+---
+
+✅ Step 1 – Update Formula Popup (support position classes)
+
+formula-popup.component.html
+
+<div *ngIf="show" class="formula-popup" [ngClass]="positionClass">
+  <input type="text"
+         class="form-control form-control-sm"
+         [(ngModel)]="formula"
+         placeholder="@TotalPD*0.25-0.1" />
+
+  <div class="popup-actions">
+    <button class="btn btn-primary btn-sm" (click)="onOk()">Ok</button>
+    <button class="btn btn-secondary btn-sm" (click)="onCancel()">Cancel</button>
+  </div>
+</div>
+
+
+---
+
+formula-popup.component.ts
+
+import { Component, EventEmitter, Input, Output, ElementRef, AfterViewInit, HostListener } from '@angular/core';
+
+@Component({
+  selector: 'app-formula-popup',
+  templateUrl: './formula-popup.component.html',
+  styleUrls: ['./formula-popup.component.scss']
+})
+export class FormulaPopupComponent implements AfterViewInit {
+  @Input() show = false;
+  @Input() context: any = {};
+  @Output() closed = new EventEmitter<void>();
+  @Output() applied = new EventEmitter<number>();
+
+  formula = '';
+  positionClass: string = ''; // auto adjusted class
+
+  constructor(private el: ElementRef) {}
+
+  ngAfterViewInit() {
+    if (this.show) {
+      this.adjustPosition();
+    }
+  }
+
+  @HostListener('window:resize')
+  onResize() {
+    if (this.show) this.adjustPosition();
+  }
+
+  private adjustPosition() {
+    const popupEl: HTMLElement = this.el.nativeElement.querySelector('.formula-popup');
+    if (!popupEl) return;
+
+    const rect = popupEl.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let pos = '';
+
+    if (rect.right > viewportWidth - 10) {
+      pos += ' popup-left'; // shift left if overflowing right
+    }
+    if (rect.bottom > viewportHeight - 10) {
+      pos += ' popup-top'; // shift up if overflowing bottom
+    }
+
+    this.positionClass = pos.trim();
+  }
+
+  onOk() {
+    if (!this.formula) {
+      this.closed.emit();
+      return;
+    }
+    try {
+      let expr = this.formula;
+      Object.keys(this.context).forEach(key => {
+        expr = expr.replace(new RegExp(`@${key}`, 'g'), this.context[key]);
+      });
+      // ⚠️ demo only
+      // eslint-disable-next-line no-eval
+      const result = eval(expr);
+      this.applied.emit(result);
+    } catch {
+      alert('Invalid formula');
+    }
+    this.closed.emit();
+  }
+
+  onCancel() {
+    this.closed.emit();
+  }
+}
+
+
+---
+
+✅ Step 2 – CSS for auto-adjust positions
+
+formula-popup.component.scss
+
+.formula-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px;
+  width: 260px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  z-index: 1000;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 20px;
+    border-width: 8px;
+    border-style: solid;
+    border-color: transparent transparent #fff transparent;
+    filter: drop-shadow(0 -1px 1px rgba(0,0,0,0.2));
+  }
+}
+
+/* Popup above (if near bottom) */
+.popup-top {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 6px;
+
+  &::before {
+    top: auto;
+    bottom: -16px;
+    border-color: #fff transparent transparent transparent;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
+  }
+}
+
+/* Popup shifted left (if near right edge) */
+.popup-left {
+  left: auto;
+  right: 0;
+
+  &::before {
+    left: auto;
+    right: 20px;
+  }
+}
+
+/* Combine both (bottom-right corner case) */
+.popup-top.popup-left::before {
+  bottom: -16px;
+  right: 20px;
+}
+
+
+---
+
+✅ How it Works
+
+Default → opens below + left-aligned with arrow.
+
+If near right edge → shifts left.
+
+If near bottom edge → opens above.
+
+If in bottom-right corner → opens above & left.
+
+
+
+---
+
+👉 This way, your formula editor will never overflow the screen — always visible.
+
+Would you like me to also add click outside to close (like Excel tooltips), or should it strictly close only on OK/Cancel as you wanted earlier?
+
