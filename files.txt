@@ -1,44 +1,14 @@
-Ahh 👍 now I get it — you don’t just want a plain Material mat-menu, you want a popover-style box with an arrow, pointing to the column cell (like Excel or Bootstrap popovers).
+Perfect 👍 let’s make it smart so the popover auto-adjusts:
 
-Angular Material does not have a built-in “arrow popover”, but we can achieve it by:
+If the cell is on the right side (last columns), popover will open to the left with arrow pointing right.
 
-Using MatDialog or MatMenu with custom CSS.
-
-Adding a CSS arrow (::before / ::after).
-
-Positioning it to the left of the column cell with auto-adjust.
+If the cell is on the left side (first columns), popover will open to the right with arrow pointing left.
 
 
 
 ---
 
-✅ Example (Popover with Arrow, Strict Close)
-
-fx-popover.component.html
-
-<button mat-icon-button (click)="togglePopover($event)">
-  fx
-</button>
-
-<div 
-  class="fx-popover"
-  *ngIf="isOpen"
-  [ngStyle]="{ top: positionTop + 'px', left: positionLeft + 'px' }">
-
-  <div class="fx-arrow"></div>
-
-  <mat-form-field appearance="outline" class="fx-input">
-    <input matInput [(ngModel)]="formula" placeholder="Enter formula">
-  </mat-form-field>
-
-  <div class="fx-actions">
-    <button mat-button color="primary" (click)="onOk()">OK</button>
-    <button mat-button (click)="onCancel()">Cancel</button>
-  </div>
-</div>
-
-
----
+🔧 Updated Code
 
 fx-popover.component.ts
 
@@ -59,18 +29,27 @@ export class FxPopoverComponent {
   isOpen = false;
   positionTop = 0;
   positionLeft = 0;
-
-  constructor(private el: ElementRef) {}
+  arrowDirection: 'left' | 'right' = 'right'; // default
 
   togglePopover(event: MouseEvent) {
     this.isOpen = !this.isOpen;
 
     if (this.isOpen) {
       const rect = (event.target as HTMLElement).getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
 
-      // position popover to left of cell
+      const popoverWidth = 220; // approximate popover width
       this.positionTop = rect.top + window.scrollY;
-      this.positionLeft = rect.left + window.scrollX - 220; // popover width offset
+
+      if (rect.right + popoverWidth > viewportWidth) {
+        // Not enough space on right → open on LEFT
+        this.positionLeft = rect.left + window.scrollX - popoverWidth - 12;
+        this.arrowDirection = 'right';
+      } else {
+        // Enough space → open on RIGHT
+        this.positionLeft = rect.right + window.scrollX + 12;
+        this.arrowDirection = 'left';
+      }
     }
   }
 
@@ -89,11 +68,38 @@ export class FxPopoverComponent {
 
 ---
 
+fx-popover.component.html
+
+<button mat-icon-button (click)="togglePopover($event)">
+  fx
+</button>
+
+<div 
+  class="fx-popover"
+  *ngIf="isOpen"
+  [ngStyle]="{ top: positionTop + 'px', left: positionLeft + 'px' }">
+
+  <!-- arrow -->
+  <div class="fx-arrow" [ngClass]="arrowDirection"></div>
+
+  <mat-form-field appearance="outline" class="fx-input">
+    <input matInput [(ngModel)]="formula" placeholder="Enter formula">
+  </mat-form-field>
+
+  <div class="fx-actions">
+    <button mat-button color="primary" (click)="onOk()">OK</button>
+    <button mat-button (click)="onCancel()">Cancel</button>
+  </div>
+</div>
+
+
+---
+
 fx-popover.component.scss
 
 .fx-popover {
   position: absolute;
-  width: 200px;
+  width: 220px;
   padding: 12px;
   background: white;
   border: 1px solid #ccc;
@@ -113,13 +119,24 @@ fx-popover.component.scss
   }
 }
 
-/* Arrow pointing right (popover is on left of column) */
+/* Arrow styles */
 .fx-arrow {
   position: absolute;
   top: 12px;
-  right: -8px; /* arrow on right side */
   width: 0;
   height: 0;
+}
+
+.fx-arrow.left {
+  left: -8px;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 8px solid white;
+  filter: drop-shadow(-1px 0 1px rgba(0,0,0,0.2));
+}
+
+.fx-arrow.right {
+  right: -8px;
   border-top: 8px solid transparent;
   border-bottom: 8px solid transparent;
   border-left: 8px solid white;
@@ -129,19 +146,19 @@ fx-popover.component.scss
 
 ---
 
-⚡ Behavior
+✅ Now Behavior
 
-Click fx → popover with arrow opens to the left of the clicked cell.
+If clicked cell is near left edge → popover opens right side with arrow pointing left.
 
-Popover stays open until OK or Cancel.
+If clicked cell is near right edge → popover opens left side with arrow pointing right.
 
-Arrow makes it clear the popover belongs to that column.
+Popover strictly closes only on OK or Cancel.
 
-You can enhance logic: if the column is the first column (leftmost), then flip arrow & show on right instead.
+Looks exactly like a popover belonging to that column.
 
 
 
 ---
 
-👉 Do you want me to also add the auto-adjust logic so that if it’s the last column on the right, the popover flips and arrow goes the other way?
+Do you also want me to extend this so that the popover can open above/below the cell if there’s not enough vertical space (like Material CDK Overlay does)?
 
