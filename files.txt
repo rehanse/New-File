@@ -1,164 +1,101 @@
-Perfect 👍 let’s make it smart so the popover auto-adjusts:
-
-If the cell is on the right side (last columns), popover will open to the left with arrow pointing right.
-
-If the cell is on the left side (first columns), popover will open to the right with arrow pointing left.
-
+Got it 👍 thanks for pointing that out.
+If the popover is not showing when you click fx, a couple of things usually go wrong in Angular Material:
 
 
 ---
 
-🔧 Updated Code
+✅ Checklist to make it work
 
-fx-popover.component.ts
+1. Module imports
+In Angular 17 you must import the Material modules you use.
+Add in your app.module.ts (or feature module):
 
-import { Component, Input, Output, EventEmitter, ElementRef } from '@angular/core';
 
-@Component({
-  selector: 'app-fx-popover',
-  templateUrl: './fx-popover.component.html',
-  styleUrls: ['./fx-popover.component.scss']
+
+import { FormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+
+@NgModule({
+  imports: [
+    FormsModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatIconModule
+  ]
 })
-export class FxPopoverComponent {
-  @Input() rowIndex!: number;
-  @Input() colKey!: string;
-  @Input() value!: any;
-  @Output() formulaApplied = new EventEmitter<{ rowIndex: number, col: string, formula: string }>();
+export class AppModule {}
 
-  formula = '';
-  isOpen = false;
-  positionTop = 0;
-  positionLeft = 0;
-  arrowDirection: 'left' | 'right' = 'right'; // default
-
-  togglePopover(event: MouseEvent) {
-    this.isOpen = !this.isOpen;
-
-    if (this.isOpen) {
-      const rect = (event.target as HTMLElement).getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-
-      const popoverWidth = 220; // approximate popover width
-      this.positionTop = rect.top + window.scrollY;
-
-      if (rect.right + popoverWidth > viewportWidth) {
-        // Not enough space on right → open on LEFT
-        this.positionLeft = rect.left + window.scrollX - popoverWidth - 12;
-        this.arrowDirection = 'right';
-      } else {
-        // Enough space → open on RIGHT
-        this.positionLeft = rect.right + window.scrollX + 12;
-        this.arrowDirection = 'left';
-      }
-    }
-  }
-
-  onOk() {
-    this.formulaApplied.emit({ rowIndex: this.rowIndex, col: this.colKey, formula: this.formula });
-    this.isOpen = false;
-    this.formula = '';
-  }
-
-  onCancel() {
-    this.isOpen = false;
-    this.formula = '';
-  }
-}
+Without FormsModule → [(ngModel)] won’t work.
+Without Material modules → buttons, form-field, input won’t render.
 
 
 ---
 
-fx-popover.component.html
+2. Template binding
+Check that the click is really calling your method. In fx-popover.component.html you must have:
+
+
 
 <button mat-icon-button (click)="togglePopover($event)">
   fx
 </button>
 
-<div 
-  class="fx-popover"
-  *ngIf="isOpen"
-  [ngStyle]="{ top: positionTop + 'px', left: positionLeft + 'px' }">
+Try putting a debug log in togglePopover():
 
-  <!-- arrow -->
-  <div class="fx-arrow" [ngClass]="arrowDirection"></div>
+togglePopover(event: MouseEvent) {
+  console.log('FX clicked'); // 👈 test log
+  this.isOpen = !this.isOpen;
+  ...
+}
 
-  <mat-form-field appearance="outline" class="fx-input">
-    <input matInput [(ngModel)]="formula" placeholder="Enter formula">
-  </mat-form-field>
-
-  <div class="fx-actions">
-    <button mat-button color="primary" (click)="onOk()">OK</button>
-    <button mat-button (click)="onCancel()">Cancel</button>
-  </div>
-</div>
+If you don’t see FX clicked in browser console → the button or event binding is broken.
 
 
 ---
 
-fx-popover.component.scss
+3. Positioning CSS
+Make sure .fx-popover is absolutely positioned relative to the page.
+You might need:
+
+
 
 .fx-popover {
   position: absolute;
-  width: 220px;
-  padding: 12px;
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-
-  .fx-input {
-    width: 100%;
-  }
-
-  .fx-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 8px;
-  }
 }
 
-/* Arrow styles */
-.fx-arrow {
-  position: absolute;
-  top: 12px;
-  width: 0;
-  height: 0;
-}
+Otherwise Angular may render it but you can’t see it.
 
-.fx-arrow.left {
-  left: -8px;
-  border-top: 8px solid transparent;
-  border-bottom: 8px solid transparent;
-  border-right: 8px solid white;
-  filter: drop-shadow(-1px 0 1px rgba(0,0,0,0.2));
-}
 
-.fx-arrow.right {
-  right: -8px;
-  border-top: 8px solid transparent;
-  border-bottom: 8px solid transparent;
-  border-left: 8px solid white;
-  filter: drop-shadow(1px 0 1px rgba(0,0,0,0.2));
+---
+
+4. Z-index
+If the popover opens but hides behind table or other container, add:
+
+
+
+.fx-popover {
+  z-index: 2000;
 }
 
 
 ---
 
-✅ Now Behavior
+👉 Quick test:
+Replace the popover <div> with something simple first:
 
-If clicked cell is near left edge → popover opens right side with arrow pointing left.
+<div *ngIf="isOpen" style="position:absolute; background:red; color:white; padding:10px; z-index:2000;">
+  Test Popover
+  <button (click)="onCancel()">X</button>
+</div>
 
-If clicked cell is near right edge → popover opens left side with arrow pointing right.
-
-Popover strictly closes only on OK or Cancel.
-
-Looks exactly like a popover belonging to that column.
-
+If this shows up when clicking fx, then the issue is only styling.
 
 
 ---
 
-Do you also want me to extend this so that the popover can open above/below the cell if there’s not enough vertical space (like Material CDK Overlay does)?
+⚡ Question for you: Do you want me to simplify this into a minimal working demo (table + fx button + popover) so you can copy-paste and see it working end-to-end? That way we can confirm logic first before we add the arrow/auto-adjust part.
 
