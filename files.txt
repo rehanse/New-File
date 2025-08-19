@@ -1,4 +1,3 @@
-
 <button mat-icon-button [matMenuTriggerFor]="fxMenu" #trigger="matMenuTrigger">
   fx
 </button>
@@ -9,9 +8,9 @@
   yPosition="below" 
   xPosition="after"
   [overlapTrigger]="false"
-  [hasBackdrop]="true"
-  (closed)="onCancel()"> <!-- optional safety -->
-  
+  [hasBackdrop]="false"   <!-- 🚫 No backdrop, so outside clicks won’t close -->
+  [disableClose]="true">  <!-- 🚫 Strict: menu won’t auto-close -->
+
   <div class="fx-container" (click)="$event.stopPropagation()">
     <mat-form-field appearance="outline" class="fx-input">
       <input matInput [(ngModel)]="formula" placeholder="Enter formula">
@@ -23,14 +22,32 @@
     </div>
   </div>
 </mat-menu>
+import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
+import { MatMenuTrigger } from '@angular/material/menu';
 
-onOk() {
-  this.formulaApplied.emit({ rowIndex: this.rowIndex, col: this.colKey, formula: this.formula });
-  this.menuTrigger.closeMenu(); // close only when OK
-  this.formula = '';
-}
+@Component({
+  selector: 'app-fx-popover',
+  templateUrl: './fx-popover.component.html',
+  styleUrls: ['./fx-popover.component.scss']
+})
+export class FxPopoverComponent {
+  @Input() rowIndex!: number;
+  @Input() colKey!: string;
+  @Input() value!: any;
+  @Output() formulaApplied = new EventEmitter<{ rowIndex: number, col: string, formula: string }>();
 
-onCancel() {
-  this.menuTrigger.closeMenu(); // close only when Cancel
-  this.formula = '';
+  @ViewChild(MatMenuTrigger) menuTrigger!: MatMenuTrigger;
+
+  formula = '';
+
+  onOk() {
+    this.formulaApplied.emit({ rowIndex: this.rowIndex, col: this.colKey, formula: this.formula });
+    this.menuTrigger.closeMenu(); // ✅ Close only here
+    this.formula = '';
+  }
+
+  onCancel() {
+    this.menuTrigger.closeMenu(); // ✅ Close only here
+    this.formula = '';
+  }
 }
