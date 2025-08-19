@@ -1,114 +1,395 @@
-Got it 👍 that’s a very common bug when implementing popover-style components in a table.
+Absolutely — here’s a clean, step-by-step implementation of Option 2 (Shared PopoverService) using Angular 17 + Angular Material, with:
 
-Right now, each <app-fx-popover> manages its own isOpen state, so if you click multiple fx buttons → multiple popovers stay open.
+Only one popover open at a time (service-controlled)
 
-We need a single source of truth so that only one popover is open at a time.
+Strict close (only OK/Cancel)
 
+Arrow pointing to the cell
 
----
+Auto left/right positioning (flips if near the right edge)
 
-🔧 Solution Approaches
+Works in tables with many rows/columns
 
-Option 1 – Manage State in Parent (Table Component)
-
-Instead of letting each popover track its own state, keep the active cell (row + column) in the table component.
-
-table.component.ts
-
-activePopover: { rowIndex: number, colKey: string } | null = null;
-
-openPopover(rowIndex: number, colKey: string) {
-  this.activePopover = { rowIndex, colKey };
-}
-
-closePopover() {
-  this.activePopover = null;
-}
-
-isActive(rowIndex: number, colKey: string): boolean {
-  return this.activePopover?.rowIndex === rowIndex &&
-         this.activePopover?.colKey === colKey;
-}
-
-table.component.html
-
-<td mat-cell *matCellDef="let element; let i = index">
-  {{element.salary}}
-  <app-fx-popover
-    [rowIndex]="i"
-    colKey="salary"
-    [isOpen]="isActive(i, 'salary')"
-    (opened)="openPopover(i, 'salary')"
-    (closed)="closePopover()"
-  ></app-fx-popover>
-</td>
 
 
 ---
 
-Option 2 – Use a Shared Service
+0) Prereqs (Angular Material & Forms)
 
-Create a PopoverService with a BehaviorSubject<{rowIndex, colKey}>.
-Each popover subscribes → if it’s not the active one, it closes itself.
+Install (if you haven’t):
 
-This is useful if popover components are scattered in many places.
+ng add @angular/material
+
+Make sure you have these in your app (standalone or module):
+
+// If using standalone components, each component will list needed imports.
+// If using NgModule:
+import { FormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule }   from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule }  from '@angular/material/input';
+import { MatTableModule }  from '@angular/material/table';
 
 
 ---
 
-Popover Component Update
+1) Popover Service
 
-fx-popover.component.ts:
+popover.service.ts
 
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Injectable } from '@angular/core';
+import { BehaviorSubject } from 'rxjs';
+
+export interface ActivePopover {
+  rowIndex: number;
+  colKey: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class PopoverService {
+  private activePopoverSubject = new BehaviorSubject<ActivePopover | null>(null);
+  activePopover$ = this.activePopoverSubject.asObservable();
+
+  setActive(rowIndex: number, colKey: string) {
+    this.activePopoverSubject.next({ rowIndex, colKey });
+  }
+
+  clearActive() {
+    this.activePopoverSubject.next(null);
+  }
+
+  getActive(): ActivePopover | null {
+    return this.activePopoverSubject.value;
+  }
+}
+
+
+---
+
+2) Reusable Popover Component (standalone)
+
+fx-popover.component.ts
+
+import { Component, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule }   from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule }  from '@angular/material/input';
+import { Subscription } from 'rxjs';
+import { PopoverService } from './popover.service';
+
+type ArrowSide = 'left' | 'right';
 
 @Component({
   selector: 'app-fx-popover',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule],
   templateUrl: './fx-popover.component.html',
   styleUrls: ['./fx-popover.component.scss']
 })
-export class FxPopoverComponent {
+export class FxPopoverComponent implements OnInit, OnDestroy {
   @Input() rowIndex!: number;
   @Input() colKey!: string;
-  @Input() isOpen = false;
 
-  @Output() opened = new EventEmitter<void>();
-  @Output() closed = new EventEmitter<void>();
+  /** Emits when user clicks OK with the formula text */
+  @Output() formulaApplied = new EventEmitter<{ rowIndex: number; col: string; formula: string }>();
 
-  formula: string = '';
+  isOpen = false;
+  formula = '';
 
-  togglePopover(event: MouseEvent) {
+  // fixed-positioned coordinates (viewport)
+  top = 0;
+  left = 0;
+  arrowSide: ArrowSide = 'left';
+
+  private sub!: Subscription;
+  private triggerRect: DOMRect | null = null;
+  private readonly POPOVER_W = 260; // px
+  private readonly GAP = 12;        // gap between button and popover
+
+  constructor(private popovers: PopoverService) {}
+
+  ngOnInit() {
+    this.sub = this.popovers.activePopover$.subscribe(active => {
+      const shouldBeOpen = !!active && active.rowIndex === this.rowIndex && active.colKey === this.colKey;
+      this.isOpen = shouldBeOpen;
+
+      // When opening, (re)calculate position using last trigger rect if available
+      if (this.isOpen && this.triggerRect) {
+        this.calcPosition(this.triggerRect);
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    this.sub?.unsubscribe();
+  }
+
+  /** Click handler on the fx button */
+  onFxClick(ev: MouseEvent) {
+    const target = ev.currentTarget as HTMLElement;
+    this.triggerRect = target.getBoundingClientRect();
+
     if (!this.isOpen) {
-      this.opened.emit();
+      // open this popover (and automatically close any other)
+      this.popovers.setActive(this.rowIndex, this.colKey);
+      this.calcPosition(this.triggerRect);
     } else {
-      this.closed.emit();
+      // close this popover
+      this.popovers.clearActive();
     }
   }
 
+  /** Strict closing: only OK/Cancel will close */
   onOk() {
-    console.log('Formula applied:', this.formula);
-    this.closed.emit();
+    this.formulaApplied.emit({ rowIndex: this.rowIndex, col: this.colKey, formula: this.formula });
+    this.formula = '';
+    this.popovers.clearActive();
   }
 
   onCancel() {
-    this.closed.emit();
+    this.formula = '';
+    this.popovers.clearActive();
+  }
+
+  /** Reposition on resize/scroll while open */
+  @HostListener('window:resize')
+  @HostListener('window:scroll')
+  onViewportChange() {
+    if (!this.isOpen || !this.triggerRect) return;
+    this.calcPosition(this.triggerRect);
+  }
+
+  /** Decide left/right, compute top/left in viewport (position: fixed) */
+  private calcPosition(rect: DOMRect) {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Default: open to the right of the fx button
+    let left = rect.right + this.GAP;
+    let arrow: ArrowSide = 'left';
+
+    // If it would overflow right edge, open on left
+    if (left + this.POPOVER_W > vw) {
+      left = rect.left - this.GAP - this.POPOVER_W;
+      arrow = 'right';
+    }
+
+    // Vertical placement: try aligning top to button top; clamp inside viewport with small margin
+    const margin = 8;
+    let top = rect.top;
+    if (top + 10 > vh - margin) top = vh - margin - 10; // minimal clamp
+    if (top < margin) top = margin;
+
+    this.left = Math.round(left);
+    this.top = Math.round(top);
+    this.arrowSide = arrow;
   }
 }
 
+fx-popover.component.html
+
+<!-- FX button -->
+<button mat-icon-button (click)="onFxClick($event)" aria-label="Edit via formula">
+  <mat-icon>functions</mat-icon>
+</button>
+
+<!-- Fixed-position popover (strict: no outside-close) -->
+<div *ngIf="isOpen"
+     class="fx-popover"
+     [ngClass]="arrowSide"
+     [style.left.px]="left"
+     [style.top.px]="top"
+     (click)="$event.stopPropagation()">
+
+  <div class="arrow"></div>
+
+  <mat-form-field appearance="outline" class="fx-input">
+    <input matInput [(ngModel)]="formula" placeholder="Enter formula (e.g. @TotalPD*0.25-0.1)">
+  </mat-form-field>
+
+  <div class="fx-actions">
+    <button mat-button (click)="onCancel()">Cancel</button>
+    <button mat-raised-button color="primary" (click)="onOk()">OK</button>
+  </div>
+</div>
+
+fx-popover.component.scss
+
+/* The floating popover */
+.fx-popover {
+  position: fixed; /* use viewport coordinates */
+  width: 260px;
+  background: #fff;
+  border: 1px solid #dadde1;
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+  z-index: 9000;
+
+  .fx-input { width: 100%; }
+
+  .fx-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  /* arrow base */
+  .arrow {
+    position: absolute;
+    top: 12px;
+    width: 0; height: 0;
+    border: 8px solid transparent;
+    filter: drop-shadow(0 0 1px rgba(0,0,0,0.25));
+  }
+
+  &.left .arrow {
+    left: -16px;
+    border-right-color: #fff;
+  }
+
+  &.right .arrow {
+    right: -16px;
+    border-left-color: #fff;
+  }
+}
+
+> Notes
+• We use position: fixed + getBoundingClientRect() so it floats correctly even inside scrolling tables.
+• Strict close: only onOk()/onCancel() clears the service’s active popover.
+• Opening a new popover calls setActive → all others auto-close via the subscription.
+
+
+
 
 ---
 
-✅ Behavior Now
+3) Use in a Material Table
 
-When you click fx in row 1, col A → popover opens.
+app.component.ts (example table)
 
-When you click fx in row 2, col B → previous closes automatically.
+import { Component } from '@angular/core';
+import { MatTableModule } from '@angular/material/table';
+import { FxPopoverComponent } from './fx-popover.component'; // adjust path
 
-At most one popover open across entire table.
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [MatTableModule, FxPopoverComponent],
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss']
+})
+export class AppComponent {
+  displayedColumns = ['name', 'age', 'salary'];
+  data = [
+    { name: 'John', age: 28, salary: 50000, TotalPD: 26.8 },
+    { name: 'Alice', age: 32, salary: 65000, TotalPD: 15.2 },
+    { name: 'Bob', age: 41, salary: 80000, TotalPD: 30.1 }
+  ];
+
+  // (Optional) handle formula if you want to apply a result back to the table
+  onFormulaApplied(e: { rowIndex: number; col: string; formula: string }) {
+    console.log('Apply formula', e);
+    // Example: simple replacement for @TotalPD (avoid eval in real apps)
+    const row = this.data[e.rowIndex];
+    const expr = e.formula.replace(/@TotalPD/g, String(row.TotalPD));
+    try {
+      // eslint-disable-next-line no-eval
+      const result = eval(expr);
+      (row as any)[e.col] = result;
+    } catch {
+      alert('Invalid formula');
+    }
+  }
+}
+
+app.component.html
+
+<table mat-table [dataSource]="data" class="mat-elevation-z2 w-full">
+
+  <!-- Name -->
+  <ng-container matColumnDef="name">
+    <th mat-header-cell *matHeaderCellDef>Name</th>
+    <td mat-cell *matCellDef="let row; let i = index">
+      {{ row.name }}
+      <app-fx-popover
+        [rowIndex]="i"
+        colKey="name"
+        (formulaApplied)="onFormulaApplied($event)">
+      </app-fx-popover>
+    </td>
+  </ng-container>
+
+  <!-- Age -->
+  <ng-container matColumnDef="age">
+    <th mat-header-cell *matHeaderCellDef>Age</th>
+    <td mat-cell *matCellDef="let row; let i = index">
+      {{ row.age }}
+      <app-fx-popover
+        [rowIndex]="i"
+        colKey="age"
+        (formulaApplied)="onFormulaApplied($event)">
+      </app-fx-popover>
+    </td>
+  </ng-container>
+
+  <!-- Salary -->
+  <ng-container matColumnDef="salary">
+    <th mat-header-cell *matHeaderCellDef>Salary</th>
+    <td mat-cell *matCellDef="let row; let i = index">
+      {{ row.salary }}
+      <app-fx-popover
+        [rowIndex]="i"
+        colKey="salary"
+        (formulaApplied)="onFormulaApplied($event)">
+      </app-fx-popover>
+    </td>
+  </ng-container>
+
+  <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+  <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+</table>
+
+app.component.scss (optional)
+
+.w-full { width: 100%; }
+
+
+---
+
+4) How the “only one open” works
+
+Each <app-fx-popover> subscribes to PopoverService.activePopover$.
+
+Clicking fx:
+
+If closed → setActive(rowIndex, colKey) → all popovers receive it; only the matching one opens; any previously open popover sees it no longer matches → closes.
+
+If open → clearActive() closes it.
+
+
+No backdrop; clicking elsewhere does not close (strict). Opening another fx still closes the previous one (via service).
 
 
 
 ---
 
-⚡ Question for you: Do you prefer me to finish this with the parent-managed approach (Option 1, simpler) or the service-based approach (Option 2, scalable)?
+5) Optional Enhancements
+
+Add top/bottom flipping if vertical space is tight (same idea as left/right; change top and add arrow on top/bottom).
+
+Replace eval with a safe lib like mathjs.
+
+Trap focus inside the popover if you want keyboard strictness.
+
+
+
+---
+
+If you copy these files as-is (fix imports/paths), you’ll have a working service-driven, strict, arrowed, auto-positioning popover that behaves correctly across a large table. Want me to add top/bottom auto-flip too?
 
