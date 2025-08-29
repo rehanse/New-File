@@ -1,121 +1,68 @@
-Great question 👍
+using FluentValidation;
+using NCalc;
 
-You basically have three realistic options for evaluating the formula in property B and comparing it with A in FluentValidation. Let me break them down with pros & cons so you can pick the best for your use case:
-
-
----
-
-🔹 1. NCalc (Recommended in most cases)
-
-var expr = new Expression("Building + 10 * 20");
-expr.Parameters["Building"] = 50; // safer than string replace
-var result = expr.Evaluate(); // → 250
-
-✅ Pros
-
-Designed for evaluating mathematical & logical expressions.
-
-Safe (sandboxed, no arbitrary C# execution).
-
-Supports variables, functions, custom parameters.
-
-Easy to integrate and maintain.
-
-
-❌ Cons
-
-External NuGet dependency (NCalc).
-
-Slightly slower than raw C# (but negligible for most apps).
-
-
-👉 Best for: Business rules, configurable expressions, enterprise apps.
-
-
----
-
-🔹 2. DataTable.Compute (Hacky)
-
-using System.Data;
-
-string expr = "50 + 10 * 20"; 
-var result = new DataTable().Compute(expr, null); // → 250
-
-✅ Pros
-
-Built-in (no extra library).
-
-Quick & simple for math-only expressions.
-
-
-❌ Cons
-
-No support for variables (you’d need manual string replace).
-
-Vulnerable to injection if input isn’t sanitized.
-
-Limited functionality compared to NCalc.
-
-
-👉 Best for: Small apps, throwaway scripts, quick hacks.
-
-
----
-
-🔹 3. Roslyn C# Scripting
-
-using Microsoft.CodeAnalysis.CSharp.Scripting;
-
-var result = await CSharpScript.EvaluateAsync<int>("Building + 10 * 20",
-    globals: new { Building = 50 });
-
-✅ Pros
-
-Runs real C# (full power of the language).
-
-Extremely flexible.
-
-
-❌ Cons
-
-Heavy (requires Roslyn packages).
-
-Security risk: executing arbitrary C# code if input is untrusted.
-
-Overkill for just formulas like "Building + 10 * 20".
-
-
-👉 Best for: Advanced scenarios where users really need full C# scripting (like Excel formulas or DSLs).
-
-
----
-
-✅ My Recommendation
-
-For your case (A should equal evaluated B where C is the variable):
-👉 Use NCalc with parameter substitution.
-
-It’s safe, expressive, and built exactly for this type of rule validation.
-Example (better than string replace 👇):
-
-private bool BeValidExpression(MyModel model)
+public class MyModel
 {
-    try
-    {
-        var expr = new Expression(model.B);
-        expr.Parameters["Building"] = model.C;
+    public decimal A { get; set; }  // Numeric value
+    public string B { get; set; }   // Expression (e.g. "Building + 10 * 20")
+    public decimal C { get; set; }  // Building value
+}
 
-        var result = expr.Evaluate();
-        return Convert.ToDecimal(result) == model.A;
-    }
-    catch
+public class MyModelValidator : AbstractValidator<MyModel>
+{
+    public MyModelValidator()
     {
-        return false;
+        RuleFor(x => x)
+            .Must(BeValidExpression)
+            .WithMessage("A must equal the evaluated expression from B.");
+    }
+
+    private bool BeValidExpression(MyModel model)
+    {
+        if (string.IsNullOrWhiteSpace(model.B))
+            return false;
+
+        try
+        {
+            // Replace "Building" keyword with actual C value
+            string expressionText = model.B.Replace("Building", model.C.ToString());
+
+            // Use NCalc to evaluate
+            var expr = new Expression(expressionText);
+            var result = expr.Evaluate();
+
+            if (result == null)
+                return false;
+
+            decimal evaluatedValue = Convert.ToDecimal(result);
+
+            return model.A == evaluatedValue;
+        }
+        catch
+        {
+            return false; // Invalid expression
+        }
     }
 }
 
+var model = new MyModel
+{
+    A = 250,
+    B = "Building + 10 * 20",
+    C = 50
+};
 
----
+var validator = new MyModelValidator();
+var result = validator.Validate(model);
 
-Do you want me to extend this and show you a complete FluentValidation rule with NCalc parameters (instead of doing string replace) so you get the cleanest & safest version?
-
+if (!result.IsValid)
+{
+    foreach (var error in result.Errors)
+    {
+        Console.WriteLine(error.ErrorMessage);
+    }
+}
+else
+{
+    Console.WriteLine("Validation Passed ✅");
+}
