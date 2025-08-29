@@ -1,127 +1,121 @@
-Got it 👍
-From your screenshots, I see the first image is the current design (popover with formula input) and you want to make it look like the second image (Excel-like popup formula editor aligned to the column, with a clean input box and OK/Cancel buttons at the bottom).
+Great question 👍
 
-I’ll rewrite your Angular template (HTML) and provide CSS so that the formula editor looks like your second screenshot.
-
-
----
-
-✅ Updated Angular HTML
-
-<div appDisableControl [condition]="isRetReadOnly" [alwaysEnabledClass]="'btn-secondary'">
-
-  <!-- fx trigger -->
-  <a [matMenuTriggerFor]="fxMenu" #menuTrigger="matMenuTrigger" class="fx-anchor-top-right"
-     (click)="opened.emit(); $event.stopPropagation();">
-    <span [ngClass]="rowFormGroup?.get(formulaControlName)?.value ? 'fx-icon-blue': 'fx-icon-gray'">
-      fx
-    </span>
-  </a>
-
-  <!-- Formula Popup -->
-  <mat-menu #fxMenu="matMenu" class="fx-popover-menu" yPosition="below" xPosition="after" [overlapTrigger]="false" [hasBackdrop]="false">
-    <div class="fx-popup-container" (click)="$event.stopPropagation()">
-
-      <!-- Formula Input -->
-      <mat-form-field appearance="outline" class="fx-input-field">
-        <input matInput type="text"
-               #inputRef
-               [formControl]="formulaControl"
-               [value]="rowFormGroup?.get(formulaControlName)?.value"
-               [mentionConfig]="mentionConfig"
-               [mentionListTemplate]="mentionListTemplate"
-               placeholder="Type @"
-               class="formula-input" />
-        <ng-template #mentionListTemplate let-item="item">
-          <span>{{ item.columnName }}</span>
-        </ng-template>
-      </mat-form-field>
-
-      <!-- Action buttons -->
-      <div class="fx-actions">
-        <button mat-stroked-button color="primary" (click)="onok()">Ok</button>
-        <button mat-stroked-button color="warn" (click)="onCancel()">Cancel</button>
-      </div>
-    </div>
-  </mat-menu>
-</div>
+You basically have three realistic options for evaluating the formula in property B and comparing it with A in FluentValidation. Let me break them down with pros & cons so you can pick the best for your use case:
 
 
 ---
 
-✅ CSS (formula popup like second screenshot)
+🔹 1. NCalc (Recommended in most cases)
 
-/* container look */
-.fx-popup-container {
-  background: #fff;
-  border: 1px solid #d1d1d1;
-  border-radius: 6px;
-  padding: 12px;
-  width: 350px; /* set width like in 2nd screenshot */
-  box-shadow: 0px 2px 8px rgba(0,0,0,0.15);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+var expr = new Expression("Building + 10 * 20");
+expr.Parameters["Building"] = 50; // safer than string replace
+var result = expr.Evaluate(); // → 250
 
-/* input box */
-.fx-input-field {
-  width: 100%;
-}
+✅ Pros
 
-.formula-input {
-  font-family: monospace;
-  font-size: 14px;
-  padding: 6px;
-}
+Designed for evaluating mathematical & logical expressions.
 
-/* action buttons */
-.fx-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
+Safe (sandboxed, no arbitrary C# execution).
 
-.fx-actions button {
-  min-width: 70px;
-  border-radius: 4px;
-}
+Supports variables, functions, custom parameters.
 
-/* fx icon trigger */
-.fx-anchor-top-right {
-  text-decoration: none;
-  cursor: pointer;
-}
+Easy to integrate and maintain.
 
-.fx-icon-blue {
-  color: #1976d2;
-  font-weight: bold;
-}
 
-.fx-icon-gray {
-  color: gray;
+❌ Cons
+
+External NuGet dependency (NCalc).
+
+Slightly slower than raw C# (but negligible for most apps).
+
+
+👉 Best for: Business rules, configurable expressions, enterprise apps.
+
+
+---
+
+🔹 2. DataTable.Compute (Hacky)
+
+using System.Data;
+
+string expr = "50 + 10 * 20"; 
+var result = new DataTable().Compute(expr, null); // → 250
+
+✅ Pros
+
+Built-in (no extra library).
+
+Quick & simple for math-only expressions.
+
+
+❌ Cons
+
+No support for variables (you’d need manual string replace).
+
+Vulnerable to injection if input isn’t sanitized.
+
+Limited functionality compared to NCalc.
+
+
+👉 Best for: Small apps, throwaway scripts, quick hacks.
+
+
+---
+
+🔹 3. Roslyn C# Scripting
+
+using Microsoft.CodeAnalysis.CSharp.Scripting;
+
+var result = await CSharpScript.EvaluateAsync<int>("Building + 10 * 20",
+    globals: new { Building = 50 });
+
+✅ Pros
+
+Runs real C# (full power of the language).
+
+Extremely flexible.
+
+
+❌ Cons
+
+Heavy (requires Roslyn packages).
+
+Security risk: executing arbitrary C# code if input is untrusted.
+
+Overkill for just formulas like "Building + 10 * 20".
+
+
+👉 Best for: Advanced scenarios where users really need full C# scripting (like Excel formulas or DSLs).
+
+
+---
+
+✅ My Recommendation
+
+For your case (A should equal evaluated B where C is the variable):
+👉 Use NCalc with parameter substitution.
+
+It’s safe, expressive, and built exactly for this type of rule validation.
+Example (better than string replace 👇):
+
+private bool BeValidExpression(MyModel model)
+{
+    try
+    {
+        var expr = new Expression(model.B);
+        expr.Parameters["Building"] = model.C;
+
+        var result = expr.Evaluate();
+        return Convert.ToDecimal(result) == model.A;
+    }
+    catch
+    {
+        return false;
+    }
 }
 
 
 ---
 
-🔑 Key Improvements
-
-1. Popup looks like Excel formula editor → box with white background, shadow, and border.
-
-
-2. Input field styled monospace → makes formula text more readable.
-
-
-3. Ok / Cancel buttons at bottom-right → similar to screenshot 2.
-
-
-4. Better spacing and alignment with flex + gap.
-
-
-
-
----
-
-👉 Do you want me to also auto-focus the input when the popup opens (like Excel does), so the user can start typing formula immediately?
+Do you want me to extend this and show you a complete FluentValidation rule with NCalc parameters (instead of doing string replace) so you get the cleanest & safest version?
 
