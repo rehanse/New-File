@@ -1,68 +1,168 @@
-using FluentValidation;
-using NCalc;
+Got it 👍
+You want to replace Angular Material’s mat-menu with ngx-bootstrap popover, but still keep the same behavior:
 
-public class MyModel
-{
-    public decimal A { get; set; }  // Numeric value
-    public string B { get; set; }   // Expression (e.g. "Building + 10 * 20")
-    public decimal C { get; set; }  // Building value
+Parent → child component interaction (via @Input / @Output)
+
+A textbox with Angular Mention inside popover
+
+Two buttons: Cancel & OK
+
+The popover opens when you click an icon (fx), and it should close when Cancel/Ok clicked
+
+
+Here’s a step-by-step process with working sample code for ngx-bootstrap v12.0:
+
+
+---
+
+1. Install dependencies
+
+If not already installed:
+
+npm install ngx-bootstrap --save
+npm install angular-mentions --save
+
+
+---
+
+2. Import Modules
+
+In your app.module.ts (or shared module):
+
+import { PopoverModule } from 'ngx-bootstrap/popover';
+import { MentionModule } from 'angular-mentions';
+
+@NgModule({
+  imports: [
+    PopoverModule.forRoot(),
+    MentionModule,
+    // other modules...
+  ],
+})
+export class AppModule {}
+
+
+---
+
+3. Create Child Component (Popover Content)
+
+Let’s say this is your popover form component:
+
+popover-form.component.ts
+
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+
+@Component({
+  selector: 'app-popover-form',
+  templateUrl: './popover-form.component.html'
+})
+export class PopoverFormComponent {
+  @Input() initialValue: string = '';
+  @Output() save = new EventEmitter<string>();
+  @Output() cancel = new EventEmitter<void>();
+
+  textValue: string = '';
+
+  ngOnInit() {
+    this.textValue = this.initialValue;
+  }
+
+  onSave() {
+    this.save.emit(this.textValue);
+  }
+
+  onCancel() {
+    this.cancel.emit();
+  }
 }
 
-public class MyModelValidator : AbstractValidator<MyModel>
-{
-    public MyModelValidator()
-    {
-        RuleFor(x => x)
-            .Must(BeValidExpression)
-            .WithMessage("A must equal the evaluated expression from B.");
-    }
+popover-form.component.html
 
-    private bool BeValidExpression(MyModel model)
-    {
-        if (string.IsNullOrWhiteSpace(model.B))
-            return false;
+<div class="p-2" style="width: 250px;">
+  <input type="text"
+         class="form-control mb-2"
+         [(ngModel)]="textValue"
+         [mention]="['John', 'Jane', 'Jack']"
+         placeholder="Type @ to mention" />
 
-        try
-        {
-            // Replace "Building" keyword with actual C value
-            string expressionText = model.B.Replace("Building", model.C.ToString());
+  <div class="d-flex justify-content-end">
+    <button class="btn btn-sm btn-secondary me-2" (click)="onCancel()">Cancel</button>
+    <button class="btn btn-sm btn-primary" (click)="onSave()">OK</button>
+  </div>
+</div>
 
-            // Use NCalc to evaluate
-            var expr = new Expression(expressionText);
-            var result = expr.Evaluate();
 
-            if (result == null)
-                return false;
+---
 
-            decimal evaluatedValue = Convert.ToDecimal(result);
+4. Parent Component (With Popover)
 
-            return model.A == evaluatedValue;
-        }
-        catch
-        {
-            return false; // Invalid expression
-        }
-    }
+Replace your mat-menu trigger with ngx-bootstrap popover:
+
+parent.component.html
+
+<button type="button"
+        class="btn btn-outline-primary"
+        [popover]="popoverTemplate"
+        popoverTitle="Mention Box"
+        triggers="click"
+        container="body"
+        placement="bottom"
+        #p="bs-popover">
+  fx
+</button>
+
+<ng-template #popoverTemplate>
+  <app-popover-form
+    [initialValue]="value"
+    (save)="onSave($event); p.hide()"
+    (cancel)="onCancel(); p.hide()">
+  </app-popover-form>
+</ng-template>
+
+
+---
+
+5. Parent Component Logic
+
+parent.component.ts
+
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-parent',
+  templateUrl: './parent.component.html'
+})
+export class ParentComponent {
+  value: string = '';
+
+  onSave(newVal: string) {
+    this.value = newVal;
+    console.log('Saved value:', newVal);
+  }
+
+  onCancel() {
+    console.log('Cancelled');
+  }
 }
 
-var model = new MyModel
-{
-    A = 250,
-    B = "Building + 10 * 20",
-    C = 50
-};
 
-var validator = new MyModelValidator();
-var result = validator.Validate(model);
+---
 
-if (!result.IsValid)
-{
-    foreach (var error in result.Errors)
-    {
-        Console.WriteLine(error.ErrorMessage);
-    }
-}
-else
-{
-    Console.WriteLine("Validation Passed ✅");
-}
+✅ Key Notes:
+
+popoverTemplate holds the child component.
+
+triggers="click" makes the popover open/close on click.
+
+p.hide() closes the popover programmatically on OK or Cancel.
+
+container="body" avoids positioning issues (important inside tables/dialogs).
+
+You can fully reuse your Angular Mention setup inside popover-form.component.
+
+
+
+---
+
+👉 Would you like me to also show you how to handle the "only one popover open at a time" case (like mat-menu auto-closes others)?
+
