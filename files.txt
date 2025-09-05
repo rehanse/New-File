@@ -166,3 +166,4 @@ You can fully reuse your Angular Mention setup inside popover-form.component.
 
 👉 Would you like me to also show you how to handle the "only one popover open at a time" case (like mat-menu auto-closes others)?
 
+IRONSUITE.REHANJBIET.GMAIL.COM.4530-E46BF95329-BRYXO34TED37TREY-NHMULSNCPZZU-WGZOJAFONWJA-F4NDCCQ7I7BM-UCA63FMXS3SZ-HJXFSMJDCO5A-BC3JVJ-TNYTFINZIOGQEA-DEPLOYMENT.TRIAL-LAA3L5.TRIAL.EXPIRES.05.OCT.2025
